@@ -26,7 +26,8 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
             ls: dir
         build-feature:
           - default
-          - rational  # will execute pyproject-rational.py before build
+          - rational
+          - incr
     runs-on: ${{ format('{0}-latest', matrix.os) }}
 
     steps:
@@ -69,7 +70,7 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
 
       - name: apply patch to build different packages
         if: matrix.build-feature != 'default'
-        run: python pyproject-${{ matrix.build-feature }}.py apply
+        run: python pyproject-patch.py ${{ matrix.build-feature }} apply
 
       - name: Build Wheels
         run: python -m cibuildwheel --output-dir wheelhouse

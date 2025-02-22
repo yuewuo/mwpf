@@ -10,8 +10,21 @@ if "mwpf" not in globals():
         import mwpf
     except ImportError as e:
         print(e)
-        print("mwpf package not available, use mwpf_rational instead")
+        print("mwpf package not available, trying others...")
+
+if "mwpf" not in globals():
+    try:
         import mwpf_rational as mwpf
+    except ImportError as e:
+        print(e)
+        print("mwpf_rational package not available, trying others...")
+
+if "mwpf" not in globals():
+    try:
+        import mwpf_incr as mwpf
+    except ImportError as e:
+        print(e)
+        print("mwpf_incr package not available, trying others...")
 
 
 def circle_positions(n: int):

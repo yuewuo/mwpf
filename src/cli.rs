@@ -41,11 +41,32 @@ enum Commands {
     Benchmark(BenchmarkParameters),
     /// benchmark the matrix speed
     MatrixSpeed(MatrixSpeedParameters),
+    /// decoder speed
+    DecoderSpeed(DecoderSpeedParameters),
     /// built-in tests
     Test {
         #[clap(subcommand)]
         command: TestCommands,
     },
+}
+
+#[derive(Parser, Clone)]
+pub struct DecoderSpeedParameters {
+    #[clap(short = 'f', long)]
+    file_path: String,
+    /// select the combination of primal and dual module
+    #[clap(short = 'p', long, value_enum, default_value_t = SolverType::UnionFind)]
+    solver_type: SolverType,
+    /// the configuration of primal and dual module
+    #[clap(long, default_value_t = json!({}), value_parser = ValueParser::new(SerdeJsonParser))]
+    solver_config: serde_json::Value,
+    /// to use bp or not
+    #[clap(long, action)]
+    use_bp: bool,
+    #[clap(long, action)]
+    bp_application_ratio: Option<f64>,
+    #[clap(long, action)]
+    bp_max_iter: Option<usize>,
 }
 
 #[derive(Parser, Clone)]
@@ -540,6 +561,55 @@ impl Cli {
                     }
                 }
             },
+            Commands::DecoderSpeed(DecoderSpeedParameters {
+                file_path,
+                solver_type,
+                solver_config,
+                use_bp,
+                bp_application_ratio,
+                bp_max_iter,
+            }) => {
+                if !file_path.ends_with("cbor") {
+                    eprintln!(
+                        "only support cbor file, the file path \"{file_path}\" does not end with cbor, operations may fail"
+                    );
+                }
+                let BenchmarkSuite {
+                    initializer,
+                    syndrome_patterns,
+                } = BenchmarkSuite::from_cbor(&file_path);
+
+                // time construction time
+                let start = std::time::Instant::now();
+                let initializer = Arc::new(initializer);
+                let mut decoder = solver_type.bench_build(&initializer, solver_config);
+                if use_bp {
+                    decoder = match SolverBPWrapper::new(
+                        decoder.solver_base(),
+                        bp_max_iter.unwrap_or(1),
+                        bp_application_ratio.unwrap_or(0.1),
+                    )
+                    .solver
+                    .inner
+                    {
+                        SolverEnum::SolverSerialUnionFind(x) => Box::new(x) as Box<dyn SolverTrait>,
+                        SolverEnum::SolverSerialSingleHair(x) => Box::new(x) as Box<dyn SolverTrait>,
+                        SolverEnum::SolverSerialJointSingleHair(x) => Box::new(x) as Box<dyn SolverTrait>,
+                        SolverEnum::SolverErrorPatternLogger(_) => panic!("not supported"),
+                    };
+                }
+                let construction_time = start.elapsed();
+                eprintln!("construction time {:?}", construction_time);
+
+                // time solving time
+                let start = std::time::Instant::now();
+                for syndrome_pattern in syndrome_patterns.into_iter() {
+                    decoder.solve(syndrome_pattern);
+                    decoder.clear();
+                }
+                let solving_time = start.elapsed();
+                eprintln!("solving time {:?}", solving_time);
+            }
         }
     }
 }
@@ -607,6 +677,19 @@ impl SolverType {
             Self::SingleHair => Box::new(SolverSerialSingleHair::new(initializer, solver_config)),
             Self::JointSingleHair => Box::new(SolverSerialJointSingleHair::new(initializer, solver_config)),
             Self::ErrorPatternLogger => Box::new(SolverErrorPatternLogger::new(initializer, code, solver_config)),
+        }
+    }
+
+    pub fn bench_build(
+        &self,
+        initializer: &Arc<SolverInitializer>,
+        solver_config: serde_json::Value,
+    ) -> Box<dyn SolverTrait> {
+        match self {
+            Self::UnionFind => Box::new(SolverSerialUnionFind::new(initializer, solver_config)),
+            Self::SingleHair => Box::new(SolverSerialSingleHair::new(initializer, solver_config)),
+            Self::JointSingleHair => Box::new(SolverSerialJointSingleHair::new(initializer, solver_config)),
+            Self::ErrorPatternLogger => panic!("error pattern logger does not support decoder (stable) speed benchmark"),
         }
     }
 }
