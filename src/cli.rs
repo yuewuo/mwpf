@@ -55,7 +55,7 @@ pub struct DecoderSpeedParameters {
     #[clap(short = 'f', long)]
     file_path: String,
     /// select the combination of primal and dual module
-    #[clap(short = 'p', long, value_enum, default_value_t = SolverType::UnionFind)]
+    #[clap(short = 'p', long, value_enum, default_value_t = SolverType::JointSingleHair)]
     solver_type: SolverType,
     /// the configuration of primal and dual module
     #[clap(long, default_value_t = json!({}), value_parser = ValueParser::new(SerdeJsonParser))]
