@@ -7,7 +7,6 @@ use super::interface::*;
 use super::visualize::*;
 use crate::util::*;
 use prettytable::*;
-use std::collections::*;
 
 pub struct HairView<'a, M: MatrixTail + MatrixEchelon> {
     base: &'a mut M,
@@ -71,10 +70,10 @@ impl<'a, M: MatrixTail + MatrixEchelon> HairView<'a, M> {
 }
 
 impl<'a, M: MatrixTail + MatrixEchelon> MatrixTail for HairView<'a, M> {
-    fn get_tail_edges(&self) -> &BTreeSet<EdgeIndex> {
+    fn get_tail_edges(&self) -> &FastIterSet<EdgeIndex> {
         self.get_base().get_tail_edges()
     }
-    fn get_tail_edges_mut(&mut self) -> &mut BTreeSet<EdgeIndex> {
+    fn get_tail_edges_mut(&mut self) -> &mut FastIterSet<EdgeIndex> {
         panic!("cannot mutate a hair view");
     }
 }
@@ -95,7 +94,7 @@ impl<'a, M: MatrixTight + MatrixTail + MatrixEchelon> MatrixTight for HairView<'
     fn is_tight(&self, edge_index: usize) -> bool {
         self.get_base().is_tight(edge_index)
     }
-    fn get_tight_edges(&self) -> &BTreeSet<EdgeIndex> {
+    fn get_tight_edges(&self) -> &FastIterSet<EdgeIndex> {
         self.base.get_tight_edges()
     }
 }
@@ -132,10 +131,10 @@ impl<'a, M: MatrixTail + MatrixEchelon> MatrixBasic for HairView<'a, M> {
     fn edge_to_var_index(&self, edge_index: EdgeIndex) -> Option<VarIndex> {
         self.get_base().edge_to_var_index(edge_index)
     }
-    fn get_vertices(&self) -> BTreeSet<VertexIndex> {
+    fn get_vertices(&self) -> FastIterSet<VertexIndex> {
         self.get_base().get_vertices()
     }
-    fn get_edges(&self) -> BTreeSet<EdgeIndex> {
+    fn get_edges(&self) -> FastIterSet<EdgeIndex> {
         self.get_base().get_edges()
     }
 }

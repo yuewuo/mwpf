@@ -14,12 +14,10 @@ use crate::primal_module_serial::PrimalClusterPtr;
 use crate::relaxer_optimizer::OptimizerResult;
 use crate::util::*;
 use crate::visualize::*;
-use hashbrown::HashSet;
+use hashbrown::{HashMap, HashSet};
 #[cfg(feature = "python_binding")]
 use pyo3::prelude::*;
 
-use std::collections::BTreeMap;
-use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
 // this is not effectively doing much right now due to the My (Leo's) desire for ultra performance (inlining function > branches)
@@ -374,9 +372,9 @@ pub trait DualModuleImpl {
     fn get_obstacles_tune(
         &self,
         optimizer_result: OptimizerResult,
-        dual_node_deltas: BTreeMap<OrderedDualNodePtr, (Rational, NodeIndex)>,
-    ) -> BTreeSet<Obstacle> {
-        let mut obstacles = BTreeSet::new();
+        dual_node_deltas: FastIterMap<OrderedDualNodePtr, (Rational, NodeIndex)>,
+    ) -> FastIterSet<Obstacle> {
+        let mut obstacles = FastIterSet::new();
         match optimizer_result {
             OptimizerResult::EarlyReturned => {
                 // if early returned, meaning optimizer didn't optimize, but simply should find current obstacles and return
@@ -441,7 +439,8 @@ pub trait DualModuleImpl {
                 // in other cases, optimizer should have optimized, so we should apply the deltas and return the nwe obstacles
 
                 // edge deltas needs to be applied at once for accurate obstacles calculation
-                let mut edge_deltas = BTreeMap::new();
+                let mut edge_deltas: std::collections::BTreeMap<usize, crate::ordered_float::OrderedFloat> =
+                    FastIterMap::new();
                 for (dual_node_ptr, (grow_rate, _cluster_index)) in dual_node_deltas.into_iter() {
                     // update the dual node and check for obstacles
                     let mut node_ptr_write = dual_node_ptr.ptr.write();
@@ -455,10 +454,10 @@ pub trait DualModuleImpl {
                     // calculate the total edge deltas
                     for edge_index in node_ptr_write.invalid_subgraph.hair.iter() {
                         match edge_deltas.entry(*edge_index) {
-                            std::collections::btree_map::Entry::Vacant(v) => {
+                            FastIterEntry::Vacant(v) => {
                                 v.insert(grow_rate.clone());
                             }
-                            std::collections::btree_map::Entry::Occupied(mut o) => {
+                            FastIterEntry::Occupied(mut o) => {
                                 let current = o.get_mut();
                                 *current += grow_rate.clone();
                             }
@@ -526,7 +525,7 @@ pub trait DualModuleImpl {
     }
 
     /// force set the weights given the indices and new weights
-    fn set_weights(&mut self, _new_weights: BTreeMap<EdgeIndex, Weight>) {
+    fn set_weights(&mut self, _new_weights: FastIterMap<EdgeIndex, Weight>) {
         unimplemented!()
     }
 
@@ -664,7 +663,7 @@ impl DualModuleInterfacePtr {
         let mut interface = self.write();
         let invalid_subgraph = Arc::new(InvalidSubgraph::new_complete(
             vec![vertex_idx].into_iter().collect(),
-            BTreeSet::new(),
+            FastIterSet::new(),
             &interface.decoding_graph,
         ));
         let node_index = interface.nodes.len() as NodeIndex;

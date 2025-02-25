@@ -4,7 +4,6 @@ use crate::util::*;
 use core::panic;
 use derivative::Derivative;
 use prettytable::*;
-use std::collections::BTreeSet;
 
 #[derive(Clone, Derivative)]
 #[derivative(Default(new = "true"))]
@@ -33,10 +32,10 @@ impl<M: MatrixView> Echelon<M> {
 }
 
 impl<M: MatrixTail + MatrixView> MatrixTail for Echelon<M> {
-    fn get_tail_edges(&self) -> &BTreeSet<EdgeIndex> {
+    fn get_tail_edges(&self) -> &FastIterSet<EdgeIndex> {
         self.base.get_tail_edges()
     }
-    fn get_tail_edges_mut(&mut self) -> &mut BTreeSet<EdgeIndex> {
+    fn get_tail_edges_mut(&mut self) -> &mut FastIterSet<EdgeIndex> {
         self.is_info_outdated = true;
         self.base.get_tail_edges_mut()
     }
@@ -50,7 +49,7 @@ impl<M: MatrixTight> MatrixTight for Echelon<M> {
     fn is_tight(&self, edge_index: usize) -> bool {
         self.base.is_tight(edge_index)
     }
-    fn get_tight_edges(&self) -> &BTreeSet<EdgeIndex> {
+    fn get_tight_edges(&self) -> &FastIterSet<EdgeIndex> {
         self.base.get_tight_edges()
     }
 }
@@ -89,10 +88,10 @@ impl<M: MatrixView> MatrixBasic for Echelon<M> {
     fn edge_to_var_index(&self, edge_index: EdgeIndex) -> Option<VarIndex> {
         self.get_base().edge_to_var_index(edge_index)
     }
-    fn get_vertices(&self) -> BTreeSet<VertexIndex> {
+    fn get_vertices(&self) -> FastIterSet<VertexIndex> {
         self.get_base().get_vertices()
     }
-    fn get_edges(&self) -> BTreeSet<EdgeIndex> {
+    fn get_edges(&self) -> FastIterSet<EdgeIndex> {
         self.get_base().get_edges()
     }
 }

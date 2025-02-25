@@ -22,7 +22,6 @@
 use crate::util::*;
 use derivative::Derivative;
 use num_traits::{One, Zero};
-use std::collections::BTreeSet;
 
 pub type VarIndex = usize;
 pub type RowIndex = usize;
@@ -57,8 +56,8 @@ pub trait MatrixBasic {
         self.edge_to_var_index(edge_index).is_some()
     }
 
-    fn get_edges(&self) -> BTreeSet<EdgeIndex>;
-    fn get_vertices(&self) -> BTreeSet<VertexIndex>;
+    fn get_edges(&self) -> FastIterSet<EdgeIndex>;
+    fn get_vertices(&self) -> FastIterSet<VertexIndex>;
 }
 
 pub trait MatrixView: MatrixBasic {
@@ -97,7 +96,7 @@ pub trait MatrixView: MatrixBasic {
 pub trait MatrixTight: MatrixView {
     fn update_edge_tightness(&mut self, edge_index: EdgeIndex, is_tight: bool);
     fn is_tight(&self, edge_index: usize) -> bool;
-    fn get_tight_edges(&self) -> &BTreeSet<EdgeIndex>;
+    fn get_tight_edges(&self) -> &FastIterSet<EdgeIndex>;
 
     fn add_variable_with_tightness(&mut self, edge_index: EdgeIndex, is_tight: bool) {
         self.add_variable(edge_index);
@@ -110,8 +109,8 @@ pub trait MatrixTight: MatrixView {
 }
 
 pub trait MatrixTail {
-    fn get_tail_edges(&self) -> &BTreeSet<EdgeIndex>;
-    fn get_tail_edges_mut(&mut self) -> &mut BTreeSet<EdgeIndex>;
+    fn get_tail_edges(&self) -> &FastIterSet<EdgeIndex>;
+    fn get_tail_edges_mut(&mut self) -> &mut FastIterSet<EdgeIndex>;
 
     fn set_tail_edges<EdgeIter>(&mut self, edges: EdgeIter)
     where
@@ -168,7 +167,7 @@ pub trait MatrixEchelon: MatrixView {
         if !info.satisfiable {
             return None; // no solution
         }
-        let mut solution = BTreeSet::new();
+        let mut solution = FastIterSet::new();
         for (row, row_info) in info.rows.iter().enumerate() {
             debug_assert!(row_info.has_leading());
             if self.get_rhs(row) {
@@ -360,7 +359,6 @@ impl std::fmt::Debug for RowInfo {
 pub mod tests {
     use super::super::*;
     use super::*;
-    use std::collections::BTreeMap;
 
     type TightMatrix = Tight<BasicMatrix>;
 
@@ -406,7 +404,7 @@ pub mod tests {
 
     #[derive(Default)]
     struct TestEdgeWeights {
-        pub weights: BTreeMap<EdgeIndex, Weight>,
+        pub weights: FastIterMap<EdgeIndex, Weight>,
     }
 
     impl TestEdgeWeights {

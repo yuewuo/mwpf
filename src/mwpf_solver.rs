@@ -24,7 +24,6 @@ use core::panic;
 use num_traits::ToPrimitive;
 use serde::{Deserialize, Serialize};
 
-use std::collections::BTreeSet;
 use std::fs::File;
 use std::io::{prelude::*, BufWriter};
 use std::sync::Arc;
@@ -158,12 +157,12 @@ macro_rules! bind_trait_to_python {
                 let vertices = if let Some(vertices) = vertices {
                     py_into_btree_set(vertices)?
                 } else {
-                    BTreeSet::new()
+                    FastIterSet::new()
                 };
                 let edges = if let Some(edges) = edges {
                     py_into_btree_set(edges)?
                 } else {
-                    BTreeSet::new()
+                    FastIterSet::new()
                 };
                 let invalid_subgraph = Arc::new(InvalidSubgraph::new_raw(vertices, edges, hair));
                 let interface_ptr = self.0.interface_ptr.clone();
@@ -262,7 +261,7 @@ macro_rules! bind_trait_to_python {
                 let edges = if let Some(edges) = edges {
                     py_into_btree_set(edges)?
                 } else {
-                    BTreeSet::new()
+                    FastIterSet::new()
                 };
                 // vertices must be superset of the union of all edges
                 let interface = self.0.interface_ptr.read_recursive();
@@ -372,10 +371,10 @@ impl SolverSerialPlugins {
     pub fn get_cluster(&self, vertex_index: VertexIndex) -> Cluster {
         let mut cluster = Cluster::new();
         // visit the graph via tight edges
-        let mut current_vertices = BTreeSet::new();
+        let mut current_vertices = FastIterSet::new();
         current_vertices.insert(vertex_index);
         while !current_vertices.is_empty() {
-            let mut next_vertices = BTreeSet::new();
+            let mut next_vertices = FastIterSet::new();
             for &vertex_index in current_vertices.iter() {
                 cluster.add_vertex(vertex_index);
                 for &edge_index in self.model_graph.get_vertex_neighbors(vertex_index).iter() {
@@ -954,12 +953,12 @@ impl SolverBPWrapper {
         let vertices = if let Some(vertices) = vertices {
             py_into_btree_set(vertices)?
         } else {
-            BTreeSet::new()
+            FastIterSet::new()
         };
         let edges = if let Some(edges) = edges {
             py_into_btree_set(edges)?
         } else {
-            BTreeSet::new()
+            FastIterSet::new()
         };
         let invalid_subgraph = Arc::new(InvalidSubgraph::new_raw(vertices, edges, hair));
         let interface_ptr = self.solver.interface_ptr().clone();
@@ -1072,7 +1071,7 @@ impl SolverBPWrapper {
         let edges = if let Some(edges) = edges {
             py_into_btree_set(edges)?
         } else {
-            BTreeSet::new()
+            FastIterSet::new()
         };
         // vertices must be superset of the union of all edges
         let interface = self.solver.interface_ptr().read_recursive();

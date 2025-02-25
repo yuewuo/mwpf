@@ -2,14 +2,13 @@ use super::interface::*;
 use super::visualize::*;
 use crate::util::*;
 use derivative::Derivative;
-use std::collections::BTreeSet;
 
 #[derive(Clone, Derivative)]
 #[derivative(Default(new = "true"))]
 pub struct Tail<M: MatrixView> {
     base: M,
     /// the set of edges that should be placed at the end, if any
-    tail_edges: BTreeSet<EdgeIndex>,
+    tail_edges: FastIterSet<EdgeIndex>,
     /// var indices are outdated on any changes to the underlying matrix
     #[derivative(Default(value = "true"))]
     is_var_indices_outdated: bool,
@@ -26,7 +25,7 @@ impl<M: MatrixView> Tail<M> {
     pub fn from_base(base: M) -> Self {
         let mut value = Self {
             base,
-            tail_edges: BTreeSet::new(),
+            tail_edges: FastIterSet::new(),
             is_var_indices_outdated: true,
             var_indices: vec![],
             tail_var_indices: vec![],
@@ -37,10 +36,10 @@ impl<M: MatrixView> Tail<M> {
 }
 
 impl<M: MatrixView> MatrixTail for Tail<M> {
-    fn get_tail_edges(&self) -> &BTreeSet<EdgeIndex> {
+    fn get_tail_edges(&self) -> &FastIterSet<EdgeIndex> {
         &self.tail_edges
     }
-    fn get_tail_edges_mut(&mut self) -> &mut BTreeSet<EdgeIndex> {
+    fn get_tail_edges_mut(&mut self) -> &mut FastIterSet<EdgeIndex> {
         self.is_var_indices_outdated = true;
         &mut self.tail_edges
     }
@@ -54,7 +53,7 @@ impl<M: MatrixTight> MatrixTight for Tail<M> {
     fn is_tight(&self, edge_index: usize) -> bool {
         self.base.is_tight(edge_index)
     }
-    fn get_tight_edges(&self) -> &BTreeSet<EdgeIndex> {
+    fn get_tight_edges(&self) -> &FastIterSet<EdgeIndex> {
         self.base.get_tight_edges()
     }
 }
@@ -92,10 +91,10 @@ impl<M: MatrixView> MatrixBasic for Tail<M> {
     fn edge_to_var_index(&self, edge_index: EdgeIndex) -> Option<VarIndex> {
         self.get_base().edge_to_var_index(edge_index)
     }
-    fn get_vertices(&self) -> BTreeSet<VertexIndex> {
+    fn get_vertices(&self) -> FastIterSet<VertexIndex> {
         self.get_base().get_vertices()
     }
-    fn get_edges(&self) -> BTreeSet<EdgeIndex> {
+    fn get_edges(&self) -> FastIterSet<EdgeIndex> {
         self.get_base().get_edges()
     }
 }

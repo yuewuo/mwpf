@@ -3,15 +3,14 @@ use super::row::*;
 use super::visualize::*;
 use crate::util::*;
 use derivative::Derivative;
-use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Derivative, PartialEq, Eq)]
 #[derivative(Default(new = "true"))]
 pub struct BasicMatrix {
     /// the vertices already maintained by this parity check
-    pub vertices: BTreeSet<VertexIndex>,
+    pub vertices: FastIterSet<VertexIndex>,
     /// the edges maintained by this parity check, mapping to the local indices
-    pub edges: BTreeMap<EdgeIndex, VarIndex>,
+    pub edges: FastIterMap<EdgeIndex, VarIndex>,
     /// variable index map to edge index
     pub variables: Vec<EdgeIndex>,
     pub constraints: Vec<ParityRow>,
@@ -83,11 +82,11 @@ impl MatrixBasic for BasicMatrix {
         self.edges.get(&edge_index).cloned()
     }
 
-    fn get_vertices(&self) -> BTreeSet<VertexIndex> {
+    fn get_vertices(&self) -> FastIterSet<VertexIndex> {
         self.vertices.clone()
     }
 
-    fn get_edges(&self) -> BTreeSet<EdgeIndex> {
+    fn get_edges(&self) -> FastIterSet<EdgeIndex> {
         self.edges.keys().cloned().collect()
     }
 }

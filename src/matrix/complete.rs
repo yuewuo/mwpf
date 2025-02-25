@@ -3,16 +3,15 @@ use super::row::*;
 use super::visualize::*;
 use crate::util::*;
 use derivative::Derivative;
-use std::collections::{BTreeMap, BTreeSet};
 
 /// complete matrix considers a predefined set of edges and won't consider any other edges
 #[derive(Clone, Derivative)]
 #[derivative(Default(new = "true"))]
 pub struct CompleteMatrix {
     /// the vertices already maintained by this parity check
-    vertices: BTreeSet<VertexIndex>,
+    vertices: FastIterSet<VertexIndex>,
     /// the edges maintained by this parity check, mapping to the local indices
-    edges: BTreeMap<EdgeIndex, VarIndex>,
+    edges: FastIterMap<EdgeIndex, VarIndex>,
     /// variable index map to edge index
     variables: Vec<EdgeIndex>,
     constraints: Vec<ParityRow>,
@@ -82,11 +81,11 @@ impl MatrixBasic for CompleteMatrix {
         self.edges.get(&edge_index).cloned()
     }
 
-    fn get_vertices(&self) -> BTreeSet<VertexIndex> {
+    fn get_vertices(&self) -> FastIterSet<VertexIndex> {
         self.vertices.clone()
     }
 
-    fn get_edges(&self) -> BTreeSet<EdgeIndex> {
+    fn get_edges(&self) -> FastIterSet<EdgeIndex> {
         self.edges.keys().cloned().collect()
     }
 }

@@ -8,9 +8,8 @@ use mwpf::model_hypergraph::*;
 use mwpf::util::*;
 use mwpf::visualize::*;
 use num_traits::FromPrimitive;
-use std::collections::BTreeSet;
+
 use std::sync::Arc;
-use sugar::*;
 
 fn hyperedge_example() {
     let visualize_filename = "paper_hyperedge_example.json".to_string();
@@ -41,14 +40,14 @@ fn hyperedge_example() {
     }
     // manually grow the dual variables
     let decoding_graph = interface_ptr.read_recursive().decoding_graph.clone();
-    let dual_variables: Vec<(BTreeSet<VertexIndex>, f64)> = vec![
-        (btreeset! {5,6}, 0.1),
-        (btreeset! {4,5}, 0.1),
-        (btreeset! {2}, 0.1),
-        (btreeset! {1}, 0.5),
+    let dual_variables: Vec<(FastIterSet<VertexIndex>, f64)> = vec![
+        (fast_iter_set! {5,6}, 0.1),
+        (fast_iter_set! {4,5}, 0.1),
+        (fast_iter_set! {2}, 0.1),
+        (fast_iter_set! {1}, 0.5),
     ];
     for (vertices, dual_variable) in dual_variables.into_iter() {
-        let s1 = Arc::new(InvalidSubgraph::new_complete(vertices, btreeset! {}, &decoding_graph));
+        let s1 = Arc::new(InvalidSubgraph::new_complete(vertices, fast_iter_set! {}, &decoding_graph));
         let (_, s1_ptr) = interface_ptr.find_or_create_node(&s1, &mut dual_module);
         dual_module.set_grow_rate(&s1_ptr, Rational::from_f64(dual_variable).unwrap());
     }

@@ -1,4 +1,3 @@
-use crate::mwpf_solver::*;
 #[cfg(not(feature = "float_lp"))]
 use crate::num_rational;
 use crate::num_traits::{FromPrimitive, ToPrimitive};
@@ -7,6 +6,8 @@ use crate::rand_xoshiro::rand_core::RngCore;
 #[cfg(feature = "python_binding")]
 use crate::util_py::*;
 use crate::visualize::*;
+use crate::{fast_ds, mwpf_solver::*};
+use derivative::Derivative;
 use itertools::izip;
 use lnexp::LnExp;
 use num_traits::Zero;
@@ -15,7 +16,7 @@ use pyo3::prelude::*;
 #[cfg(feature = "python_binding")]
 use pyo3::types::{PyDict, PyFloat, PyList, PyTuple};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
+
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::{BufReader, BufWriter};
@@ -68,6 +69,29 @@ pub type DefectIndex = VertexIndex;
 pub type VertexNodeIndex = VertexIndex; // must be same as VertexIndex, NodeIndex, DefectIndex
 pub type VertexNum = VertexIndex;
 pub type NodeNum = VertexIndex;
+
+pub type FastIterMap<K, V> = fast_ds::Map<K, V>;
+pub type FastIterSet<T> = std::collections::BTreeSet<T>;
+// pub type FastIterSet<T> = fast_ds::Set<T>;
+
+// pub type FastIterEntry<'a, K, V> = std::collections::btree_map::Entry<'a, K, V>;
+
+#[macro_export]
+macro_rules! fast_iter_set {
+    ($($key:expr,)+) => (btreeset!($($key),+));
+
+    ( $($key:expr),* ) => {
+        {
+            let mut _set = FastIterSet::new();
+            $(
+                _set.insert($key);
+            )*
+            _set
+        }
+    };
+}
+
+pub use crate::fast_iter_set;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "python_binding", pyclass(module = "mwpf"))]
@@ -209,7 +233,7 @@ impl SolverInitializer {
         self.weighted_edges = weighted_edges;
     }
     #[getter]
-    fn get_heralds(&self) -> Vec<std::collections::BTreeMap<EdgeIndex, PyRational>> {
+    fn get_heralds(&self) -> Vec<FastIterMap<EdgeIndex, PyRational>> {
         self.heralds
             .iter()
             .map(|x| x.iter().map(|(k, v)| (*k, v.clone().into())).collect())
@@ -233,7 +257,7 @@ impl SolverInitializer {
         json_to_pyobject(self.snapshot(abbrev))
     }
     #[pyo3(name = "get_subgraph_syndrome")]
-    fn py_get_subgraph_syndrome(&self, subgraph: PySubgraph) -> BTreeSet<VertexIndex> {
+    fn py_get_subgraph_syndrome(&self, subgraph: PySubgraph) -> FastIterSet<VertexIndex> {
         self.get_subgraph_syndrome(&subgraph.into())
     }
     #[pyo3(name = "matches_subgraph_syndrome")]
@@ -313,8 +337,8 @@ impl SolverInitializer {
     }
 
     #[allow(clippy::unnecessary_cast)]
-    pub fn get_subgraph_syndrome(&self, subgraph: &OutputSubgraph) -> BTreeSet<VertexIndex> {
-        let mut defect_vertices = BTreeSet::new();
+    pub fn get_subgraph_syndrome(&self, subgraph: &OutputSubgraph) -> FastIterSet<VertexIndex> {
+        let mut defect_vertices = FastIterSet::new();
         for &edge_index in subgraph.iter() {
             let HyperEdge { vertices, .. } = &self.weighted_edges[edge_index as usize];
             for &vertex_index in vertices.iter() {
