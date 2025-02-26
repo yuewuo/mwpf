@@ -118,7 +118,7 @@ pub trait PrimalModuleImpl {
             let mut weights = weights.clone();
             if let Some(floor_weight) = floor_weight {
                 weights.iter_mut().for_each(|w| {
-                    if *w < floor_weight {
+                    if *w < *floor_weight {
                         *w = floor_weight.clone();
                     }
                 });
