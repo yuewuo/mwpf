@@ -73,6 +73,21 @@ class SinterMWPFDecoder:
     # record benchmark suite when enabled
     benchmark_suite_filename: Optional[str] = None
 
+    # adding BP decoder as a pre-decoder
+    bp: bool = False
+    max_iter: int = 0  # by default "adaptive"
+    bp_method: str = "ms"  # 'product_sum' or 'minimum_sum'
+    ms_scaling_factor: float = 0.625  # usually better than the original default of 1.0
+    schedule: str = "parallel"  #  'parallel', 'serial', or 'serial_relative'
+    omp_thread_count: int = 1
+    random_schedule_seed: int = 0
+    serial_schedule_order: Optional[list[int]] = None
+    bp_weight_mix_ratio: float = 1.0
+    skip_zero_syndrome: bool = True
+    floor_weight: Optional[float] = (
+        None  # when updating the mwpf weights, all the weights are enforced to be no less than this value; by default 0 which enforces all the weights to be non-negative
+    )
+
     @property
     def _cluster_node_limit(self) -> int:
         if self.cluster_node_limit is not None:
@@ -97,11 +112,9 @@ class SinterMWPFDecoder:
         self.circuit = circuit.copy()
         return self
 
-    def compile_decoder_for_dem(
-        self,
-        *,
-        dem: "stim.DetectorErrorModel",
-    ) -> "MwpfCompiledDecoder":
+    def common_prepare(
+        self, dem: "stim.DetectorErrorModel"
+    ) -> tuple[Any, Predictor, Any]:
         if self.pass_circuit:
             assert (
                 self.circuit is not None
@@ -122,6 +135,43 @@ class SinterMWPFDecoder:
             dem.num_observables == predictor.num_observables()
         ), "Mismatched number of observables, are you using the corresponding circuit of dem?"
 
+        # construct bp decoder if requested
+        bp_decoder: Optional[Any] = None
+        if self.bp:
+            if self.circuit is not None:
+                assert (
+                    not predictor.is_dynamic
+                ), "BP is not supported for dynamic predictors, e.g., in presence of heralded errors."
+
+            from ldpc import BpDecoder
+            from ldpc.ckt_noise.dem_matrices import (
+                detector_error_model_to_check_matrices,
+            )
+
+            bp_matrices = detector_error_model_to_check_matrices(
+                dem, allow_undecomposed_hyperedges=True
+            )
+            bp_decoder = BpDecoder(
+                pcm=bp_matrices.check_matrix,
+                error_channel=list(bp_matrices.priors),
+                max_iter=self.max_iter,
+                bp_method=self.bp_method,
+                ms_scaling_factor=self.ms_scaling_factor,
+                schedule=self.schedule,
+                omp_thread_count=self.omp_thread_count,
+                serial_schedule_order=self.serial_schedule_order,
+                input_vector_type="syndrome",
+            )
+
+        return solver, predictor, bp_decoder
+
+    def compile_decoder_for_dem(
+        self,
+        *,
+        dem: "stim.DetectorErrorModel",
+    ) -> "MwpfCompiledDecoder":
+        solver, predictor, bp_decoder = self.common_prepare(dem)
+
         benchmark_suite: Optional[BenchmarkSuite] = None
         if self.benchmark_suite_filename is not None:
             benchmark_suite = BenchmarkSuite(solver.get_initializer())
@@ -136,6 +186,10 @@ class SinterMWPFDecoder:
             panic_cases=self.panic_cases,  # record all the panic information to the same place
             benchmark_suite=benchmark_suite,
             benchmark_suite_filename=self.benchmark_suite_filename,
+            bp_decoder=bp_decoder,
+            bp_weight_mix_ratio=self.bp_weight_mix_ratio,
+            skip_zero_syndrome=self.skip_zero_syndrome,
+            floor_weight=self.floor_weight,
         )
 
     def decode_via_files(
@@ -149,20 +203,10 @@ class SinterMWPFDecoder:
         obs_predictions_b8_out_path: pathlib.Path,
         tmp_dir: pathlib.Path,
     ) -> None:
-        if self.pass_circuit:
-            assert (
-                self.circuit is not None
-            ), "The circuit is not loaded but the flag `pass_circuit` is True"
-
         dem = stim.DetectorErrorModel.from_file(dem_path)
-        solver, predictor = construct_decoder_and_predictor(
-            dem,
-            decoder_type=self.decoder_type,
-            config=self.config,
-            ref_circuit=(
-                RefCircuit.of(self.circuit) if self.circuit is not None else None
-            ),
-        )
+
+        solver, predictor, bp_decoder = self.common_prepare(dem)
+
         assert num_dets == predictor.num_detectors()
         assert num_obs == predictor.num_observables()
 
@@ -177,31 +221,20 @@ class SinterMWPFDecoder:
                 for dets_bit_packed in iter_det(
                     dets_in_f, num_shots, num_det_bytes, self.with_progress
                 ):
-                    syndrome = predictor.syndrome_of(dets_bit_packed)
-                    if solver is None:
-                        if benchmark_suite is not None:
-                            benchmark_suite.append(syndrome)
-                        prediction = 0
-                    else:
-                        try:
-                            solver.solve(syndrome)
-                            subgraph = solver.subgraph()
-                            prediction = predictor.prediction_of(syndrome, subgraph)
-                        except BaseException as e:
-                            self.panic_cases.append(
-                                DecoderPanic(
-                                    initializer=solver.get_initializer(),
-                                    config=solver.config,
-                                    syndrome=syndrome,
-                                    panic_message=traceback.format_exc(),
-                                )
-                            )
-                            if "<class 'KeyboardInterrupt'>" in str(e):
-                                raise e
-                            elif self.panic_action == PanicAction.RAISE:
-                                raise ValueError(panic_text_of(solver, syndrome)) from e
-                            elif self.panic_action == PanicAction.CATCH:
-                                prediction = random.getrandbits(num_obs)
+                    prediction = decode_common(
+                        dets_bit_packed=dets_bit_packed,
+                        predictor=predictor,
+                        solver=solver,
+                        num_dets=num_dets,
+                        num_obs=num_obs,
+                        panic_action=self.panic_action,
+                        panic_cases=self.panic_cases,
+                        benchmark_suite=benchmark_suite,
+                        skip_zero_syndrome=self.skip_zero_syndrome,
+                        bp_decoder=bp_decoder,
+                        bp_weight_mix_ratio=self.bp_weight_mix_ratio,
+                        floor_weight=self.floor_weight,
+                    )
                     obs_out_f.write(
                         int(prediction).to_bytes((num_obs + 7) // 8, byteorder="little")
                     )
@@ -294,10 +327,14 @@ class MwpfCompiledDecoder:
     predictor: Predictor
     num_dets: int
     num_obs: int
-    panic_action: PanicAction = PanicAction.CATCH
-    panic_cases: list[DecoderPanic] = field(default_factory=list)
-    benchmark_suite: Optional[BenchmarkSuite] = None
-    benchmark_suite_filename: Optional[str] = None
+    panic_action: PanicAction
+    panic_cases: list[DecoderPanic]
+    benchmark_suite: Optional[BenchmarkSuite]
+    benchmark_suite_filename: Optional[str]
+    bp_decoder: Any
+    skip_zero_syndrome: bool
+    bp_weight_mix_ratio: float
+    floor_weight: Optional[float]
 
     def decode_shots_bit_packed(
         self,
@@ -309,31 +346,21 @@ class MwpfCompiledDecoder:
             shape=(num_shots, (self.num_obs + 7) // 8), dtype=np.uint8
         )
         for shot in range(num_shots):
-            syndrome = self.predictor.syndrome_of(bit_packed_detection_event_data[shot])
-            if self.solver is None:
-                if self.benchmark_suite is not None:
-                    self.benchmark_suite.append(syndrome)
-                prediction = 0
-            else:
-                try:
-                    self.solver.solve(syndrome)
-                    subgraph = self.solver.subgraph()
-                    prediction = self.predictor.prediction_of(syndrome, subgraph)
-                except BaseException as e:
-                    self.panic_cases.append(
-                        DecoderPanic(
-                            initializer=self.solver.get_initializer(),
-                            config=self.solver.config,
-                            syndrome=syndrome,
-                            panic_message=traceback.format_exc(),
-                        )
-                    )
-                    if "<class 'KeyboardInterrupt'>" in str(e):
-                        raise e
-                    elif self.panic_action == PanicAction.RAISE:
-                        raise ValueError(panic_text_of(self.solver, syndrome)) from e
-                    elif self.panic_action == PanicAction.CATCH:
-                        prediction = random.getrandbits(self.num_obs)
+            dets_bit_packed = bit_packed_detection_event_data[shot]
+            prediction = decode_common(
+                dets_bit_packed=dets_bit_packed,
+                predictor=self.predictor,
+                solver=self.solver,
+                num_dets=self.num_dets,
+                num_obs=self.num_obs,
+                panic_action=self.panic_action,
+                panic_cases=self.panic_cases,
+                benchmark_suite=self.benchmark_suite,
+                skip_zero_syndrome=self.skip_zero_syndrome,
+                bp_decoder=self.bp_decoder,
+                bp_weight_mix_ratio=self.bp_weight_mix_ratio,
+                floor_weight=self.floor_weight,
+            )
             predictions[shot] = np.packbits(
                 np.array(
                     list(np.binary_repr(prediction, width=self.num_obs))[::-1],
@@ -348,58 +375,67 @@ class MwpfCompiledDecoder:
         return predictions
 
 
-@dataclass
-class SinterBPMWPFDecoder(SinterMWPFDecoder):
-    max_iter: int = 10
-    bp_application_ratio: float = 0.625
-
-    def decode_via_files(
-        self,
-        *,
-        num_shots: int,
-        num_dets: int,
-        num_obs: int,
-        dem_path: pathlib.Path,
-        dets_b8_in_path: pathlib.Path,
-        obs_predictions_b8_out_path: pathlib.Path,
-        tmp_dir: pathlib.Path,
-    ) -> None:
-        # TODO: need better code structure to avoid writing duplicate code
-        raise NotImplemented("Not implemented for SinterBPMWPFDecoder")
-
-    def compile_decoder_for_dem(
-        self,
-        *,
-        dem: "stim.DetectorErrorModel",
-    ) -> "BPMWPFCompiledDecoder":
-        compiled_decoder = super().compile_decoder_for_dem(dem=dem)
-        return BPMWPFCompiledDecoder(
-            mwpf_decoder=compiled_decoder,
-            max_iter=self.max_iter,
-            bp_application_ratio=self.bp_application,
-        )
-
-
-@dataclass
-class BPMWPFCompiledDecoder:
-    mwpf_decoder: MwpfCompiledDecoder
-    max_iter: int = 10
-    bp_application_ratio: float = 0.625
-
-    def __post_init__(self):
-        self.bp_decoder = MwpfCompiledDecoder(
-            solver=BP(
-                self.mwpf_decoder.solver.get_solver_base(),
-                max_iter=self.max_iter,
-                bp_application_ratio=self.bp_application_ratio,
+def decode_common(
+    dets_bit_packed: np.ndarray,
+    predictor: Predictor,
+    solver: Any,
+    num_dets: int,
+    num_obs: int,
+    panic_action: PanicAction,
+    panic_cases: list[DecoderPanic],
+    benchmark_suite: Optional[BenchmarkSuite],
+    skip_zero_syndrome: bool,
+    bp_decoder: Any,
+    bp_weight_mix_ratio: float,
+    floor_weight: Optional[float],
+):
+    syndrome = predictor.syndrome_of(dets_bit_packed)
+    if solver is None:
+        if benchmark_suite is not None:
+            benchmark_suite.append(syndrome)
+        prediction = 0
+    elif skip_zero_syndrome and np.count_nonzero(dets_bit_packed) == 0:
+        prediction = 0
+    else:
+        try:
+            if bp_decoder is not None:
+                dets_bits = np.unpackbits(
+                    dets_bit_packed, count=num_dets, bitorder="little"
+                )
+                bp_solution = bp_decoder.decode(dets_bits)
+                if bp_decoder.converge:
+                    prediction = predictor.prediction_of(
+                        syndrome, np.flatnonzero(bp_solution)
+                    )
+                else:
+                    syndrome = mwpf.SyndromePattern(
+                        defect_vertices=syndrome.defect_vertices,
+                        override_weights=list(bp_decoder.log_prob_ratios),
+                        override_ratio=bp_weight_mix_ratio,
+                        floor_weight=floor_weight,
+                    )
+                    solver.solve(syndrome)
+                    subgraph = solver.subgraph()
+                    # # subgraph = set(solver.subgraph()) ^ set(np.flatnonzero(bp_solution))
+                    prediction = predictor.prediction_of(syndrome, subgraph)
+            else:
+                solver.solve(syndrome)
+                subgraph = solver.subgraph()
+                prediction = predictor.prediction_of(syndrome, subgraph)
+        except BaseException as e:
+            panic_cases.append(
+                DecoderPanic(
+                    initializer=solver.get_initializer(),
+                    config=solver.config,
+                    syndrome=syndrome,
+                    panic_message=traceback.format_exc(),
+                )
             )
-        )
-
-    def decode_shots_bit_packed(
-        self,
-        *,
-        bit_packed_detection_event_data: "np.ndarray",
-    ) -> "np.ndarray":
-        return self.bp_decoder.decode_shots_bit_packed(
-            bit_packed_detection_event_data=bit_packed_detection_event_data
-        )
+            if "<class 'KeyboardInterrupt'>" in str(e):
+                raise e
+            elif panic_action == PanicAction.RAISE:
+                raise e
+                raise ValueError(panic_text_of(self.solver, syndrome)) from e
+            elif panic_action == PanicAction.CATCH:
+                prediction = random.getrandbits(num_obs)
+    return prediction
