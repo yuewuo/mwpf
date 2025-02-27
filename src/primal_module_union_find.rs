@@ -12,7 +12,6 @@ use crate::invalid_subgraph::*;
 use crate::num_traits::Zero;
 use crate::pointers::*;
 use crate::primal_module::*;
-use crate::serde::{Deserialize, Serialize};
 use crate::union_find::*;
 use crate::util::*;
 use crate::visualize::*;
@@ -29,7 +28,7 @@ pub struct PrimalModuleUnionFind {
 type UnionFind = UnionFindGeneric<PrimalModuleUnionFindNode>;
 
 /// define your own union-find node data structure like this
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Clone)]
 pub struct PrimalModuleUnionFindNode {
     /// all the internal edges
     pub internal_edges: FastIterSet<EdgeIndex>,

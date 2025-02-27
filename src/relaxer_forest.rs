@@ -72,7 +72,7 @@ impl RelaxerForest {
         // validate only at debug mode to improve speed
         debug_assert_eq!(self.validate(&relaxer), Ok(()));
         // add this relaxer to the forest
-        for (edge_index, speed) in relaxer.get_untighten_edges() {
+        for (edge_index, speed) in relaxer.get_untighten_edges().iter() {
             debug_assert!(speed.is_negative());
             if !self.edge_untightener.contains_key(edge_index) {
                 self.edge_untightener.insert(*edge_index, (relaxer.clone(), -speed.recip()));
@@ -86,7 +86,7 @@ impl RelaxerForest {
         }
         let mut untightened_edges: FastIterMap<EdgeIndex, Rational> = FastIterMap::new();
         let mut directions: FastIterMap<Arc<InvalidSubgraph>, Rational> = relaxer.get_direction().clone();
-        for (edge_index, speed) in relaxer.get_growing_edges() {
+        for (edge_index, speed) in relaxer.get_growing_edges().iter() {
             debug_assert!(speed.is_positive());
             if self.tight_edges.contains(edge_index) {
                 debug_assert!(self.edge_untightener.contains_key(edge_index));
@@ -109,7 +109,7 @@ impl RelaxerForest {
                     let (edge_relaxer, speed_ratio) = self.edge_untightener.get(edge_index).unwrap();
                     debug_assert!(speed_ratio.is_positive());
                     let expanded_edge_relaxer = self.expanded_relaxers.get(edge_relaxer).unwrap();
-                    for (subgraph, original_speed) in expanded_edge_relaxer.get_direction() {
+                    for (subgraph, original_speed) in expanded_edge_relaxer.get_direction().iter() {
                         let new_speed = original_speed * speed_ratio;
                         if let Some(speed) = directions.get_mut(subgraph) {
                             *speed += new_speed;
@@ -117,7 +117,7 @@ impl RelaxerForest {
                             directions.insert(subgraph.clone(), new_speed);
                         }
                     }
-                    for (edge_index, original_speed) in expanded_edge_relaxer.get_untighten_edges() {
+                    for (edge_index, original_speed) in expanded_edge_relaxer.get_untighten_edges().iter() {
                         debug_assert!(original_speed.is_negative());
                         let new_speed = -original_speed * speed_ratio;
                         if let Some(speed) = untightened_edges.get_mut(edge_index) {

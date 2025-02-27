@@ -36,7 +36,7 @@ debug = true
 
 [features]
 # to enable a feature, use `--features xxx`
-default = ["f64_weight", "qecp_integrate", "embed_visualizer", "progress_bar"]
+default = ["f64_weight", "qecp_integrate", "embed_visualizer", "progress_bar", "fast_ds"]
 f64_weight = ["float_lp"] # use f64 instead of BigRational as weight type
 rational_weight = ["slp"]
 slp = [] # placeholder feature; the src/slp dependency is always included
@@ -52,6 +52,9 @@ incr_lp = [
 embed_visualizer = [
 ] # use nodejs to build frontend and embed in Python instead of outputing individual JSON files
 loose_sanity_check = [] # do not panic when check fails
+btrees = [] # use btrees to fast iterate
+index_map = ["indexmap"] # use indexmap to fast iterate
+fast_ds = [] # use fast data structures to fast iterate
 
 [dependencies]
 pyo3 = { version = "0.23.4", features = [
@@ -100,6 +103,7 @@ base64 = "0.22.1"
 bp = { path = "src/bp" }
 thread-priority = "1.2.0"
 lnexp = "0.2.1"
+indexmap = {version = "2.7.1", optional = true }
 
 [dev-dependencies]
 test-case = "3.1.0"

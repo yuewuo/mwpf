@@ -50,10 +50,17 @@ pub struct PrimalModuleSerial {
     pub cluster_weights_initialized: bool,
 }
 
-#[derive(Eq, Debug, Clone)]
+#[derive(Eq, Debug, Clone, Default)]
 pub struct ClusterAffinity {
     pub cluster_index: NodeIndex,
     pub affinity: Affinity,
+}
+
+impl std::hash::Hash for ClusterAffinity {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.cluster_index.hash(state);
+        self.affinity.hash(state);
+    }
 }
 
 impl PartialEq for ClusterAffinity {
@@ -354,7 +361,7 @@ impl PrimalModuleImpl for PrimalModuleSerial {
 
         // if a relaxer is found, execute it and return
         if let Some(relaxer) = relaxer {
-            for (invalid_subgraph, grow_rate) in relaxer.get_direction() {
+            for (invalid_subgraph, grow_rate) in relaxer.get_direction().iter() {
                 let (existing, dual_node_ptr) = interface_ptr.find_or_create_node(invalid_subgraph, dual_module);
                 if !existing {
                     // create the corresponding primal node and add it to cluster
@@ -618,7 +625,7 @@ impl PrimalModuleImpl for PrimalModuleSerial {
                 }
             }
 
-            for (invalid_subgraph, grow_rate) in relaxer.get_direction() {
+            for (invalid_subgraph, grow_rate) in relaxer.get_direction().iter() {
                 if let Some((existing, dual_node_ptr)) =
                     interface_ptr.find_or_create_node_tune(invalid_subgraph, dual_module)
                 {

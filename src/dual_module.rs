@@ -189,6 +189,12 @@ pub struct OrderedDualNodePtr {
     pub ptr: DualNodePtr,
 }
 
+impl std::hash::Hash for OrderedDualNodePtr {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.index.hash(state);
+    }
+}
+
 impl OrderedDualNodePtr {
     pub fn new(index: NodeIndex, ptr: DualNodePtr) -> Self {
         Self { index, ptr }
@@ -439,8 +445,7 @@ pub trait DualModuleImpl {
                 // in other cases, optimizer should have optimized, so we should apply the deltas and return the nwe obstacles
 
                 // edge deltas needs to be applied at once for accurate obstacles calculation
-                let mut edge_deltas: std::collections::BTreeMap<usize, crate::ordered_float::OrderedFloat> =
-                    FastIterMap::new();
+                let mut edge_deltas = FastIterMap::new();
                 for (dual_node_ptr, (grow_rate, _cluster_index)) in dual_node_deltas.into_iter() {
                     // update the dual node and check for obstacles
                     let mut node_ptr_write = dual_node_ptr.ptr.write();
@@ -801,6 +806,19 @@ impl MWPSVisualizer for DualModuleInterfacePtr {
         let mut dual_nodes = Vec::<serde_json::Value>::new();
         for dual_node_ptr in interface.nodes.iter() {
             let dual_node = dual_node_ptr.read_recursive();
+            #[cfg(not(feature = "btrees"))]
+            dual_nodes.push(json!({
+                if abbrev { "e" } else { "edges" }: dual_node.invalid_subgraph.edges.iter().copied().collect::<Vec<_>>(),
+                if abbrev { "v" } else { "vertices" }: dual_node.invalid_subgraph.vertices.iter().copied().collect::<Vec<_>>(),
+                if abbrev { "h" } else { "hair" }: dual_node.invalid_subgraph.hair.iter().copied().collect::<Vec<_>>(),
+                if abbrev { "d" } else { "dual_variable" }: dual_node.get_dual_variable().to_f64(),
+                if abbrev { "dn" } else { "dual_variable_numerator" }: numer_of(&dual_node.get_dual_variable()),
+                if abbrev { "dd" } else { "dual_variable_denominator" }: denom_of(&dual_node.get_dual_variable()),
+                if abbrev { "r" } else { "grow_rate" }: dual_node.grow_rate.to_f64(),
+                if abbrev { "rn" } else { "grow_rate_numerator" }: numer_of(&dual_node.grow_rate),
+                if abbrev { "rd" } else { "grow_rate_denominator" }: denom_of(&dual_node.grow_rate),
+            }));
+            #[cfg(feature = "btrees")]
             dual_nodes.push(json!({
                 if abbrev { "e" } else { "edges" }: dual_node.invalid_subgraph.edges,
                 if abbrev { "v" } else { "vertices" }: dual_node.invalid_subgraph.vertices,

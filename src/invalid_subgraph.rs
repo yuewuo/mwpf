@@ -9,7 +9,7 @@ use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 /// an invalid subgraph $S = (V_S, E_S)$, also store the hair $\delta(S)$
-#[derive(Clone, PartialEq, Eq, Derivative)]
+#[derive(Clone, PartialEq, Eq, Derivative, Default)]
 #[derivative(Debug)]
 pub struct InvalidSubgraph {
     /// the hash value calculated by other fields
@@ -37,6 +37,17 @@ impl Ord for InvalidSubgraph {
             Ordering::Equal
         } else {
             // rare cases: same hash value but different state
+
+            #[cfg(feature = "index_map")]
+            return match self.vertices.iter().cmp(other.vertices.iter()) {
+                Ordering::Equal => match self.edges.iter().cmp(other.edges.iter()) {
+                    Ordering::Equal => self.hair.iter().cmp(other.hair.iter()),
+                    other => return other,
+                },
+                other => return other,
+            };
+
+            #[cfg(not(feature = "index_map"))]
             (&self.vertices, &self.edges, &self.hair).cmp(&(&other.vertices, &other.edges, &other.hair))
         }
     }
@@ -95,6 +106,16 @@ impl InvalidSubgraph {
         invalid_subgraph
     }
 
+    #[cfg(feature = "index_map")]
+    pub fn update_hash(&mut self) {
+        let mut hasher = DefaultHasher::new();
+        self.vertices.iter().for_each(|x| x.hash(&mut hasher));
+        self.edges.iter().for_each(|x| x.hash(&mut hasher));
+        self.hair.iter().for_each(|x| x.hash(&mut hasher));
+        self.hash_value = hasher.finish();
+    }
+
+    #[cfg(not(feature = "index_map"))]
     pub fn update_hash(&mut self) {
         let mut hasher = DefaultHasher::new();
         self.vertices.hash(&mut hasher);
@@ -206,11 +227,22 @@ pub mod tests {
         let (decoding_graph, ..) = color_code_5_decoding_graph(vec![7, 1], visualize_filename);
         let invalid_subgraph_1 = InvalidSubgraph::new(vec![13].into_iter().collect(), decoding_graph.as_ref());
         println!("invalid_subgraph_1: {invalid_subgraph_1:?}");
-        assert_eq!(invalid_subgraph_1.vertices, vec![2, 6, 7].into_iter().collect());
-        assert_eq!(invalid_subgraph_1.edges, vec![13].into_iter().collect());
         assert_eq!(
-            invalid_subgraph_1.hair,
-            vec![5, 6, 9, 10, 11, 12, 14, 15, 16, 17].into_iter().collect()
+            {
+                let mut vs = invalid_subgraph_1.vertices.into_iter().collect::<Vec<_>>();
+                vs.sort();
+                vs
+            },
+            vec![2, 6, 7]
+        );
+        assert_eq!(invalid_subgraph_1.edges.into_iter().collect::<Vec<_>>(), vec![13]);
+        assert_eq!(
+            {
+                let mut hair = invalid_subgraph_1.hair.into_iter().collect::<Vec<_>>();
+                hair.sort();
+                hair
+            },
+            vec![5, 6, 9, 10, 11, 12, 14, 15, 16, 17]
         );
     }
 
