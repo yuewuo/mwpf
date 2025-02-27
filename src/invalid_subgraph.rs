@@ -227,21 +227,10 @@ pub mod tests {
         let (decoding_graph, ..) = color_code_5_decoding_graph(vec![7, 1], visualize_filename);
         let invalid_subgraph_1 = InvalidSubgraph::new(vec![13].into_iter().collect(), decoding_graph.as_ref());
         println!("invalid_subgraph_1: {invalid_subgraph_1:?}");
+        assert_eq!(sorted_vec(invalid_subgraph_1.vertices.into_iter().collect()), vec![2, 6, 7]);
+        assert_eq!(sorted_vec(invalid_subgraph_1.edges.into_iter().collect()), vec![13]);
         assert_eq!(
-            {
-                let mut vs = invalid_subgraph_1.vertices.into_iter().collect::<Vec<_>>();
-                vs.sort();
-                vs
-            },
-            vec![2, 6, 7]
-        );
-        assert_eq!(invalid_subgraph_1.edges.into_iter().collect::<Vec<_>>(), vec![13]);
-        assert_eq!(
-            {
-                let mut hair = invalid_subgraph_1.hair.into_iter().collect::<Vec<_>>();
-                hair.sort();
-                hair
-            },
+            sorted_vec(invalid_subgraph_1.hair.into_iter().collect()),
             vec![5, 6, 9, 10, 11, 12, 14, 15, 16, 17]
         );
     }

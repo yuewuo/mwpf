@@ -301,10 +301,7 @@ impl<K: Eq + Hash + Clone, V: Hash> Map<K, V> {
 /* SET implementation */
 /// A `Set<T>` that provides Ord and fast Hash
 #[derive(Debug, Clone, Derivative)]
-pub struct Set<T: Hash>
-where
-    T:,
-{
+pub struct Set<T: Hash> {
     set: HashSet<T>,
     combined_hash: u64,
 }
@@ -407,7 +404,7 @@ impl<T: Eq + Hash + Clone + Debug> Extend<T> for Set<T> {
         };
         self.set.reserve(reserve);
         into_iter.for_each(move |t| {
-            self.set.insert(t);
+            self.insert(t);
         });
     }
 }
@@ -423,7 +420,7 @@ impl<'a, T: Eq + Hash + Clone + Debug> Extend<&'a T> for Set<T> {
         };
         self.set.reserve(reserve);
         into_iter.for_each(move |t| {
-            self.set.insert(t.clone());
+            self.insert(t.clone());
         });
     }
 }

@@ -456,18 +456,27 @@ pub mod tests {
             (3, Rational::from_float(10.).unwrap()),
             (9, Rational::from_float(10.).unwrap()),
         ]);
-        assert_eq!(weights.get_solution_local_minimum(&mut matrix), Some(vec![5, 7, 8]));
+        assert_eq!(
+            sorted_vec_option(weights.get_solution_local_minimum(&mut matrix)),
+            Some(vec![5, 7, 8])
+        );
         let weights = TestEdgeWeights::new(&[
             (7, Rational::from_float(10.).unwrap()),
             (9, Rational::from_float(10.).unwrap()),
         ]);
-        assert_eq!(weights.get_solution_local_minimum(&mut matrix), Some(vec![3, 4, 8]));
+        assert_eq!(
+            sorted_vec_option(weights.get_solution_local_minimum(&mut matrix)),
+            Some(vec![3, 4, 8])
+        );
         let weights = TestEdgeWeights::new(&[
             (3, Rational::from_float(10.).unwrap()),
             (4, Rational::from_float(10.).unwrap()),
             (7, Rational::from_float(10.).unwrap()),
         ]);
-        assert_eq!(weights.get_solution_local_minimum(&mut matrix), Some(vec![5, 6, 9]));
+        assert_eq!(
+            sorted_vec_option(weights.get_solution_local_minimum(&mut matrix)),
+            Some(vec![5, 6, 9])
+        );
     }
 
     #[test]

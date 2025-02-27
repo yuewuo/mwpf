@@ -331,9 +331,10 @@ impl SolverInitializer {
     }
 
     pub fn matches_subgraph_syndrome(&self, subgraph: &OutputSubgraph, defect_vertices: &[VertexIndex]) -> bool {
-        let subgraph_defect_vertices: Vec<_> = self.get_subgraph_syndrome(subgraph).into_iter().collect();
+        let mut subgraph_defect_vertices: Vec<_> = self.get_subgraph_syndrome(subgraph).into_iter().collect();
         let mut defect_vertices = defect_vertices.to_owned();
         defect_vertices.sort();
+        subgraph_defect_vertices.sort();
         if defect_vertices.len() != subgraph_defect_vertices.len() {
             println!(
                 "defect vertices: {:?}\nsubgraph_defect_vertices: {:?}",
@@ -1293,6 +1294,16 @@ impl BenchmarkSuite {
     fn py_append(&mut self, syndrome: SyndromePattern) {
         self.append(syndrome)
     }
+}
+
+pub fn sorted_vec<T: Ord>(vec: Vec<T>) -> Vec<T> {
+    let mut vec = vec;
+    vec.sort();
+    vec
+}
+
+pub fn sorted_vec_option<T: Ord>(vec: Option<Vec<T>>) -> Option<Vec<T>> {
+    vec.map(|vec| sorted_vec(vec))
 }
 
 #[cfg(test)]

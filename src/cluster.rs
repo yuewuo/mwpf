@@ -118,7 +118,7 @@ pub mod tests {
             fast_iter_set! { 9, 5, 6, 2, 3, 7, 11, 16, 15, 13, 12, 14 },
         );
         let node_indices = cluster.nodes.iter().map(|d| d.index).collect::<Vec<_>>();
-        assert_eq!(node_indices, vec![0, 1, 2]);
+        assert_eq!(sorted_vec(node_indices), vec![0, 1, 2]);
         cluster.parity_matrix.printstd();
         assert_eq!(
             cluster.parity_matrix.clone().printstd_str(),
