@@ -18,8 +18,10 @@ from enum import Enum
 import random
 import numpy as np
 import stim
-from io import BufferedReader
-
+from io import BufferedReader, BufferedWriter
+import time
+import struct
+from contextlib import nullcontext
 from .ref_circuit import *
 from .heralded_dem import *
 
@@ -72,6 +74,8 @@ class SinterMWPFDecoder:
 
     # record benchmark suite when enabled
     benchmark_suite_filename: Optional[str] = None
+    # record decoding data when enabled, including decoding time, primal and dual weights, etc.
+    trace_filename: Optional[str] = None
 
     # adding BP decoder as a pre-decoder
     bp: bool = False
@@ -83,7 +87,6 @@ class SinterMWPFDecoder:
     random_schedule_seed: int = 0
     serial_schedule_order: Optional[list[int]] = None
     bp_weight_mix_ratio: float = 1.0
-    skip_zero_syndrome: bool = True
     floor_weight: Optional[float] = (
         None  # when updating the mwpf weights, all the weights are enforced to be no less than this value; by default 0 which enforces all the weights to be non-negative
     )
@@ -186,9 +189,9 @@ class SinterMWPFDecoder:
             panic_cases=self.panic_cases,  # record all the panic information to the same place
             benchmark_suite=benchmark_suite,
             benchmark_suite_filename=self.benchmark_suite_filename,
+            trace_filename=self.trace_filename,
             bp_decoder=bp_decoder,
             bp_weight_mix_ratio=self.bp_weight_mix_ratio,
-            skip_zero_syndrome=self.skip_zero_syndrome,
             floor_weight=self.floor_weight,
         )
 
@@ -216,28 +219,35 @@ class SinterMWPFDecoder:
             solver = None
 
         num_det_bytes = math.ceil(num_dets / 8)
-        with open(dets_b8_in_path, "rb") as dets_in_f:
-            with open(obs_predictions_b8_out_path, "wb") as obs_out_f:
-                for dets_bit_packed in iter_det(
-                    dets_in_f, num_shots, num_det_bytes, self.with_progress
-                ):
-                    prediction = decode_common(
-                        dets_bit_packed=dets_bit_packed,
-                        predictor=predictor,
-                        solver=solver,
-                        num_dets=num_dets,
-                        num_obs=num_obs,
-                        panic_action=self.panic_action,
-                        panic_cases=self.panic_cases,
-                        benchmark_suite=benchmark_suite,
-                        skip_zero_syndrome=self.skip_zero_syndrome,
-                        bp_decoder=bp_decoder,
-                        bp_weight_mix_ratio=self.bp_weight_mix_ratio,
-                        floor_weight=self.floor_weight,
-                    )
-                    obs_out_f.write(
-                        int(prediction).to_bytes((num_obs + 7) // 8, byteorder="little")
-                    )
+        with (
+            open(self.trace_filename, "wb")
+            if self.trace_filename is not None
+            else nullcontext()
+        ) as trace_f:
+            with open(dets_b8_in_path, "rb") as dets_in_f:
+                with open(obs_predictions_b8_out_path, "wb") as obs_out_f:
+                    for dets_bit_packed in iter_det(
+                        dets_in_f, num_shots, num_det_bytes, self.with_progress
+                    ):
+                        prediction = decode_common(
+                            dets_bit_packed=dets_bit_packed,
+                            predictor=predictor,
+                            solver=solver,
+                            num_dets=num_dets,
+                            num_obs=num_obs,
+                            panic_action=self.panic_action,
+                            panic_cases=self.panic_cases,
+                            benchmark_suite=benchmark_suite,
+                            trace_f=trace_f,
+                            bp_decoder=bp_decoder,
+                            bp_weight_mix_ratio=self.bp_weight_mix_ratio,
+                            floor_weight=self.floor_weight,
+                        )
+                        obs_out_f.write(
+                            int(prediction).to_bytes(
+                                (num_obs + 7) // 8, byteorder="little"
+                            )
+                        )
 
         if benchmark_suite is not None:
             benchmark_suite.save_cbor(self.benchmark_suite_filename)
@@ -330,9 +340,9 @@ class MwpfCompiledDecoder:
     panic_action: PanicAction
     panic_cases: list[DecoderPanic]
     benchmark_suite: Optional[BenchmarkSuite]
+    trace_filename: Optional[str]
     benchmark_suite_filename: Optional[str]
     bp_decoder: Any
-    skip_zero_syndrome: bool
     bp_weight_mix_ratio: float
     floor_weight: Optional[float]
 
@@ -345,29 +355,34 @@ class MwpfCompiledDecoder:
         predictions = np.zeros(
             shape=(num_shots, (self.num_obs + 7) // 8), dtype=np.uint8
         )
-        for shot in range(num_shots):
-            dets_bit_packed = bit_packed_detection_event_data[shot]
-            prediction = decode_common(
-                dets_bit_packed=dets_bit_packed,
-                predictor=self.predictor,
-                solver=self.solver,
-                num_dets=self.num_dets,
-                num_obs=self.num_obs,
-                panic_action=self.panic_action,
-                panic_cases=self.panic_cases,
-                benchmark_suite=self.benchmark_suite,
-                skip_zero_syndrome=self.skip_zero_syndrome,
-                bp_decoder=self.bp_decoder,
-                bp_weight_mix_ratio=self.bp_weight_mix_ratio,
-                floor_weight=self.floor_weight,
-            )
-            predictions[shot] = np.packbits(
-                np.array(
-                    list(np.binary_repr(prediction, width=self.num_obs))[::-1],
-                    dtype=np.uint8,
-                ),
-                bitorder="little",
-            )
+        with (
+            open(self.trace_filename, "wb")
+            if self.trace_filename is not None
+            else nullcontext()
+        ) as trace_f:
+            for shot in range(num_shots):
+                dets_bit_packed = bit_packed_detection_event_data[shot]
+                prediction = decode_common(
+                    dets_bit_packed=dets_bit_packed,
+                    predictor=self.predictor,
+                    solver=self.solver,
+                    num_dets=self.num_dets,
+                    num_obs=self.num_obs,
+                    panic_action=self.panic_action,
+                    panic_cases=self.panic_cases,
+                    benchmark_suite=self.benchmark_suite,
+                    trace_f=trace_f,
+                    bp_decoder=self.bp_decoder,
+                    bp_weight_mix_ratio=self.bp_weight_mix_ratio,
+                    floor_weight=self.floor_weight,
+                )
+                predictions[shot] = np.packbits(
+                    np.array(
+                        list(np.binary_repr(prediction, width=self.num_obs))[::-1],
+                        dtype=np.uint8,
+                    ),
+                    bitorder="little",
+                )
 
         if self.benchmark_suite is not None:
             self.benchmark_suite.save_cbor(self.benchmark_suite_filename)
@@ -384,7 +399,7 @@ def decode_common(
     panic_action: PanicAction,
     panic_cases: list[DecoderPanic],
     benchmark_suite: Optional[BenchmarkSuite],
-    skip_zero_syndrome: bool,
+    trace_f: Optional[BufferedWriter],
     bp_decoder: Any,
     bp_weight_mix_ratio: float,
     floor_weight: Optional[float],
@@ -394,10 +409,9 @@ def decode_common(
         if benchmark_suite is not None:
             benchmark_suite.append(syndrome)
         prediction = 0
-    elif skip_zero_syndrome and np.count_nonzero(dets_bit_packed) == 0:
-        prediction = 0
     else:
         try:
+            start = time.perf_counter()
             if bp_decoder is not None:
                 dets_bits = np.unpackbits(
                     dets_bit_packed, count=num_dets, bitorder="little"
@@ -415,12 +429,19 @@ def decode_common(
                         floor_weight=floor_weight,
                     )
                     solver.solve(syndrome)
-                    subgraph = solver.subgraph()
-                    # # subgraph = set(solver.subgraph()) ^ set(np.flatnonzero(bp_solution))
+                    if trace_f is None:
+                        subgraph = solver.subgraph()
+                    else:
+                        subgraph, bound = solver.subgraph_range()
+                        record_trace(trace_f, time.perf_counter() - start, bound)
                     prediction = predictor.prediction_of(syndrome, subgraph)
             else:
                 solver.solve(syndrome)
-                subgraph = solver.subgraph()
+                if trace_f is None:
+                    subgraph = solver.subgraph()
+                else:
+                    subgraph, bound = solver.subgraph_range()
+                    record_trace(trace_f, time.perf_counter() - start, bound)
                 prediction = predictor.prediction_of(syndrome, subgraph)
         except BaseException as e:
             panic_cases.append(
@@ -439,3 +460,10 @@ def decode_common(
             elif panic_action == PanicAction.CATCH:
                 prediction = random.getrandbits(num_obs)
     return prediction
+
+
+def record_trace(trace_f: BufferedWriter, elapsed: float, bound: mwpf.WeightRange):
+    trace_f.write(struct.pack("f", elapsed))
+    trace_f.write(struct.pack("f", bound.lower.float()))
+    trace_f.write(struct.pack("f", bound.upper.float()))
+    trace_f.write(struct.pack("f", 0))  # reserved
