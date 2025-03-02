@@ -1,5 +1,4 @@
 use std::{
-    cell::UnsafeCell,
     cmp::Ordering,
     collections::{BTreeMap, BTreeSet},
     fmt::Debug,
@@ -8,24 +7,42 @@ use std::{
 
 use derivative::Derivative;
 use hashbrown::{HashMap, HashSet};
+use std::ops::{Deref, DerefMut};
 
 /* MAP implementation */
-#[derive(Debug, Derivative)]
+#[derive(Debug, Derivative, Clone)]
 /// A `Map<K, V>` that provides Ord and fast Hash
 pub struct Map<K, V> {
     map: HashMap<K, V>,
-    combined_hash: UnsafeCell<u64>,
-    dirty: UnsafeCell<bool>,
+    combined_hash: u64,
 }
 
-// implement Clone
-impl<K: Eq + Hash + Clone, V: Hash + Clone> Clone for Map<K, V> {
-    fn clone(&self) -> Self {
-        Self {
-            map: self.map.clone(),
-            combined_hash: UnsafeCell::new(unsafe { *self.combined_hash.get() }),
-            dirty: UnsafeCell::new(unsafe { *self.dirty.get() }),
-        }
+/// A "guard" that holds a mutable reference to `value` in the `Map` along with
+/// the associated `key`. On drop, it will re-hash the new value.
+pub struct MutValueGuard<'a, K: Hash + Clone + Eq, V: Hash> {
+    key: &'a K,
+    value: &'a mut V,
+    hash: &'a mut u64,
+}
+
+/// The guard will implement Deref/DerefMut so it can be used like a &mut V
+impl<'a, K: Hash + Clone + Eq, V: Hash> Deref for MutValueGuard<'a, K, V> {
+    type Target = V;
+    fn deref(&self) -> &Self::Target {
+        self.value
+    }
+}
+impl<'a, K: Hash + Clone + Eq, V: Hash> DerefMut for MutValueGuard<'a, K, V> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.value
+    }
+}
+
+/// On drop, recalc new hash and update the map’s combined_hash
+impl<'a, K: Hash + Clone + Eq, V: Hash> Drop for MutValueGuard<'a, K, V> {
+    fn drop(&mut self) {
+        let new_hash = Map::<K, V>::compute_hash(self.key, self.value);
+        *self.hash = self.hash.wrapping_add(new_hash);
     }
 }
 
@@ -34,20 +51,7 @@ impl<K: Eq + Hash + Clone, V: Hash> Map<K, V> {
     pub fn new() -> Self {
         Self {
             map: HashMap::new(),
-            combined_hash: UnsafeCell::new(0),
-            dirty: UnsafeCell::new(false),
-        }
-    }
-
-    /// Update the combined hash if dirty
-    pub fn update_hash(&self) {
-        if unsafe { *self.dirty.get() } {
-            let mut hash = 0u64;
-            for (key, value) in self.map.iter() {
-                hash = hash.wrapping_add(Self::compute_hash(key, value));
-            }
-            unsafe { *self.combined_hash.get() = hash };
-            unsafe { *self.dirty.get() = false };
+            combined_hash: 0,
         }
     }
 
@@ -66,11 +70,11 @@ impl<K: Eq + Hash + Clone, V: Hash> Map<K, V> {
             hashbrown::hash_map::Entry::Occupied(mut entry) => {
                 let old_value = entry.get_mut();
                 let old_hash = Self::compute_hash(&key, old_value);
-                unsafe { *self.combined_hash.get() = (*self.combined_hash.get()).wrapping_sub(old_hash).wrapping_add(hash) };
+                self.combined_hash = self.combined_hash.wrapping_sub(old_hash).wrapping_add(hash);
                 Some(std::mem::replace(old_value, value))
             }
             hashbrown::hash_map::Entry::Vacant(entry) => {
-                unsafe { *self.combined_hash.get() = (*self.combined_hash.get()).wrapping_add(hash) };
+                self.combined_hash = self.combined_hash.wrapping_add(hash);
                 entry.insert(value);
                 None
             }
@@ -79,10 +83,10 @@ impl<K: Eq + Hash + Clone, V: Hash> Map<K, V> {
 
     /// Removes a key-value pair from the map, returning the value if it exists
     pub fn remove(&mut self, key: &K) -> Option<V> {
-        if let Some(removed_val) = self.map.remove(key) {
-            let removed_hash = Self::compute_hash(key, &removed_val);
-            unsafe { *self.combined_hash.get() = (*self.combined_hash.get()).wrapping_sub(removed_hash) };
-            Some(removed_val)
+        if let Some(old_val) = self.map.remove(key) {
+            let old_hash = Self::compute_hash(key, &old_val);
+            self.combined_hash = self.combined_hash.wrapping_sub(old_hash);
+            Some(old_val)
         } else {
             None
         }
@@ -98,8 +102,7 @@ impl<K: Eq + Hash + Clone, V: Hash> Map<K, V> {
     #[inline]
     pub fn clear(&mut self) {
         self.map.clear();
-        self.combined_hash = UnsafeCell::new(0);
-        self.dirty = UnsafeCell::new(false);
+        self.combined_hash = 0;
     }
 
     /// iter
@@ -126,11 +129,20 @@ impl<K: Eq + Hash + Clone, V: Hash> Map<K, V> {
         self.map.get(key)
     }
 
-    /// Get mutable reference
-    #[inline]
-    pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
-        unsafe { *self.dirty.get() = true };
-        self.map.get_mut(key)
+    /// The key method: returns a "guard" instead of `&mut V`.
+    /// When that guard is dropped, it will populate the hash with the re-hashed new value
+    pub fn get_mut<'a>(&'a mut self, key: &'a K) -> Option<MutValueGuard<'a, K, V>> {
+        return if let Some(value) = self.map.get_mut(key) {
+            let old_hash = Self::compute_hash(key, value);
+            self.combined_hash = self.combined_hash.wrapping_sub(old_hash);
+            Some(MutValueGuard {
+                key,
+                value,
+                hash: &mut self.combined_hash,
+            })
+        } else {
+            None
+        };
     }
 
     /// Get keys in iterator form
@@ -142,7 +154,7 @@ impl<K: Eq + Hash + Clone, V: Hash> Map<K, V> {
     /// Get combined hash value
     #[inline]
     pub fn combined_hash(&self) -> u64 {
-        unsafe { *self.combined_hash.get() }
+        self.combined_hash
     }
 }
 
@@ -181,8 +193,7 @@ impl<'a, K: Eq + Hash + Clone, V: Hash + Clone> Extend<(&'a K, &'a V)> for Map<K
 
 impl<K: Eq + Hash + Clone, V: Hash> Hash for Map<K, V> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.update_hash();
-        unsafe { *self.combined_hash.get() }.hash(state);
+        self.combined_hash.hash(state);
     }
 }
 
@@ -211,9 +222,7 @@ impl<K: Eq + Hash + Clone, V: Hash> Default for Map<K, V> {
 
 impl<K: Eq + Hash + Clone, V: PartialEq + Hash> PartialEq for Map<K, V> {
     fn eq(&self, other: &Self) -> bool {
-        self.update_hash();
-        other.update_hash();
-        if unsafe { *self.combined_hash.get() != *other.combined_hash.get() } {
+        if self.combined_hash != other.combined_hash {
             return false;
         }
         self.map == other.map
@@ -229,10 +238,7 @@ impl<K: Eq + Hash + Clone, V: PartialEq + Hash> Eq for Map<K, V> {}
 
 impl<K: Ord + Hash + Clone, V: Ord + Hash> Ord for Map<K, V> {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.update_hash();
-        other.update_hash();
-
-        let order = unsafe { *self.combined_hash.get() }.cmp(&unsafe { *other.combined_hash.get() });
+        let order = self.combined_hash.cmp(&other.combined_hash);
         if !matches!(order, Ordering::Equal) {
             return order;
         }
@@ -256,9 +262,6 @@ impl<K: Eq + Hash + Clone, V: Hash, const N: usize> From<[(K, V); N]> for Map<K,
     }
 }
 
-unsafe impl<K: Eq + Hash + Clone + Send, V: Send> Send for Map<K, V> {}
-unsafe impl<K: Eq + Hash + Clone + Sync, V: Sync> Sync for Map<K, V> {}
-
 /// An enum representing either an occupied or vacant entry in the map, consisten with std
 pub enum Entry<'a, K, V> {
     Occupied(OccupiedEntry<'a, K, V>),
@@ -280,12 +283,6 @@ impl<'a, K: Eq + Hash + Clone, V: Hash> OccupiedEntry<'a, K, V> {
     #[inline]
     pub fn get(&self) -> &V {
         self.entry.get()
-    }
-
-    /// Returns a mutable reference to the value
-    #[inline]
-    pub fn get_mut(&mut self) -> &mut V {
-        self.entry.get_mut()
     }
 
     /// Replaces the value and returns the old value
@@ -324,11 +321,11 @@ impl<K: Eq + Hash + Clone, V: Hash> Map<K, V> {
         match self.map.entry(key) {
             hashbrown::hash_map::Entry::Occupied(entry) => Entry::Occupied(OccupiedEntry {
                 entry,
-                combined_hash: unsafe { &mut *self.combined_hash.get() },
+                combined_hash: &mut self.combined_hash,
             }),
             hashbrown::hash_map::Entry::Vacant(entry) => Entry::Vacant(VacantEntry {
                 entry,
-                combined_hash: unsafe { &mut *self.combined_hash.get() },
+                combined_hash: &mut self.combined_hash,
             }),
         }
     }
@@ -556,7 +553,7 @@ mod tests {
     }
 
     // #[test]
-    fn test_iteration_order() {
+    fn _test_iteration_order() {
         let mut set = Set::new();
         set.insert(10);
         set.insert(20);

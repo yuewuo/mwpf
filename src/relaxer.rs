@@ -69,11 +69,11 @@ impl Relaxer {
         let mut edges = FastIterMap::new();
         for (invalid_subgraph, speed) in direction.iter() {
             for &edge_index in invalid_subgraph.hair.iter() {
-                if let Some(edge) = edges.get_mut(&edge_index) {
+                if let Some(mut edge) = edges.get_mut(&edge_index) {
                     *edge += speed;
-                } else {
-                    edges.insert(edge_index, speed.clone());
+                    continue;
                 }
+                edges.insert(edge_index, speed.clone());
             }
         }
         let mut untighten_edges = FastIterMap::new();

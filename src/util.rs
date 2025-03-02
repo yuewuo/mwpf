@@ -97,7 +97,7 @@ cfg_if::cfg_if! {
 compile_error!("Features `btrees` and `indexmap` are mutually exclusive.");
 
 #[cfg(all(feature = "btrees", feature = "fast_ds"))]
-compile_error!("Features `btrees` and `feature_c` are mutually exclusive.");
+compile_error!("Features `btrees` and `fast_ds` are mutually exclusive.");
 
 #[cfg(all(feature = "fast_ds", feature = "indexmap"))]
 compile_error!("Features `fast_ds` and `indexmap` are mutually exclusive.");

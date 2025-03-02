@@ -90,7 +90,7 @@ impl RelaxerForest {
             debug_assert!(speed.is_positive());
             if self.tight_edges.contains(edge_index) {
                 debug_assert!(self.edge_untightener.contains_key(edge_index));
-                let require_speed = if let Some(existing_speed) = untightened_edges.get_mut(edge_index) {
+                let require_speed = if let Some(mut existing_speed) = untightened_edges.get_mut(edge_index) {
                     if &*existing_speed >= speed {
                         *existing_speed -= speed;
                         Rational::zero()
@@ -111,20 +111,20 @@ impl RelaxerForest {
                     let expanded_edge_relaxer = self.expanded_relaxers.get(edge_relaxer).unwrap();
                     for (subgraph, original_speed) in expanded_edge_relaxer.get_direction().iter() {
                         let new_speed = original_speed * speed_ratio;
-                        if let Some(speed) = directions.get_mut(subgraph) {
+                        if let Some(mut speed) = directions.get_mut(subgraph) {
                             *speed += new_speed;
-                        } else {
-                            directions.insert(subgraph.clone(), new_speed);
+                            continue;
                         }
+                        directions.insert(subgraph.clone(), new_speed);
                     }
                     for (edge_index, original_speed) in expanded_edge_relaxer.get_untighten_edges().iter() {
                         debug_assert!(original_speed.is_negative());
                         let new_speed = -original_speed * speed_ratio;
-                        if let Some(speed) = untightened_edges.get_mut(edge_index) {
+                        if let Some(mut speed) = untightened_edges.get_mut(edge_index) {
                             *speed += new_speed;
-                        } else {
-                            untightened_edges.insert(*edge_index, new_speed);
+                            continue;
                         }
+                        untightened_edges.insert(*edge_index, new_speed);
                     }
                     debug_assert_eq!(untightened_edges.get(edge_index), Some(&require_speed));
                     *untightened_edges.get_mut(edge_index).unwrap() -= require_speed;

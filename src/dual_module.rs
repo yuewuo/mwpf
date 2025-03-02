@@ -463,10 +463,10 @@ pub trait DualModuleImpl {
                                 v.insert(grow_rate.clone());
                             }
                             FastIterEntry::Occupied(mut o) => {
-                                let current = o.get_mut();
-                                *current += grow_rate.clone();
+                                o.insert(o.get() + grow_rate.clone());
                             }
                         }
+
                         #[cfg(feature = "incr_lp")]
                         self.update_edge_cluster_weights(*edge_index, _cluster_index, grow_rate.clone());
                         // note: comment out if not using cluster-based
