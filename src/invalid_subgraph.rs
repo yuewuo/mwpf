@@ -4,7 +4,7 @@ use crate::matrix::*;
 use crate::plugin::EchelonMatrix;
 use crate::util::*;
 use std::cmp::Ordering;
-use std::collections::hash_map::DefaultHasher;
+// use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
@@ -117,7 +117,7 @@ impl InvalidSubgraph {
 
     #[cfg(not(feature = "index_map"))]
     pub fn update_hash(&mut self) {
-        let mut hasher = DefaultHasher::new();
+        let mut hasher = DefaultHasher::default();
         self.vertices.hash(&mut hasher);
         self.edges.hash(&mut hasher);
         self.hair.hash(&mut hasher);
@@ -246,7 +246,7 @@ pub mod tests {
     }
 
     pub fn get_default_hash_value(object: &impl Hash) -> u64 {
-        let mut hasher = DefaultHasher::new();
+        let mut hasher = DefaultHasher::default();
         object.hash(&mut hasher);
         hasher.finish()
     }

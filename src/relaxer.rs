@@ -3,7 +3,7 @@ use crate::invalid_subgraph::*;
 use crate::util::*;
 use num_traits::{Signed, Zero};
 use std::cmp::Ordering;
-use std::collections::hash_map::DefaultHasher;
+// use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
@@ -108,7 +108,7 @@ impl Relaxer {
     }
 
     pub fn update_hash(&mut self) {
-        let mut hasher = DefaultHasher::new();
+        let mut hasher = DefaultHasher::default();
         // only hash the direction since other field are derived from the direction
         #[cfg(not(feature = "index_map"))]
         self.direction.hash(&mut hasher);

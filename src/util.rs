@@ -46,6 +46,8 @@ cfg_if::cfg_if! {
     }
 }
 
+pub type DefaultHasher = gxhash::GxHasher;
+
 cfg_if::cfg_if! {
     if #[cfg(feature="python_binding")] {
         pub use crate::python_signal_checker::PYTHON_SIGNAL_CHECKER;

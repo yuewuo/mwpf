@@ -2,7 +2,7 @@ use std::{
     cmp::Ordering,
     collections::{BTreeMap, BTreeSet},
     fmt::Debug,
-    hash::{DefaultHasher, Hash, Hasher},
+    hash::{Hash, Hasher},
 };
 
 use derivative::Derivative;
@@ -57,7 +57,7 @@ impl<K: Eq + Hash + Clone, V: Hash> Map<K, V> {
 
     /// Computes the hash of a key-value pair
     fn compute_hash(key: &K, value: &V) -> u64 {
-        let mut hasher = DefaultHasher::default();
+        let mut hasher = crate::util::DefaultHasher::default();
         key.hash(&mut hasher);
         value.hash(&mut hasher);
         hasher.finish()
@@ -350,7 +350,7 @@ impl<T: Eq + Hash + Clone + Debug> Set<T> {
 
     /// Computes the hash of a value
     pub fn compute_hash(value: &T) -> u64 {
-        let mut hasher = DefaultHasher::new();
+        let mut hasher = crate::util::DefaultHasher::default();
         value.hash(&mut hasher);
         hasher.finish()
     }

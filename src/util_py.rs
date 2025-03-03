@@ -12,7 +12,6 @@ use pyo3::basic::CompareOp;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyFloat, PyInt, PyList, PySet, PyTuple};
 use std::fmt::Debug;
-use std::hash::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 macro_rules! bind_trait_simple_wrapper {
