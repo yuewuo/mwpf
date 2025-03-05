@@ -39,6 +39,7 @@ pub mod ordered_float;
 pub mod plugin;
 pub mod plugin_single_hair;
 pub mod plugin_union_find;
+pub mod plugin_blossom;
 pub mod pointers;
 pub mod primal_module;
 pub mod primal_module_serial;
