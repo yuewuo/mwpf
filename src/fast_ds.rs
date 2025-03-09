@@ -7,6 +7,8 @@ use std::{
 
 use derivative::Derivative;
 use hashbrown::{HashMap, HashSet};
+#[cfg(feature = "python_binding")]
+use pyo3::prelude::*;
 use std::ops::{Deref, DerefMut};
 
 /* MAP implementation */
@@ -337,6 +339,19 @@ impl<K: Eq + Hash + Clone, V: Hash> Map<K, V> {
 pub struct Set<T: Hash> {
     set: HashSet<T>,
     combined_hash: u64,
+}
+
+#[cfg(feature = "python_binding")]
+impl<'py, T: Hash + Clone + Eq + IntoPyObject<'py>> IntoPyObject<'py> for Set<T> {
+    type Target = PyAny; // the Python type
+    type Output = Bound<'py, Self::Target>; // in most cases this will be `Bound`
+    type Error = std::convert::Infallible; // the conversion error type, has to be convertable to `PyErr`
+
+    fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
+        let set: std::collections::HashSet<T> = self.set.iter().cloned().collect();
+        use crate::pyo3::IntoPyObjectExt;
+        Ok(set.into_bound_py_any(py).unwrap())
+    }
 }
 
 impl<T: Eq + Hash + Clone + Debug> Set<T> {

@@ -110,9 +110,9 @@ impl Relaxer {
     pub fn update_hash(&mut self) {
         let mut hasher = DefaultHasher::default();
         // only hash the direction since other field are derived from the direction
-        #[cfg(not(feature = "index_map"))]
-        self.direction.hash(&mut hasher);
-        #[cfg(feature = "index_map")]
+        // #[cfg(not(feature = "index_map"))]
+        // self.direction.hash(&mut hasher);
+        // #[cfg(feature = "index_map")]
         self.direction.iter().for_each(|x| x.hash(&mut hasher));
         self.hash_value = hasher.finish();
     }

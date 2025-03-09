@@ -141,8 +141,8 @@ impl HyperEdge {
 impl HyperEdge {
     #[new]
     fn py_new(vertices: &Bound<PyAny>, weight: &Bound<PyAny>) -> PyResult<Self> {
-        use crate::util_py::py_into_btree_set;
-        let vertices: Vec<VertexIndex> = py_into_btree_set::<VertexIndex>(vertices)?.into_iter().collect();
+        use crate::util_py::py_into_vec;
+        let vertices: Vec<VertexIndex> = py_into_vec::<VertexIndex>(vertices)?;
         Ok(Self::new(vertices, PyRational::from(weight).0))
     }
     fn __repr__(&self) -> String {
@@ -228,11 +228,11 @@ impl SolverInitializer {
         weighted_edges: Vec<HyperEdge>,
         heralds: Option<&Bound<PyList>>,
     ) -> PyResult<Self> {
-        let mut heralds_vec = vec![];
+        let mut heralds_vec: Vec<Vec<(EdgeIndex, Weight)>> = vec![];
         if let Some(heralds) = heralds {
             for herald in heralds.iter() {
                 heralds_vec.push(
-                    py_into_btree_map::<EdgeIndex, Py<PyAny>>(&herald)?
+                    py_into_map::<EdgeIndex, Py<PyAny>>(&herald)?
                         .into_iter()
                         .map(|(k, v)| -> (EdgeIndex, Weight) { (k, PyRational::from(v.bind(py)).into()) })
                         .collect(),
@@ -261,7 +261,7 @@ impl SolverInitializer {
         self.weighted_edges = weighted_edges;
     }
     #[getter]
-    fn get_heralds(&self) -> Vec<FastIterMap<EdgeIndex, PyRational>> {
+    fn get_heralds(&self) -> Vec<std::collections::HashMap<EdgeIndex, PyRational>> {
         self.heralds
             .iter()
             .map(|x| x.iter().map(|(k, v)| (*k, v.clone().into())).collect())
@@ -272,7 +272,7 @@ impl SolverInitializer {
         self.heralds = vec![];
         for herald in heralds.iter() {
             self.heralds.push(
-                py_into_btree_map::<EdgeIndex, Py<PyAny>>(&herald)?
+                py_into_map::<EdgeIndex, Py<PyAny>>(&herald)?
                     .into_iter()
                     .map(|(k, v)| -> (EdgeIndex, Weight) { (k, PyRational::from(v.bind(py)).into()) })
                     .collect(),
@@ -497,9 +497,9 @@ impl SyndromePattern {
         override_weights: Option<&Bound<PyList>>,
         override_ratio: Option<&Bound<PyAny>>,
     ) -> PyResult<Self> {
-        use crate::util_py::py_into_btree_set;
+        use crate::util_py::py_into_vec;
         let defect_vertices: Vec<VertexIndex> = if let Some(defect_vertices) = defect_vertices {
-            py_into_btree_set(defect_vertices)?.into_iter().collect()
+            py_into_vec(defect_vertices)?
         } else {
             vec![]
         };
@@ -518,12 +518,12 @@ impl SyndromePattern {
             ))
         } else {
             let erasures: Vec<EdgeIndex> = if let Some(erasures) = erasures {
-                py_into_btree_set(erasures)?.into_iter().collect()
+                py_into_vec(erasures)?
             } else {
                 vec![]
             };
             let heralds: Vec<HeraldIndex> = if let Some(heralds) = heralds {
-                py_into_btree_set(heralds)?.into_iter().collect()
+                py_into_vec(heralds)?
             } else {
                 vec![]
             };

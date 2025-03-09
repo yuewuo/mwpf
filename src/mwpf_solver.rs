@@ -152,15 +152,15 @@ macro_rules! bind_trait_to_python {
                 vertices: Option<&Bound<PyAny>>,
                 edges: Option<&Bound<PyAny>>,
             ) -> PyResult<PyDualNodePtr> {
-                let hair = py_into_btree_set(hair)?;
+                let hair = py_into_set(hair)?;
                 assert!(!hair.is_empty(), "hair must not be empty");
                 let vertices = if let Some(vertices) = vertices {
-                    py_into_btree_set(vertices)?
+                    py_into_set(vertices)?
                 } else {
                     FastIterSet::new()
                 };
                 let edges = if let Some(edges) = edges {
-                    py_into_btree_set(edges)?
+                    py_into_set(edges)?
                 } else {
                     FastIterSet::new()
                 };
@@ -259,14 +259,14 @@ macro_rules! bind_trait_to_python {
             ) -> PyResult<InvalidSubgraph> {
                 // edges default to empty set
                 let edges = if let Some(edges) = edges {
-                    py_into_btree_set(edges)?
+                    py_into_set(edges)?
                 } else {
                     FastIterSet::new()
                 };
                 // vertices must be superset of the union of all edges
                 let interface = self.0.interface_ptr.read_recursive();
                 Ok(if let Some(vertices) = vertices {
-                    let vertices = py_into_btree_set(vertices)?;
+                    let vertices = py_into_set(vertices)?;
                     InvalidSubgraph::new_complete(vertices, edges, &interface.decoding_graph)
                 } else {
                     InvalidSubgraph::new(edges, &interface.decoding_graph)
@@ -948,15 +948,15 @@ impl SolverBPWrapper {
         vertices: Option<&Bound<PyAny>>,
         edges: Option<&Bound<PyAny>>,
     ) -> PyResult<PyDualNodePtr> {
-        let hair = py_into_btree_set(hair)?;
+        let hair = py_into_set(hair)?;
         assert!(!hair.is_empty(), "hair must not be empty");
         let vertices = if let Some(vertices) = vertices {
-            py_into_btree_set(vertices)?
+            py_into_set(vertices)?
         } else {
             FastIterSet::new()
         };
         let edges = if let Some(edges) = edges {
-            py_into_btree_set(edges)?
+            py_into_set(edges)?
         } else {
             FastIterSet::new()
         };
@@ -1069,14 +1069,14 @@ impl SolverBPWrapper {
     ) -> PyResult<InvalidSubgraph> {
         // edges default to empty set
         let edges = if let Some(edges) = edges {
-            py_into_btree_set(edges)?
+            py_into_set(edges)?
         } else {
             FastIterSet::new()
         };
         // vertices must be superset of the union of all edges
         let interface = self.solver.interface_ptr().read_recursive();
         Ok(if let Some(vertices) = vertices {
-            let vertices = py_into_btree_set(vertices)?;
+            let vertices = py_into_set(vertices)?;
             InvalidSubgraph::new_complete(vertices, edges, &interface.decoding_graph)
         } else {
             InvalidSubgraph::new(edges, &interface.decoding_graph)
