@@ -281,8 +281,9 @@ impl SolverInitializer {
     }
 
     pub fn matches_subgraph_syndrome(&self, subgraph: &OutputSubgraph, defect_vertices: &[VertexIndex]) -> bool {
-        let subgraph_defect_vertices: Vec<_> = self.get_subgraph_syndrome(subgraph).into_iter().collect();
+        let mut subgraph_defect_vertices: Vec<_> = self.get_subgraph_syndrome(subgraph).into_iter().collect();
         let mut defect_vertices = defect_vertices.to_owned();
+        subgraph_defect_vertices.sort();
         defect_vertices.sort();
         if defect_vertices.len() != subgraph_defect_vertices.len() {
             println!(
@@ -399,6 +400,10 @@ impl SyndromePattern {
         ratio: Weight,
         floor_weight: Option<Weight>,
     ) -> Self {
+        println!(
+            "defect_vertices: {:?}, weights: {:?}, ratio: {:?}, floor_weight: {:?}",
+            defect_vertices, weights, ratio, floor_weight
+        );
         Self {
             defect_vertices,
             erasures: vec![],
