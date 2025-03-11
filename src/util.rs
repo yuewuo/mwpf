@@ -1,3 +1,6 @@
+#[cfg(feature = "fast_ds")]
+use crate::fast_ds;
+use crate::mwpf_solver::*;
 #[cfg(not(feature = "float_lp"))]
 use crate::num_rational;
 use crate::num_traits::{FromPrimitive, ToPrimitive};
@@ -6,7 +9,6 @@ use crate::rand_xoshiro::rand_core::RngCore;
 #[cfg(feature = "python_binding")]
 use crate::util_py::*;
 use crate::visualize::*;
-use crate::{fast_ds, mwpf_solver::*};
 #[cfg(feature = "index_map")]
 use indexmap::{IndexMap, IndexSet};
 use itertools::izip;
@@ -17,9 +19,6 @@ use pyo3::prelude::*;
 #[cfg(feature = "python_binding")]
 use pyo3::types::{PyDict, PyFloat, PyList, PyTuple};
 use serde::{Deserialize, Serialize};
-
-#[cfg(feature = "btrees")]
-use std::collections::{BTreeMap, BTreeSet};
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::{BufReader, BufWriter};
