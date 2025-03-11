@@ -1,7 +1,7 @@
 use num_traits::Zero;
 use serde::{Deserialize, Serialize};
 
-const EPSILON: f64 = 1e-4; // note: it would be interesting to play around with this.
+const EPSILON: f64 = 1e-10; // note: it would be interesting to play around with this.
 const COMP_EPSILON: f64 = 1e-10; // note: it would be interesting to play around with this.
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

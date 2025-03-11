@@ -192,7 +192,7 @@ impl<'a> BpDecoder {
         if (self.bp_input_type == BpInputType::Auto && input_vector.len() == self.bit_count)
             || (self.bp_input_type == BpInputType::ReceivedVector)
         {
-            println!("this is invoked");
+            // println!("this is invoked");
             let syndrome = self.pcm.mulvec(input_vector);
             let rv_decoding = if self.schedule == BpSchedule::Parallel {
                 self.bp_decode_parallel(&syndrome)
@@ -240,8 +240,14 @@ impl<'a> BpDecoder {
                         unsafe {
                             (*e).inner.check_to_bit_msg *= temp;
                             let message_sign = if syndrome[i] != 0 { -1.0 } else { 1.0 };
-                            (*e).inner.check_to_bit_msg = message_sign
-                                * ((1.0 + (*e).inner.check_to_bit_msg) / (1.0 - (*e).inner.check_to_bit_msg)).ln();
+                            // (*e).inner.check_to_bit_msg = message_sign
+                            //     * ((1.0 + (*e).inner.check_to_bit_msg) / (1.0 - (*e).inner.check_to_bit_msg)).ln();
+                            // Note: However, shouldn't we just return? (-inf should be the actual result)
+                            // TODO: Test with this
+                            let eps = 1e-10;
+                            let safe_msg = (*e).inner.check_to_bit_msg.clamp(-1.0 + eps, 1.0 - eps);
+                            (*e).inner.check_to_bit_msg = message_sign * ((1.0 + safe_msg) / (1.0 - safe_msg)).ln();
+
                             temp *= ((*e).inner.bit_to_check_msg / 2.0).tanh();
                         }
                     }

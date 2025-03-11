@@ -114,9 +114,16 @@ pub trait PrimalModuleImpl {
         initializer: &Arc<SolverInitializer>,
     ) -> Arc<SyndromePattern> {
         // update weights given the syndrome pattern
-        if let Some((weights, ratio)) = syndrome_pattern.override_weights.as_ref() {
-            println!("override weights: {:?}, ratio: {:?}", weights, ratio);
-            dual_module.update_weights(weights.clone(), ratio.clone());
+        if let Some((weights, mix_ratio, floor_weight)) = syndrome_pattern.override_weights.as_ref() {
+            let mut weights = weights.clone();
+            if let Some(floor_weight) = floor_weight {
+                weights.iter_mut().for_each(|w| {
+                    if *w < *floor_weight {
+                        *w = floor_weight.clone();
+                    }
+                });
+            }
+            dual_module.update_weights(weights, mix_ratio.clone());
         } else {
             let mut weight_updates: BTreeMap<EdgeIndex, Weight> = BTreeMap::new();
             for &herald_index in syndrome_pattern.heralds.iter() {

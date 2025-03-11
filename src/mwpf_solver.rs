@@ -424,8 +424,10 @@ impl SolverTrait for SolverSerialPlugins {
         }
         self.syndrome_loaded = true;
 
+        let original_syndrome_pattern = Arc::new(syndrome_pattern);
+
         let syndrome_pattern = self.primal_module.weight_preprocessing(
-            Arc::new(syndrome_pattern),
+            original_syndrome_pattern.clone(),
             &mut self.dual_module,
             &self.model_graph.initializer,
         );
@@ -439,7 +441,7 @@ impl SolverTrait for SolverSerialPlugins {
             {
                 let subgraph = self.subgraph();
                 self.model_graph
-                    .matches_subgraph_syndrome(&subgraph, &syndrome_pattern.defect_vertices)
+                    .matches_subgraph_syndrome(&subgraph, &original_syndrome_pattern.defect_vertices)
             },
             "the subgraph does not generate the syndrome"
         );

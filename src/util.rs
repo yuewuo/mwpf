@@ -281,8 +281,9 @@ impl SolverInitializer {
     }
 
     pub fn matches_subgraph_syndrome(&self, subgraph: &OutputSubgraph, defect_vertices: &[VertexIndex]) -> bool {
-        let subgraph_defect_vertices: Vec<_> = self.get_subgraph_syndrome(subgraph).into_iter().collect();
+        let mut subgraph_defect_vertices: Vec<_> = self.get_subgraph_syndrome(subgraph).into_iter().collect();
         let mut defect_vertices = defect_vertices.to_owned();
+        subgraph_defect_vertices.sort();
         defect_vertices.sort();
         if defect_vertices.len() != subgraph_defect_vertices.len() {
             println!(
@@ -377,7 +378,7 @@ pub struct SyndromePattern {
     pub heralds: Vec<HeraldIndex>,
     /// a set of new weights that are mixed with existing weights; this will override
     /// the weight changes of erasures and heralds
-    pub override_weights: Option<(Vec<Weight>, Weight)>,
+    pub override_weights: Option<(Vec<Weight>, Weight, Option<Weight>)>,
 }
 
 impl SyndromePattern {
@@ -393,12 +394,17 @@ impl SyndromePattern {
             override_weights: None,
         }
     }
-    pub fn new_with_override_weights(defect_vertices: Vec<VertexIndex>, weights: Vec<Weight>, ratio: Weight) -> Self {
+    pub fn new_with_override_weights(
+        defect_vertices: Vec<VertexIndex>,
+        weights: Vec<Weight>,
+        ratio: Weight,
+        floor_weight: Option<Weight>,
+    ) -> Self {
         Self {
             defect_vertices,
             erasures: vec![],
             heralds: vec![],
-            override_weights: Some((weights, ratio)),
+            override_weights: Some((weights, ratio, floor_weight)),
         }
     }
     pub fn new_vertices(defect_vertices: Vec<VertexIndex>) -> Self {
@@ -436,13 +442,14 @@ impl MWPSVisualizer for SyndromePattern {
 #[pymethods]
 impl SyndromePattern {
     #[new]
-    #[pyo3(signature = (defect_vertices=None, erasures=None, heralds=None, override_weights=None, override_ratio=None))]
+    #[pyo3(signature = (defect_vertices=None, erasures=None, heralds=None, override_weights=None, override_ratio=None, floor_weight=None))]
     fn py_new(
         defect_vertices: Option<&Bound<PyAny>>,
         erasures: Option<&Bound<PyAny>>,
         heralds: Option<&Bound<PyAny>>,
         override_weights: Option<&Bound<PyList>>,
         override_ratio: Option<&Bound<PyAny>>,
+        floor_weight: Option<&Bound<PyAny>>,
     ) -> PyResult<Self> {
         use crate::util_py::py_into_btree_set;
         let defect_vertices: Vec<VertexIndex> = if let Some(defect_vertices) = defect_vertices {
@@ -458,10 +465,12 @@ impl SyndromePattern {
             let ratio = override_ratio
                 .map(|x| PyRational::from(x).into())
                 .unwrap_or_else(|| Rational::from_f64(1.0).unwrap());
+            let floor_weight = floor_weight.map(|x| PyRational::from(x).into());
             Ok(Self::new_with_override_weights(
                 defect_vertices,
                 override_weights.iter().map(|x| PyRational::from(&x).into()).collect(),
                 ratio,
+                floor_weight,
             ))
         } else {
             let erasures: Vec<EdgeIndex> = if let Some(erasures) = erasures {
@@ -505,16 +514,24 @@ impl SyndromePattern {
         self.heralds = heralds;
     }
     #[getter]
-    fn get_override_weights(&self) -> Option<(Vec<PyRational>, PyRational)> {
-        if let Some((weights, ratio)) = self.override_weights.as_ref() {
-            return Some((weights.iter().map(|x| x.clone().into()).collect(), ratio.clone().into()));
+    fn get_override_weights(&self) -> Option<(Vec<PyRational>, PyRational, Option<PyRational>)> {
+        if let Some((weights, ratio, floor_weight)) = self.override_weights.as_ref() {
+            return Some((
+                weights.iter().map(|x| x.clone().into()).collect(),
+                ratio.clone().into(),
+                floor_weight.clone().map(|x| x.into()),
+            ));
         }
         None
     }
     #[setter]
-    fn set_override_weights(&mut self, override_weights: Option<(Vec<PyRational>, PyRational)>) {
-        if let Some((weights, ratio)) = override_weights {
-            self.override_weights = Some((weights.iter().map(|x| x.0.clone()).collect(), ratio.0.clone()));
+    fn set_override_weights(&mut self, override_weights: Option<(Vec<PyRational>, PyRational, Option<PyRational>)>) {
+        if let Some((weights, ratio, floor_weight)) = override_weights {
+            self.override_weights = Some((
+                weights.iter().map(|x| x.0.clone()).collect(),
+                ratio.0.clone(),
+                floor_weight.map(|x| x.0.clone()),
+            ));
         } else {
             self.override_weights = None;
         }
@@ -1145,7 +1162,7 @@ pub struct CompressedBenchmarkSuite {
     pub syndrome_defect_vertices: Vec<Vec<VertexIndex>>,
     pub syndrome_erasures: Vec<Vec<EdgeIndex>>,
     pub syndrome_heralds: Vec<Vec<HeraldIndex>>,
-    pub syndrome_override_weights: Vec<Option<(Vec<Weight>, Weight)>>,
+    pub syndrome_override_weights: Vec<Option<(Vec<Weight>, Weight, Option<Weight>)>>,
 }
 
 impl From<&BenchmarkSuite> for CompressedBenchmarkSuite {

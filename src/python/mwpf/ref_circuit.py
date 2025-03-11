@@ -671,6 +671,10 @@ class Predictor(Protocol):
             )
         )
 
+    @property
+    def is_dynamic(self) -> bool:
+        return False
+
 
 @dataclass(frozen=True)
 class StaticPredictor(Predictor):

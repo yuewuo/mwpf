@@ -383,6 +383,10 @@ class HeraldedDemPredictor(Predictor):
     def num_observables(self) -> int:
         return self.num_obs
 
+    @property
+    def is_dynamic(self) -> bool:
+        return len(self.herald_detectors) > 0
+
 
 def add_herald_detectors(circuit: stim.Circuit) -> stim.Circuit:
     """
