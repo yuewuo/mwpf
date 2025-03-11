@@ -138,6 +138,21 @@ def patches_of(name: str) -> list:
                 ],
             )
         )
+    elif name == "fastds":
+        patches.append(
+            (
+                "pyproject.toml",
+                [
+                    ('name = "mwpf"', 'name = "mwpf_fastds"', 1),
+                    (
+                        "python_binding,f64_weight,embed_visualizer",
+                        "python_binding,f64_weight,fast_ds,embed_visualizer",
+                        1,
+                    ),
+                    ('"f64_weight",', '"f64_weight" ,"fast_ds",', 1),
+                ],
+            )
+        )
     return patches
 
 
@@ -196,8 +211,8 @@ def revert(name: str):
 if __name__ == "__main__":
     assert (
         len(sys.argv) == 3
-    ), "Usage: python pyproject-patch.py [rational|incr] [dry|apply|revert]"
-    assert sys.argv[1] in ["rational", "incr"]
+    ), "Usage: python pyproject-patch.py [rational|incr|fastds] [dry|apply|revert]"
+    assert sys.argv[1] in ["rational", "incr", "fastds"]
     if sys.argv[2] == "dry":
         patch(dry=True, name=sys.argv[1])
     elif sys.argv[2] == "apply":
