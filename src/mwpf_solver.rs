@@ -424,12 +424,10 @@ impl SolverTrait for SolverSerialPlugins {
         }
         self.syndrome_loaded = true;
 
-        // Note: costing performance in release mode
-        // TODO: remove
-        let original_syndrome_pattern = syndrome_pattern.clone();
+        let original_syndrome_pattern = Arc::new(syndrome_pattern);
 
         let syndrome_pattern = self.primal_module.weight_preprocessing(
-            Arc::new(syndrome_pattern),
+            original_syndrome_pattern.clone(),
             &mut self.dual_module,
             &self.model_graph.initializer,
         );
