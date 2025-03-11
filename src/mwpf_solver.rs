@@ -424,6 +424,8 @@ impl SolverTrait for SolverSerialPlugins {
         }
         self.syndrome_loaded = true;
 
+        // Note: costing performance in release mode
+        // TODO: remove
         let original_syndrome_pattern = syndrome_pattern.clone();
 
         let syndrome_pattern = self.primal_module.weight_preprocessing(
