@@ -619,15 +619,15 @@ impl Cli {
                 let vertex_num = 3;
                 let edge1 = HyperEdge {
                     vertices: vec![0, 1],
-                    weight: 100.0.into(),
+                    weight: Weight::from_float(100.0).unwrap(),
                 };
                 let edge2 = HyperEdge {
                     vertices: vec![1, 2],
-                    weight: 100.0.into(),
+                    weight: Weight::from_float(100.0).unwrap(),
                 };
                 let edge3 = HyperEdge {
                     vertices: vec![2, 0],
-                    weight: 100.0.into(),
+                    weight: Weight::from_float(100.0).unwrap(),
                 };
                 let initializer = SolverInitializer::new(vertex_num, vec![edge1, edge2, edge3]);
                 let initializer = Arc::new(initializer);
@@ -684,22 +684,22 @@ impl Cli {
                 println!("({}, {})", bound.lower, bound.upper);
                 assert_eq!(bound.lower, bound.upper);
                 assert_eq!(subgraph.into_iter().collect::<Vec<_>>(), vec![2]);
-                assert_eq!(bound.upper, 100.0);
+                assert_eq!(bound.upper, Weight::from_float(100.0).unwrap());
             }
             Commands::CustomTest2 => {
                 // custom test: ported from test_override_weights_decoding
                 let vertex_num = 3;
                 let edge1 = HyperEdge {
                     vertices: vec![0, 1],
-                    weight: 100.0.into(),
+                    weight: Weight::from_float(100.0).unwrap(),
                 };
                 let edge2 = HyperEdge {
                     vertices: vec![1, 2],
-                    weight: 100.0.into(),
+                    weight: Weight::from_float(100.0).unwrap(),
                 };
                 let edge3 = HyperEdge {
                     vertices: vec![2, 0],
-                    weight: 100.0.into(),
+                    weight: Weight::from_float(100.0).unwrap(),
                 };
                 let initializer = SolverInitializer::new(vertex_num, vec![edge1, edge2, edge3]);
                 let initializer = Arc::new(initializer);
@@ -756,7 +756,7 @@ impl Cli {
                 println!("({}, {})", bound.lower, bound.upper);
                 assert_eq!(bound.lower, bound.upper);
                 assert_eq!(subgraph.into_iter().collect::<Vec<_>>(), vec![2]);
-                assert_eq!(bound.upper, 100.0);
+                assert_eq!(bound.upper, Weight::from_float(100.0).unwrap());
             }
         }
     }
