@@ -400,10 +400,6 @@ impl SyndromePattern {
         ratio: Weight,
         floor_weight: Option<Weight>,
     ) -> Self {
-        println!(
-            "defect_vertices: {:?}, weights: {:?}, ratio: {:?}, floor_weight: {:?}",
-            defect_vertices, weights, ratio, floor_weight
-        );
         Self {
             defect_vertices,
             erasures: vec![],
