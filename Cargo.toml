@@ -60,7 +60,7 @@ embed_visualizer = [
 loose_sanity_check = [] # do not panic when check fails
 btrees = [] # use btrees to fast iterate
 index_map = ["indexmap"] # use indexmap to fast iterate
-fast_ds = [] # use fast data structures to fast iterate
+fast_ds = ["gxhash"] # use fast data structures to fast iterate
 
 [dependencies]
 pyo3 = { version = "0.23.4", features = [
@@ -110,7 +110,7 @@ bp = { path = "src/bp" }
 thread-priority = "1.2.0"
 lnexp = "0.2.1"
 indexmap = { version = "2.7.1", optional = true }
-gxhash = "3.4.1"
+gxhash = { version = "3.4.1", optional = true }
 
 [dev-dependencies]
 test-case = "3.1.0"

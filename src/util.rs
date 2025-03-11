@@ -45,7 +45,13 @@ cfg_if::cfg_if! {
     }
 }
 
-pub type DefaultHasher = gxhash::GxHasher;
+cfg_if::cfg_if! {
+    if #[cfg(feature="fast_ds")] {
+        pub type DefaultHasher = gxhash::GxHasher;
+    } else {
+        pub type DefaultHasher = std::collections::hash_map::DefaultHasher;
+    }
+}
 
 cfg_if::cfg_if! {
     if #[cfg(feature="python_binding")] {
