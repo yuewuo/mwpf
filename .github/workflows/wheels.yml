@@ -28,7 +28,7 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
           - default
           - rational
           - incr
-          - fastds
+          - fast
     runs-on: ${{ format('{0}-latest', matrix.os) }}
 
     steps:
