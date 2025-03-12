@@ -806,7 +806,7 @@ impl MWPSVisualizer for DualModuleInterfacePtr {
         let mut dual_nodes = Vec::<serde_json::Value>::new();
         for dual_node_ptr in interface.nodes.iter() {
             let dual_node = dual_node_ptr.read_recursive();
-            #[cfg(not(feature = "btrees"))]
+            #[cfg(feature = "fast_ds")]
             dual_nodes.push(json!({
                 if abbrev { "e" } else { "edges" }: dual_node.invalid_subgraph.edges.iter().copied().collect::<Vec<_>>(),
                 if abbrev { "v" } else { "vertices" }: dual_node.invalid_subgraph.vertices.iter().copied().collect::<Vec<_>>(),
@@ -818,7 +818,7 @@ impl MWPSVisualizer for DualModuleInterfacePtr {
                 if abbrev { "rn" } else { "grow_rate_numerator" }: numer_of(&dual_node.grow_rate),
                 if abbrev { "rd" } else { "grow_rate_denominator" }: denom_of(&dual_node.grow_rate),
             }));
-            #[cfg(feature = "btrees")]
+            #[cfg(not(feature = "fast_ds"))]
             dual_nodes.push(json!({
                 if abbrev { "e" } else { "edges" }: dual_node.invalid_subgraph.edges,
                 if abbrev { "v" } else { "vertices" }: dual_node.invalid_subgraph.vertices,

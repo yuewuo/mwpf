@@ -144,7 +144,12 @@ def patches_of(name: str) -> list:
                 "pyproject.toml",
                 [
                     ('name = "mwpf"', 'name = "mwpf_fast"', 1),
-                    ("btrees", "fast_ds", 2),
+                    (
+                        "python_binding,f64_weight,embed_visualizer",
+                        "python_binding,f64_weight,fast_ds,embed_visualizer",
+                        1,
+                    ),
+                    ('"f64_weight",', '"f64_weight" ,"fast_ds",', 1),
                 ],
             )
         )

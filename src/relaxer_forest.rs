@@ -95,7 +95,7 @@ impl RelaxerForest {
                     edge_index
                 );
                 let require_speed = if let Some(mut existing_speed) = untightened_edges.get_mut(edge_index) {
-                    if *existing_speed >= speed {
+                    if *existing_speed >= *speed {
                         *existing_speed -= speed;
                         Rational::zero()
                     } else {

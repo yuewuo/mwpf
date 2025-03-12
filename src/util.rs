@@ -79,22 +79,17 @@ pub type VertexNum = VertexIndex;
 pub type NodeNum = VertexIndex;
 
 cfg_if::cfg_if! {
-    if #[cfg(feature="btrees")] {
-        pub type FastIterSet<T> = std::collections::BTreeSet<T>;
-        pub type FastIterMap<K, V> = std::collections::BTreeMap<K, V>;
-        pub type FastIterEntry<'a, K, V> = std::collections::btree_map::Entry<'a, K, V>;
-    }
-    else if #[cfg(feature="fast_ds")] {
+    if #[cfg(feature="fast_ds")] {
         pub type FastIterSet<T> = fast_ds::Set<T>;
         pub type FastIterMap<K, V> = fast_ds::Map<K, V>;
         pub type FastIterEntry<'a, K, V> = fast_ds::Entry<'a, K, V>;
     } else {
-        panic!("no iteration data structure feature selected!");
+        // by default using std BTreeSet and BTreeMap
+        pub type FastIterSet<T> = std::collections::BTreeSet<T>;
+        pub type FastIterMap<K, V> = std::collections::BTreeMap<K, V>;
+        pub type FastIterEntry<'a, K, V> = std::collections::btree_map::Entry<'a, K, V>;
     }
 }
-
-#[cfg(all(feature = "btrees", feature = "fast_ds"))]
-compile_error!("Features `btrees` and `fast_ds` are mutually exclusive.");
 
 #[macro_export]
 macro_rules! fast_iter_set {

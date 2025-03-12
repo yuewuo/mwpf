@@ -58,7 +58,6 @@ incr_lp = [
 embed_visualizer = [
 ] # use nodejs to build frontend and embed in Python instead of outputing individual JSON files
 loose_sanity_check = [] # do not panic when check fails
-btrees = [] # use btrees to fast iterate
 fast_ds = ["gxhash"] # use fast data structures to fast iterate
 
 [dependencies]
