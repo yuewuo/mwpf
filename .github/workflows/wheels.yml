@@ -184,11 +184,10 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
         run: npm install --include=dev && npm run build
 
       - name: run Rust test
-        run: >
-          ${{ matrix.os != 'macos' && 'RUSTFLAGS="-C target-feature=+aes,+sse2"' || 'SOME_USELESS_ENV=""' }}
-          make ci_rust_test
+        run: make ci_rust_test
         env:
           SKIP_FRONTEND_BUILD: '1'
+          RUSTFLAGS: target-cpu=nature
 
   publish-to-pypi:
     name: >-
