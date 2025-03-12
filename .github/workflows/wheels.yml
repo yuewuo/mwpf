@@ -125,7 +125,7 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
       - name: install wheel for testing (macOS)
         if: matrix.os == 'macos'
         run: python -m pip install -U wheelhouse/*.whl
-      
+
       - name: install wheel for testing (Windows)
         if: matrix.os == 'windows'
         run: Get-ChildItem -Path wheelhouse -Filter *.whl |ForEach-Object { python -m pip install -U $_.FullName }
@@ -134,13 +134,14 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
         if: matrix.os != 'windows'
         run: pytest tests/python
 
+      - name: build source distribution (ubuntu only)
+        if: matrix.os == 'ubuntu'
+        run: maturin sdist --output-dir wheelhouse/
+
       - uses: actions/upload-artifact@v4
         with:
           name: binary-${{ matrix.os }}-${{ matrix.build-feature }}
-          path: wheelhouse/*.whl
-      
-      - uses: actions/checkout@v4
-        if: ${{ github.ref == 'refs/heads/main' && github.tag == '' }}
+          path: wheelhouse/*
 
   rust_tests:
     name: Run Rust tests on ${{ matrix.os }}
@@ -184,7 +185,7 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
   
       - name: Set RUSTFLAGS
         if: matrix.os != 'macos'
-        run: echo 'RUSTFLAGS=-C target-feature=+aes,+sse2' >> "$GITHUB_ENV"
+        run: echo "RUSTFLAGS=-C target-feature=+aes,+sse2" >> "$GITHUB_ENV"
 
       - name: run Rust test
         run: make ci_rust_test
@@ -194,6 +195,16 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
   publish-to-pypi:
     name: >-
       Publish Python 🐍 distribution 📦 to PyPI
+    if: startsWith(github.ref, 'refs/tags/')  # only publish to PyPI on tag pushes
+    needs:
+    - build_wheels
+    - rust_tests
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/${{ matrix.build-feature == 'default' && 'mwpf' || format('mwpf-{0}', matrix.build-feature) }}
+    permissions:
+      id-token: write  # IMPORTANT: mandatory for trusted publishing
     strategy:
       fail-fast: false
       matrix:
@@ -206,16 +217,6 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
           - rational
           - incr
           - fast
-    if: startsWith(github.ref, 'refs/tags/')  # only publish to PyPI on tag pushes
-    needs:
-    - build_wheels
-    - rust_tests
-    runs-on: ubuntu-latest
-    environment:
-      name: pypi
-      url: https://pypi.org/p/${{ matrix.build-feature == 'default' && 'mwpf' || format('mwpf-{0}', matrix.build-feature) }}
-    permissions:
-      id-token: write  # IMPORTANT: mandatory for trusted publishing
 
     steps:
       - name: Download all the dists
