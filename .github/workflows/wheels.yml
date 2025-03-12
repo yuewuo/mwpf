@@ -138,6 +138,9 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
         with:
           name: binary-${{ matrix.os }}-${{ matrix.build-feature }}
           path: wheelhouse/*.whl
+      
+      - uses: actions/checkout@v4
+        if: ${{ github.ref == 'refs/heads/main' && github.tag == '' }}
 
   rust_tests:
     name: Run Rust tests on ${{ matrix.os }}
@@ -179,9 +182,11 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
         working-directory: ./visualize
         run: npm install --include=dev && npm run build
   
+      - name: Set RUSTFLAGS
+        if: matrix.os != 'macos'
+        run: echo 'RUSTFLAGS="-C target-feature=+aes,+sse2"' >> "$GITHUB_ENV"
+
       - name: run Rust test
         run: make ci_rust_test
         env:
           SKIP_FRONTEND_BUILD: '1'
-          RUSTFLAGS:
-            ${{ matrix.os != 'macos' && 'RUSTFLAGS="-C target-feature=+aes,+sse2"' || 'SOME_USELESS_ENV=""' }}
