@@ -184,9 +184,50 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
   
       - name: Set RUSTFLAGS
         if: matrix.os != 'macos'
-        run: echo 'RUSTFLAGS="-C target-feature=+aes,+sse2"' >> "$GITHUB_ENV"
+        run: echo 'RUSTFLAGS=-C target-feature=+aes,+sse2' >> "$GITHUB_ENV"
 
       - name: run Rust test
         run: make ci_rust_test
         env:
           SKIP_FRONTEND_BUILD: '1'
+
+  publish-to-pypi:
+    name: >-
+      Publish Python 🐍 distribution 📦 to PyPI
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu
+          - macos
+          - windows
+        build-feature:
+          - default
+          - rational
+          - incr
+          - fast
+    if: startsWith(github.ref, 'refs/tags/')  # only publish to PyPI on tag pushes
+    needs:
+    - build_wheels
+    - rust_tests
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/${{ matrix.build-feature == 'default' && 'mwpf' || format('mwpf-{0}', matrix.build-feature) }}
+    permissions:
+      id-token: write  # IMPORTANT: mandatory for trusted publishing
+
+    steps:
+      - name: Download all the dists
+        uses: actions/download-artifact@v4
+        with:
+          name: binary-${{ matrix.os }}-${{ matrix.build-feature }}
+          path: wheelhouse/
+      - name: Publish distribution 📦 to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: wheelhouse/
+          skip-existing: true
+          verbose: true
+          print-hash: true
+          password: ${{ secrets.PYPI_API_TOKEN }}
