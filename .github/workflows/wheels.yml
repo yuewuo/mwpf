@@ -80,14 +80,13 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
           CIBW_SKIP: '*-win32 *_i686' # do not build for 32bit machines, rustc seems to complain about it
           CIBW_PLATFORM: ${{ matrix.platform || matrix.os }} # only build for specific platform
           CIBW_ENVIRONMENT_MACOS: >
-            PATH="$HOME/.cargo/bin:$PATH" MACOSX_DEPLOYMENT_TARGET=10.12 
-            ${{ matrix.build-feature == 'fast' && 'RUSTFLAGS="-C target-cpu=native"' || 'RUSTFLAGS=""' }}
+            PATH="$HOME/.cargo/bin:$PATH" MACOSX_DEPLOYMENT_TARGET=10.12
           CIBW_ENVIRONMENT_WINDOWS: >
             PATH="$UserProfile\.cargo\bin;$PATH" SKIP_FRONTEND_BUILD=1
-            ${{ matrix.build-feature == 'fast' && 'RUSTFLAGS="-C target-cpu=native"' || 'RUSTFLAGS=""' }}
+            ${{ matrix.build-feature == 'fast' && 'RUSTFLAGS="-C target-feature=+aes,+sse2"' || 'SOME_USELESS_ENV=""' }}
           CIBW_ENVIRONMENT_LINUX: >
             PATH="$HOME/.cargo/bin:$PATH" LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/rh/llvm-toolset-7.0/root/usr/lib64/ SKIP_FRONTEND_BUILD=1
-            ${{ matrix.build-feature == 'fast' && 'RUSTFLAGS="-C target-cpu=native"' || 'RUSTFLAGS=""' }}
+            ${{ matrix.build-feature == 'fast' && 'RUSTFLAGS="-C target-feature=+aes,+sse2"' || 'SOME_USELESS_ENV=""' }}
           CIBW_MANYLINUX_X86_64_IMAGE: 'manylinux2014'
           CIBW_MUSLLINUX_X86_64_IMAGE: 'musllinux_1_2'
           # Yue 2022.10.17: build on aarch64 failed due to strange `cargo metadata` exited with an error:     Updating crates.io index
@@ -147,7 +146,7 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
       matrix:
         os:
           - ubuntu
-          # - macos
+          - macos
           - windows
     runs-on: ${{ format('{0}-latest', matrix.os) }}
 
@@ -184,4 +183,5 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
         run: make ci_rust_test
         env:
           SKIP_FRONTEND_BUILD: '1'
-          RUSTFLAGS: '-C target-cpu=native'
+          RUSTFLAGS:
+            ${{ matrix.os != 'macos' && 'RUSTFLAGS="-C target-feature=+aes,+sse2"' || 'SOME_USELESS_ENV=""' }}
