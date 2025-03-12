@@ -187,7 +187,7 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
         run: make ci_rust_test
         env:
           SKIP_FRONTEND_BUILD: '1'
-          RUSTFLAGS: target-cpu=native
+          RUSTFLAGS: -C target-cpu=native
 
   publish-to-pypi:
     name: >-
