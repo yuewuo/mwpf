@@ -702,6 +702,16 @@ pub struct SolverParallel {
     model_graph: Arc<ModelHyperGraph>,
 }
 
+// impl Clone for SolverParallel {
+//     fn clone(&self) -> Self {
+//         Self {
+//             dual_module: self.dual_module.clone(),
+//             primal_module: self.primal_module.clone(),
+//             model_graph: self.model_graph.clone(),
+//         }
+//     }
+// }
+
 impl SolverParallel {
     pub fn new(initializer: &SolverInitializer, partition_info: &PartitionInfo, plugins: Vec<PluginEntry>, config: serde_json::Value,) -> Self {
         let model_graph = Arc::new(ModelHyperGraph::new(Arc::new(initializer.clone())));
@@ -725,6 +735,8 @@ impl SolverTrait for SolverParallel {
         self.primal_module.clear();
     }
     fn solve_visualizer(&mut self, mut syndrome_pattern: SyndromePattern, visualizer: Option<&mut Visualizer>) {
+        // println!("dual_module in solve_visualizer: {:?}", self.dual_module.units);
+        // println!("primal_module in solve_visualizer: {:?}", self.primal_module.units);
         self.dual_module.adjust_weights_for_negative_edges();
 
         let moved_out_vec = std::mem::take(&mut syndrome_pattern.defect_vertices);
@@ -750,9 +762,12 @@ impl SolverTrait for SolverParallel {
             &mut self.dual_module,
             visualizer,
         );
+        let useless_interface_ptr = DualModuleInterfacePtr::new(self.model_graph.clone());
+        let (subgraph, weight_range) = self.primal_module.subgraph_range(&useless_interface_ptr, &mut self.dual_module);
+        // println!("subgraph here: {:?}", subgraph.subgraph);
+       
         debug_assert!(
             {
-                let subgraph = self.subgraph();
                 self.model_graph
                     .matches_subgraph_syndrome(&subgraph, &syndrome_pattern.defect_vertices)
             },

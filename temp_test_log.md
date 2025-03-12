@@ -15,9 +15,9 @@ Question/To-be-investigated: use data parallelism techniques inside each serial 
 |6-core(split-4)     |               |58.851334ms | |
 |8-core(split-8)     |               | 51.1085ms | |
 |3-core(split-3)     |               | 60.036583ms | |
-|3-core(split-3, w/o print)|          | 62.062208ms     |                                                    44.858125ms |
-|4-core(split-4, w/o print)|          |38.930125ms/40.798666ms/40.984459ms/52.91975ms/51.7205ms    |        59.234167ms/38.461375ms/40.251542ms/94.73175ms/36.394709ms/35.105958ms/46.176292ms |
-|5-core(split-5, w/o print)  |         |50.592333ms/101.778208ms/46.0205ms    | |
+|3-core(split-3, w/o print)|          | 62.062208ms     | 44.858125ms |
+|4-core(split-4, w/o print)|          |38.930125ms /40.798666ms /40.984459ms /52.91975ms/51.7205ms    |        59.234167ms / 38.461375ms /40.251542ms /94.73175ms /36.394709ms /35.105958ms /46.176292ms |
+|5-core(split-5, w/o print)  |         |50.592333ms /101.778208ms /46.0205ms    | |
 
 # Cli testing (preliminary)
 On MacBook Air, Apple M2, 8-core CPU, 8GB-memory (M-series Macs do not support Hyper-Threading)
@@ -89,6 +89,15 @@ Now, we can open the visualizer at the following address:
 http://localhost:8088/partition-profile.html?filename=7-500-0.001-rotated-planar/core-4-split-4.profile
 ```
 Note that the actual server port number needs to match that in `server.py`. The `filename` needs to be under the `visualize/data` directory.
+
+# Evaluate both implementation (Odd/Even parity and For Loop) for their accuracy
+On MacBook Air, Apple M2, 8-core CPU, 8GB-memory (M-series Macs do not support Hyper-Threading)
+
+```sh
+cargo run --bin mwpf -r  benchmark 7 0.001 --code-type qec-playground-code --code-config '{"code_type": "RotatedPlanarCode", "nm": 500}' --solver-type parallel-union-find --split-num 4 --solver-config '{"dual": {"enable_parallel_execution": true},"primal": {"thread_pool_size": 4, "pin_threads_to_cores": true, "timeout": 1, "cluster_node_limit": 40}}' --use-deterministic-seed --benchmark-profiler-output visualize/data/7-500-0.001-rotated-planar/core-4-split-4.profile
+```
+
+
 
 # Fix the bug in 5-core (likely threads trying to access the same address?)
 

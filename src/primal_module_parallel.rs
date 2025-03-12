@@ -31,7 +31,6 @@ use crate::model_hypergraph::ModelHyperGraph;
 use more_asserts::assert_le;
 
 
-
 pub struct PrimalModuleParallel {
     /// the basic wrapped serial modules at the beginning, afterwards the fused units are appended after them
     pub units: Vec<PrimalModuleParallelUnitPtr>,
@@ -909,75 +908,6 @@ impl PrimalModuleParallel {
         if parallel_dual_module.config.enable_parallel_execution {
             // println!("parallel implementation");
             // current implementation of parallel fusion 
-            let thread_pool = Arc::clone(&self.thread_pool);
-            *self.last_solve_start_time.write() = Instant::now();
-            thread_pool.scope(|_| {
-                (0..self.partition_info.config.partitions.len())
-                .into_par_iter()
-                .for_each( |unit_index| {
-                    let unit_ptr = self.units[unit_index].clone();
-                    unit_ptr.individual_solve::<DualSerialModule, Queue, F>(
-                        self, 
-                        PartitionedSyndromePattern::new(&syndrome_pattern), 
-                        parallel_dual_module, 
-                        &mut None,
-                    );
-                })
-            });
-
-            thread_pool.scope(|_| {
-                (self.partition_info.config.partitions.len()..self.partition_info.units.len())
-                .into_par_iter()
-                .for_each( |unit_index| {
-                    if (unit_index - self.partition_info.config.partitions.len()) % 2 == 0 {
-                        let unit_ptr = self.units[unit_index].clone();
-                        unit_ptr.fuse_and_solve::<DualSerialModule, Queue, F>(
-                            self, 
-                            PartitionedSyndromePattern::new(&syndrome_pattern), 
-                            parallel_dual_module, 
-                            &mut None,
-                            true,
-                        );
-                    }
-                })
-            });
-
-            thread_pool.scope(|_| {
-                (self.partition_info.config.partitions.len()..self.partition_info.units.len())
-                .into_par_iter()
-                .for_each( |unit_index| {
-                    if (unit_index - self.partition_info.config.partitions.len()) % 2 == 1 {
-                        let unit_ptr = self.units[unit_index].clone();
-                        unit_ptr.fuse_and_solve::<DualSerialModule, Queue, F>(
-                            self, 
-                            PartitionedSyndromePattern::new(&syndrome_pattern), 
-                            parallel_dual_module, 
-                            &mut None,
-                            false,
-                        );
-                    }
-                })
-            });
-
-            thread_pool.scope(|_| {
-                (self.partition_info.config.partitions.len()..self.partition_info.units.len())
-                .into_par_iter()
-                .for_each( |unit_index| {
-                    if (unit_index - self.partition_info.config.partitions.len()) % 2 == 0 {
-                        let unit_ptr = self.units[unit_index].clone();
-                        let self_dual_ptr = &parallel_dual_module.units[unit_index];
-                        unit_ptr.write().combine_all_mirrored_vertices_again(self_dual_ptr);
-                    }
-                })
-            });
-
-
-
-
-            // // previous implementation of parallel fusion, solve all individual units in parallel, 
-            // // run `fuse_and_solve` on all odd boundary units in parallel, then run `fuse_and_solve` sequentially on all even
-            // // boundary units
-            // // parallel implementation using rayon
             // let thread_pool = Arc::clone(&self.thread_pool);
             // *self.last_solve_start_time.write() = Instant::now();
             // thread_pool.scope(|_| {
@@ -994,12 +924,28 @@ impl PrimalModuleParallel {
             //     })
             // });
 
-
             // thread_pool.scope(|_| {
             //     (self.partition_info.config.partitions.len()..self.partition_info.units.len())
             //     .into_par_iter()
             //     .for_each( |unit_index| {
             //         if (unit_index - self.partition_info.config.partitions.len()) % 2 == 0 {
+            //             let unit_ptr = self.units[unit_index].clone();
+            //             unit_ptr.fuse_and_solve::<DualSerialModule, Queue, F>(
+            //                 self, 
+            //                 PartitionedSyndromePattern::new(&syndrome_pattern), 
+            //                 parallel_dual_module, 
+            //                 &mut None,
+            //                 true,
+            //             );
+            //         }
+            //     })
+            // });
+
+            // thread_pool.scope(|_| {
+            //     (self.partition_info.config.partitions.len()..self.partition_info.units.len())
+            //     .into_par_iter()
+            //     .for_each( |unit_index| {
+            //         if (unit_index - self.partition_info.config.partitions.len()) % 2 == 1 {
             //             let unit_ptr = self.units[unit_index].clone();
             //             unit_ptr.fuse_and_solve::<DualSerialModule, Queue, F>(
             //                 self, 
@@ -1012,18 +958,71 @@ impl PrimalModuleParallel {
             //     })
             // });
 
-            // for unit_index in self.partition_info.config.partitions.len()..self.partition_info.units.len() {
-            //     if (unit_index - self.partition_info.config.partitions.len()) % 2 == 1 {
-            //         let unit_ptr = self.units[unit_index].clone();
-            //         unit_ptr.fuse_and_solve::<DualSerialModule, Queue, F>(
-            //             self, 
-            //             PartitionedSyndromePattern::new(&syndrome_pattern), 
-            //             parallel_dual_module, 
-            //             &mut None,
-            //             false,
-            //         );
-            //     }
-            // }
+            // thread_pool.scope(|_| {
+            //     (self.partition_info.config.partitions.len()..self.partition_info.units.len())
+            //     .into_par_iter()
+            //     .for_each( |unit_index| {
+            //         if (unit_index - self.partition_info.config.partitions.len()) % 2 == 0 {
+            //             let unit_ptr = self.units[unit_index].clone();
+            //             let self_dual_ptr = &parallel_dual_module.units[unit_index];
+            //             unit_ptr.write().combine_all_mirrored_vertices_again(self_dual_ptr);
+            //         }
+            //     })
+            // });
+
+
+
+
+            // previous implementation of parallel fusion, solve all individual units in parallel, 
+            // run `fuse_and_solve` on all odd boundary units in parallel, then run `fuse_and_solve` sequentially on all even
+            // boundary units
+            // parallel implementation using rayon
+            let thread_pool = Arc::clone(&self.thread_pool);
+            *self.last_solve_start_time.write() = Instant::now();
+            thread_pool.scope(|_| {
+                (0..self.partition_info.config.partitions.len())
+                .into_par_iter()
+                .for_each( |unit_index| {
+                    let unit_ptr = self.units[unit_index].clone();
+                    unit_ptr.individual_solve::<DualSerialModule, Queue, F>(
+                        self, 
+                        PartitionedSyndromePattern::new(&syndrome_pattern), 
+                        parallel_dual_module, 
+                        &mut None,
+                    );
+                })
+            });
+
+
+            thread_pool.scope(|_| {
+                (self.partition_info.config.partitions.len()..self.partition_info.units.len())
+                .into_par_iter()
+                .for_each( |unit_index| {
+                    if (unit_index - self.partition_info.config.partitions.len()) % 2 == 0 {
+                        let unit_ptr = self.units[unit_index].clone();
+                        unit_ptr.fuse_and_solve::<DualSerialModule, Queue, F>(
+                            self, 
+                            PartitionedSyndromePattern::new(&syndrome_pattern), 
+                            parallel_dual_module, 
+                            &mut None,
+                            false,
+                        );
+                    }
+                })
+            });
+
+            for unit_index in self.partition_info.config.partitions.len()..self.partition_info.units.len() {
+                if (unit_index - self.partition_info.config.partitions.len()) % 2 == 1 {
+                    let unit_ptr = self.units[unit_index].clone();
+                    unit_ptr.fuse_and_solve::<DualSerialModule, Queue, F>(
+                        self, 
+                        PartitionedSyndromePattern::new(&syndrome_pattern), 
+                        parallel_dual_module, 
+                        &mut None,
+                        false,
+                    );
+                }
+            }
         } else {
             // sequential implementation
             // println!("sequential implementation!");
@@ -1832,7 +1831,7 @@ pub mod tests {
         // create dual module
         // let decoding_graph = DecodingHyperGraph::new_defects(model_graph.clone(), vec![3, 29, 30]);
         let mut dual_module_parallel_config = DualModuleParallelConfig::default();
-        dual_module_parallel_config.enable_parallel_execution = true;
+        dual_module_parallel_config.enable_parallel_execution = false;
         let mut dual_module: DualModuleParallel<DualModulePQGeneric<FutureObstacleQueue<Rational>>, FutureObstacleQueue<Rational>> =
             DualModuleParallel::new_config(&initializer, &partition_info, dual_module_parallel_config);
 
@@ -1847,7 +1846,7 @@ pub mod tests {
             dual_module,
             primal_module,
             model_graph,
-            None,
+            Some(visualizer),
             initializer.clone(),
         )
     }
@@ -1856,11 +1855,13 @@ pub mod tests {
     fn primal_module_parallel_circuit_level_noise_qec_playground_1() {
         // cargo test primal_module_parallel_circuit_level_noise_qec_playground_1 -- --nocapture
         let config = json!({
-            "code_type": qecp::code_builder::CodeType::RotatedPlanarCode
+            "code_type": qecp::code_builder::CodeType::RotatedPlanarCode,
+            "nm": 16,
         });
         
-        let code = QECPlaygroundCode::new(5, 0.001, config);
-        let defect_vertices = vec![11, 12, 19];
+        let mut code = QECPlaygroundCode::new(7, 0.001, config);
+        let defect_vertices = code.generate_random_errors(132).0.defect_vertices;
+        // let defect_vertices = vec![11, 12, 19];
 
         let visualize_filename = "primal_module_parallel_circuit_level_noise_qec_playground_1.json".to_string();
         primal_module_parallel_evaluation_qec_playground_helper(
