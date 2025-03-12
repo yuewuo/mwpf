@@ -89,9 +89,13 @@ impl RelaxerForest {
         for (edge_index, speed) in relaxer.get_growing_edges().iter() {
             debug_assert!(speed.is_positive());
             if self.tight_edges.contains(edge_index) {
-                debug_assert!(self.edge_untightener.contains_key(edge_index));
+                debug_assert!(
+                    self.edge_untightener.contains_key(edge_index),
+                    "edge {} is tight but no untightener presents, thus new relaxer cannot grow on it",
+                    edge_index
+                );
                 let require_speed = if let Some(mut existing_speed) = untightened_edges.get_mut(edge_index) {
-                    if &*existing_speed >= speed {
+                    if *existing_speed >= speed {
                         *existing_speed -= speed;
                         Rational::zero()
                     } else {
@@ -110,7 +114,7 @@ impl RelaxerForest {
                     debug_assert!(speed_ratio.is_positive());
                     let expanded_edge_relaxer = self.expanded_relaxers.get(edge_relaxer).unwrap();
                     for (subgraph, original_speed) in expanded_edge_relaxer.get_direction().iter() {
-                        let new_speed = original_speed * speed_ratio;
+                        let new_speed = original_speed * speed_ratio * require_speed.clone();
                         if let Some(mut speed) = directions.get_mut(subgraph) {
                             *speed += new_speed;
                             continue;
@@ -119,7 +123,7 @@ impl RelaxerForest {
                     }
                     for (edge_index, original_speed) in expanded_edge_relaxer.get_untighten_edges().iter() {
                         debug_assert!(original_speed.is_negative());
-                        let new_speed = -original_speed * speed_ratio;
+                        let new_speed = -original_speed * speed_ratio * require_speed.clone();
                         if let Some(mut speed) = untightened_edges.get_mut(edge_index) {
                             *speed += new_speed;
                             continue;
@@ -177,18 +181,17 @@ pub mod tests {
         let invalid_subgraph_2 = Arc::new(InvalidSubgraph::new_raw([].into(), [].into(), [1, 2, 7].into()));
         let relaxer_2 = Arc::new(Relaxer::new_raw([(invalid_subgraph_2.clone(), Rational::one())].into()));
         let expanded_2 = relaxer_forest.expand(&relaxer_2);
-        assert_eq!(
-            expanded_2,
-            Relaxer::new(
-                [
-                    (invalid_subgraph_1, Rational::one()),
-                    (shrinkable_subgraphs[0].clone(), -Rational::one()),
-                    (invalid_subgraph_2, Rational::one())
-                ]
-                .into()
-            )
+        let expected_relaxer = Relaxer::new(
+            [
+                (invalid_subgraph_1, Rational::one()),
+                (shrinkable_subgraphs[0].clone(), -Rational::one()),
+                (invalid_subgraph_2, Rational::one()),
+            ]
+            .into(),
         );
         // println!("{expanded_2:#?}");
+        // println!("{expected_relaxer:#?}");
+        assert_eq!(expanded_2, expected_relaxer);
     }
 
     #[test]

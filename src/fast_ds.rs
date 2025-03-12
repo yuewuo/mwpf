@@ -12,10 +12,12 @@ use pyo3::prelude::*;
 use std::ops::{Deref, DerefMut};
 
 /* MAP implementation */
-#[derive(Debug, Derivative, Clone)]
+#[derive(Derivative, Clone)]
+#[derivative(Debug)]
 /// A `Map<K, V>` that provides Ord and fast Hash
 pub struct Map<K, V> {
     map: HashMap<K, V>,
+    #[derivative(Debug = "ignore")]
     combined_hash: u64,
 }
 

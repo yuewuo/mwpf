@@ -7,7 +7,7 @@ use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
-#[derive(Clone, PartialEq, Eq, Derivative, Default)]
+#[derive(Clone, Eq, Derivative, Default)]
 #[derivative(Debug)]
 pub struct Relaxer {
     /// the hash value calculated by other fields
@@ -28,6 +28,12 @@ impl Hash for Relaxer {
     }
 }
 
+impl PartialEq for Relaxer {
+    fn eq(&self, other: &Self) -> bool {
+        self.hash_value == other.hash_value && self.direction == other.direction
+    }
+}
+
 impl Ord for Relaxer {
     fn cmp(&self, other: &Self) -> Ordering {
         if self.hash_value != other.hash_value {
@@ -35,7 +41,7 @@ impl Ord for Relaxer {
         } else if self == other {
             Ordering::Equal
         } else {
-            // rare cases: same hash value but different state
+            // rare cases: same hash value but different state; `direction` uniquely determines the relaxer
             #[cfg(feature = "index_map")]
             return self.direction.iter().cmp(other.direction.iter());
 
@@ -110,10 +116,10 @@ impl Relaxer {
     pub fn update_hash(&mut self) {
         let mut hasher = DefaultHasher::default();
         // only hash the direction since other field are derived from the direction
-        // #[cfg(not(feature = "index_map"))]
-        // self.direction.hash(&mut hasher);
-        // #[cfg(feature = "index_map")]
-        self.direction.iter().for_each(|x| x.hash(&mut hasher));
+        #[cfg(not(feature = "index_map"))]
+        self.direction.hash(&mut hasher);
+        #[cfg(feature = "index_map")]
+        self.direction.iter().sorted().for_each(|x| x.hash(&mut hasher));
         self.hash_value = hasher.finish();
     }
 
