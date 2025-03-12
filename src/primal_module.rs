@@ -4,7 +4,6 @@
 //!
 
 use std::collections::VecDeque;
-use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use crate::dual_module::*;
@@ -56,10 +55,10 @@ pub trait PrimalModuleImpl {
     /// resolve the conflicts in the "tune" mode
     fn resolve_tune(
         &mut self,
-        _obstacles: BTreeSet<Obstacle>,
+        _obstacles: FastIterSet<Obstacle>,
         _interface: &DualModuleInterfacePtr,
         _dual_module: &mut impl DualModuleImpl,
-    ) -> (BTreeSet<Obstacle>, bool) {
+    ) -> (FastIterSet<Obstacle>, bool) {
         panic!("`resolve_tune` not implemented, this primal module does not work with tuning mode");
     }
 
@@ -125,7 +124,7 @@ pub trait PrimalModuleImpl {
             }
             dual_module.update_weights(weights, mix_ratio.clone());
         } else {
-            let mut weight_updates: BTreeMap<EdgeIndex, Weight> = BTreeMap::new();
+            let mut weight_updates: FastIterMap<EdgeIndex, Weight> = FastIterMap::new();
             for &herald_index in syndrome_pattern.heralds.iter() {
                 for (edge_index, weight) in initializer.heralds[herald_index].iter() {
                     let value = weight_updates.remove(edge_index);
@@ -231,22 +230,22 @@ pub trait PrimalModuleImpl {
 
             for cluster_affinity in cluster_affs.into_iter() {
                 let cluster_index = cluster_affinity.cluster_index;
-                let mut dual_node_deltas = BTreeMap::new();
+                let mut dual_node_deltas = FastIterMap::new();
                 let (mut resolved, optimizer_result) =
                     self.resolve_cluster_tune(cluster_index, interface, dual_module, &mut dual_node_deltas);
 
                 let mut obstacles = dual_module.get_obstacles_tune(optimizer_result, dual_node_deltas);
 
                 // for cycle resolution
-                let mut order: VecDeque<BTreeSet<Obstacle>> = VecDeque::with_capacity(MAX_HISTORY); // fifo order of the obstacles sets seen
-                let mut current_sequences: Vec<(usize, BTreeSet<Obstacle>)> = Vec::new(); // the indexes that are currently being processed
+                let mut order: VecDeque<FastIterSet<Obstacle>> = VecDeque::with_capacity(MAX_HISTORY); // fifo order of the obstacles sets seen
+                let mut current_sequences: Vec<(usize, FastIterSet<Obstacle>)> = Vec::new(); // the indexes that are currently being processed
 
                 '_resolving: while !resolved {
                     PYTHON_SIGNAL_CHECKER.check().unwrap();
                     let (_obstacles, _resolved) = self.resolve_tune(obstacles.clone(), interface, dual_module);
 
                     // cycle resolution
-                    let drained: Vec<(usize, BTreeSet<Obstacle>)> = std::mem::take(&mut current_sequences);
+                    let drained: Vec<(usize, FastIterSet<Obstacle>)> = std::mem::take(&mut current_sequences);
                     for (idx, start) in drained.into_iter() {
                         if _obstacles.eq(&start) {
                             dual_module.end_tuning();
@@ -334,8 +333,8 @@ pub trait PrimalModuleImpl {
         _cluster_index: NodeIndex,
         _interface_ptr: &DualModuleInterfacePtr,
         _dual_module: &mut impl DualModuleImpl,
-        // _dual_node_deltas: &mut BTreeMap<OrderedDualNodePtr, Rational>,
-        _dual_node_deltas: &mut BTreeMap<OrderedDualNodePtr, (Rational, NodeIndex)>,
+        // _dual_node_deltas: &mut FastIterMap<OrderedDualNodePtr, Rational>,
+        _dual_node_deltas: &mut FastIterMap<OrderedDualNodePtr, (Rational, NodeIndex)>,
     ) -> (bool, OptimizerResult) {
         panic!("not implemented `resolve_cluster_tune`");
     }
@@ -348,7 +347,7 @@ pub trait PrimalModuleImpl {
     }
 
     /// get the sorted clusters by affinity
-    fn get_sorted_clusters_aff(&mut self) -> BTreeSet<ClusterAffinity> {
+    fn get_sorted_clusters_aff(&mut self) -> FastIterSet<ClusterAffinity> {
         panic!("not implemented `get_sorted_clusters_aff`");
     }
 

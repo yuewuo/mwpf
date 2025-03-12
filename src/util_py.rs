@@ -11,9 +11,7 @@ use num_traits::FromPrimitive;
 use pyo3::basic::CompareOp;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyFloat, PyInt, PyList, PySet, PyTuple};
-use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Debug;
-use std::hash::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 macro_rules! bind_trait_simple_wrapper {
@@ -32,7 +30,7 @@ macro_rules! bind_trait_simple_wrapper {
     };
 }
 
-#[derive(Clone)]
+#[derive(Clone, Hash)]
 #[repr(transparent)]
 #[pyclass(module = "mwpf", name = "Rational")]
 pub struct PyRational(pub Rational);
@@ -131,7 +129,8 @@ impl PyRational {
         }
     }
     fn __hash__(&self) -> u64 {
-        let mut hasher = DefaultHasher::new();
+        // let mut hasher = DefaultHasher::new();
+        let mut hasher = DefaultHasher::default();
         self.0.hash(&mut hasher);
         hasher.finish()
     }
@@ -189,9 +188,16 @@ impl PartialOrd for PyDualNodePtr {
         Some(self.index().cmp(&other.index()))
     }
 }
+
 impl Ord for PyDualNodePtr {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.index().cmp(&other.index())
+    }
+}
+
+impl Hash for PyDualNodePtr {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.index().hash(state);
     }
 }
 
@@ -216,15 +222,15 @@ impl PyDualNodePtr {
         self.0.read_recursive().grow_rate.clone().into()
     }
     #[getter]
-    fn vertices(&self) -> BTreeSet<VertexIndex> {
+    fn vertices(&self) -> FastIterSet<VertexIndex> {
         self.0.read_recursive().invalid_subgraph.vertices.clone()
     }
     #[getter]
-    fn edges(&self) -> BTreeSet<EdgeIndex> {
+    fn edges(&self) -> FastIterSet<EdgeIndex> {
         self.0.read_recursive().invalid_subgraph.edges.clone()
     }
     #[getter]
-    fn hair(&self) -> BTreeSet<EdgeIndex> {
+    fn hair(&self) -> FastIterSet<EdgeIndex> {
         self.0.read_recursive().invalid_subgraph.hair.clone()
     }
 }
@@ -286,8 +292,12 @@ impl PyDualReport {
 }
 
 /// Python code of `[a, b, c]` or `{a, b, c}` or `{}`
-pub fn py_into_btree_set<'py, T: Ord + FromPyObject<'py>>(value: &Bound<'py, PyAny>) -> PyResult<BTreeSet<T>> {
-    let mut result = BTreeSet::<T>::new();
+pub fn py_into_set<'py, T: Ord + FromPyObject<'py> + std::hash::Hash>(value: &Bound<'py, PyAny>) -> PyResult<FastIterSet<T>>
+where
+    T: Clone,
+    T: Debug,
+{
+    let mut result = FastIterSet::<T>::new();
     if value.is_instance_of::<PyList>() {
         let list: &Bound<PyList> = value.downcast()?;
         for element in list.iter() {
@@ -326,11 +336,55 @@ pub fn py_into_btree_set<'py, T: Ord + FromPyObject<'py>>(value: &Bound<'py, PyA
     Ok(result)
 }
 
+/// Python code of `[a, b, c]` or `{a, b, c}` or `{}`
+pub fn py_into_vec<'py, T: Ord + FromPyObject<'py>>(value: &Bound<'py, PyAny>) -> PyResult<Vec<T>> {
+    let mut result = Vec::new();
+    if value.is_instance_of::<PyList>() {
+        let list: &Bound<PyList> = value.downcast()?;
+        for element in list.iter() {
+            result.push(element.extract::<T>()?);
+        }
+    } else if value.is_instance_of::<PySet>() {
+        let list: &Bound<PySet> = value.downcast()?;
+        for element in list.iter() {
+            result.push(element.extract::<T>()?);
+        }
+    } else if value.is_instance_of::<PyDict>() {
+        let dict: &Bound<PyDict> = value.downcast()?;
+        assert!(
+            dict.is_empty(),
+            "only empty dict is supported; please use set or list instead"
+        );
+    } else {
+        // last resort: try convert the object into a python list
+        let result: PyResult<()> = (|| {
+            let builtins = PyModule::import(value.py(), "builtins")?;
+            let any = builtins.getattr("list")?.call1((value,))?;
+            let any_list: &Bound<PyList> = any.downcast()?;
+            for element in any_list.iter() {
+                result.push(element.extract::<T>()?);
+            }
+            Ok(())
+        })();
+        if result.is_err() {
+            let type_name = value.get_type().name()?;
+            unimplemented!(
+                "unsupported python type, should be set, list, (empty)dict, or anything that can be converted to a list; got {}",
+                type_name
+            )
+        }
+    }
+    Ok(result)
+}
+
 /// Python code of `[(k1, v1), (k2, v2)]` or `{ k1: v1, k2: v2 }` or `dict(k1=v1, k2=v2)`
-pub fn py_into_btree_map<'py, K: Ord + Debug + Clone + FromPyObject<'py>, T: FromPyObject<'py>>(
+pub fn py_into_map<'py, K: Ord + Debug + Clone + FromPyObject<'py>, T: FromPyObject<'py>>(
     value: &Bound<'py, PyAny>,
-) -> PyResult<BTreeMap<K, T>> {
-    let mut result = BTreeMap::<K, T>::new();
+) -> PyResult<hashbrown::HashMap<K, T>>
+where
+    K: Hash,
+{
+    let mut result = hashbrown::HashMap::<K, T>::new();
     if value.is_instance_of::<PyList>() {
         let list: &Bound<PyList> = value.downcast()?;
         for element in list.iter() {
@@ -431,14 +485,14 @@ impl PySubgraph {
     fn snapshot(&mut self, abbrev: bool) -> PyObject {
         json_to_pyobject(self.0.snapshot(abbrev))
     }
-    fn set(&self) -> BTreeSet<EdgeIndex> {
+    fn set(&self) -> FastIterSet<EdgeIndex> {
         self.0.iter().cloned().collect()
     }
     fn list(&self) -> Vec<EdgeIndex> {
         self.0.clone()
     }
     fn __eq__(&self, other: &Bound<PyAny>) -> PyResult<bool> {
-        let other_set = py_into_btree_set::<EdgeIndex>(other)?;
+        let other_set = py_into_set::<EdgeIndex>(other)?;
         let my_set = self.set();
         Ok(other_set == my_set)
     }
@@ -464,7 +518,7 @@ macro_rules! bind_trait_matrix_basic {
                 incident_edges: &Bound<PyAny>,
                 parity: bool,
             ) -> PyResult<Option<Vec<VarIndex>>> {
-                let incident_edges: Vec<EdgeIndex> = py_into_btree_set::<EdgeIndex>(incident_edges)?.into_iter().collect();
+                let incident_edges: Vec<EdgeIndex> = py_into_vec::<EdgeIndex>(incident_edges)?;
                 Ok(self.0.add_constraint(vertex_index, &incident_edges, parity))
             }
             fn get_lhs(&self, row: RowIndex, var_index: VarIndex) -> bool {
@@ -482,10 +536,10 @@ macro_rules! bind_trait_matrix_basic {
             fn exists_edge(&self, edge_index: EdgeIndex) -> bool {
                 self.0.exists_edge(edge_index)
             }
-            fn get_vertices(&self) -> BTreeSet<VertexIndex> {
+            fn get_vertices(&self) -> FastIterSet<VertexIndex> {
                 self.0.get_vertices()
             }
-            fn get_edges(&self) -> BTreeSet<EdgeIndex> {
+            fn get_edges(&self) -> FastIterSet<EdgeIndex> {
                 self.0.get_edges()
             }
             // MatrixView trait functions
@@ -536,7 +590,7 @@ macro_rules! bind_trait_matrix_tight {
             fn is_tight(&self, edge_index: usize) -> bool {
                 self.0.is_tight(edge_index)
             }
-            fn get_tight_edges(&mut self) -> BTreeSet<EdgeIndex> {
+            fn get_tight_edges(&mut self) -> FastIterSet<EdgeIndex> {
                 self.0.get_tight_edges().clone()
             }
             fn add_variable_with_tightness(&mut self, edge_index: EdgeIndex, is_tight: bool) {
@@ -554,11 +608,11 @@ macro_rules! bind_trait_matrix_tail {
         #[pymethods]
         impl $struct_name {
             // MatrixTail trait functions
-            fn get_tail_edges(&self) -> BTreeSet<EdgeIndex> {
+            fn get_tail_edges(&self) -> FastIterSet<EdgeIndex> {
                 self.0.get_tail_edges().clone()
             }
             fn set_tail_edges(&mut self, edges: &Bound<PyAny>) -> PyResult<()> {
-                let tail_edges = py_into_btree_set(edges)?;
+                let tail_edges = py_into_vec(edges)?;
                 self.0.set_tail_edges(tail_edges.into_iter());
                 Ok(())
             }
@@ -877,39 +931,39 @@ impl PyCluster {
 #[pymethods]
 impl PyCluster {
     #[getter]
-    fn get_vertices(&self) -> BTreeSet<VertexIndex> {
+    fn get_vertices(&self) -> FastIterSet<VertexIndex> {
         self.0.vertices.clone()
     }
     #[setter]
     fn set_vertices(&mut self, vertices: &Bound<PyAny>) -> PyResult<()> {
-        self.0.vertices = py_into_btree_set(vertices)?;
+        self.0.vertices = py_into_set(vertices)?;
         Ok(())
     }
     #[getter]
-    fn get_edges(&self) -> BTreeSet<EdgeIndex> {
+    fn get_edges(&self) -> FastIterSet<EdgeIndex> {
         self.0.edges.clone()
     }
     #[setter]
     fn set_edges(&mut self, edges: &Bound<PyAny>) -> PyResult<()> {
-        self.0.edges = py_into_btree_set(edges)?;
+        self.0.edges = py_into_set(edges)?;
         Ok(())
     }
     #[getter]
-    fn get_hair(&self) -> BTreeSet<EdgeIndex> {
+    fn get_hair(&self) -> FastIterSet<EdgeIndex> {
         self.0.hair.clone()
     }
     #[setter]
     fn set_hair(&mut self, hair: &Bound<PyAny>) -> PyResult<()> {
-        self.0.hair = py_into_btree_set(hair)?;
+        self.0.hair = py_into_set(hair)?;
         Ok(())
     }
     #[getter]
-    fn get_nodes(&self) -> BTreeSet<PyDualNodePtr> {
+    fn get_nodes(&self) -> FastIterSet<PyDualNodePtr> {
         self.0.nodes.iter().map(|x| x.ptr.clone().into()).collect()
     }
     #[setter]
     fn set_nodes(&mut self, nodes: &Bound<PyAny>) -> PyResult<()> {
-        let nodes: BTreeSet<PyDualNodePtr> = py_into_btree_set(nodes)?;
+        let nodes: Vec<PyDualNodePtr> = py_into_vec(nodes)?;
         self.0.nodes = nodes.into_iter().map(|x| x.0.into()).collect();
         Ok(())
     }

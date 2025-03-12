@@ -2,14 +2,13 @@ use super::interface::*;
 use super::visualize::*;
 use crate::util::*;
 use derivative::Derivative;
-use std::collections::BTreeSet;
 
 #[derive(Clone, Derivative)]
 #[derivative(Default(new = "true"))]
 pub struct Tight<M: MatrixView> {
     base: M,
     /// the set of tight edges: should be a relatively small set
-    tight_edges: BTreeSet<EdgeIndex>,
+    tight_edges: FastIterSet<EdgeIndex>,
     /// tight matrix gives a view of only tight edges, with sorted indices
     #[derivative(Default(value = "true"))]
     is_var_indices_outdated: bool,
@@ -24,7 +23,7 @@ impl<M: MatrixView> Tight<M> {
     pub fn from_base(base: M) -> Self {
         let mut value = Self {
             base,
-            tight_edges: BTreeSet::new(),
+            tight_edges: FastIterSet::new(),
             is_var_indices_outdated: true,
             var_indices: vec![],
         };
@@ -49,7 +48,7 @@ impl<M: MatrixView> MatrixTight for Tight<M> {
         self.tight_edges.contains(&edge_index)
     }
 
-    fn get_tight_edges(&self) -> &BTreeSet<EdgeIndex> {
+    fn get_tight_edges(&self) -> &FastIterSet<EdgeIndex> {
         &self.tight_edges
     }
 }
@@ -86,10 +85,10 @@ impl<M: MatrixView> MatrixBasic for Tight<M> {
     fn edge_to_var_index(&self, edge_index: EdgeIndex) -> Option<VarIndex> {
         self.get_base().edge_to_var_index(edge_index)
     }
-    fn get_vertices(&self) -> BTreeSet<VertexIndex> {
+    fn get_vertices(&self) -> FastIterSet<VertexIndex> {
         self.get_base().get_vertices()
     }
-    fn get_edges(&self) -> BTreeSet<EdgeIndex> {
+    fn get_edges(&self) -> FastIterSet<EdgeIndex> {
         self.get_base().get_edges()
     }
 }

@@ -14,7 +14,7 @@ use crate::plugin_union_find::*;
 use crate::relaxer::*;
 use crate::util::*;
 use num_traits::One;
-use std::collections::BTreeSet;
+
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Default)]
@@ -65,8 +65,8 @@ impl PluginImpl for PluginSingleHair {
                 if !unnecessary_edges.is_empty() {
                     // we can construct a relaxer here, by growing a new invalid subgraph that
                     // removes those unnecessary edges and shrinking the existing one
-                    let mut vertices: BTreeSet<VertexIndex> = hair_view.get_vertices();
-                    let mut edges: BTreeSet<EdgeIndex> = BTreeSet::from_iter(hair_view.get_base_view_edges());
+                    let mut vertices: FastIterSet<VertexIndex> = hair_view.get_vertices();
+                    let mut edges: FastIterSet<EdgeIndex> = FastIterSet::from_iter(hair_view.get_base_view_edges());
                     for &edge_index in dual_node.invalid_subgraph.hair.iter() {
                         edges.remove(&edge_index);
                     }

@@ -3,29 +3,34 @@ use crate::invalid_subgraph::*;
 use crate::util::*;
 use num_traits::{Signed, Zero};
 use std::cmp::Ordering;
-use std::collections::hash_map::DefaultHasher;
-use std::collections::BTreeMap;
+// use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
-#[derive(Clone, PartialEq, Eq, Derivative)]
+#[derive(Clone, Eq, Derivative, Default)]
 #[derivative(Debug)]
 pub struct Relaxer {
     /// the hash value calculated by other fields
     #[derivative(Debug = "ignore")]
     hash_value: u64,
     /// the direction of invalid subgraphs
-    direction: BTreeMap<Arc<InvalidSubgraph>, Rational>,
+    direction: FastIterMap<Arc<InvalidSubgraph>, Rational>,
     /// the edges that will be untightened after growing along `direction`;
     /// basically all the edges that have negative `overall_growing_rate`
-    untighten_edges: BTreeMap<EdgeIndex, Rational>,
+    untighten_edges: FastIterMap<EdgeIndex, Rational>,
     /// the edges that will grow
-    growing_edges: BTreeMap<EdgeIndex, Rational>,
+    growing_edges: FastIterMap<EdgeIndex, Rational>,
 }
 
 impl Hash for Relaxer {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.hash_value.hash(state);
+    }
+}
+
+impl PartialEq for Relaxer {
+    fn eq(&self, other: &Self) -> bool {
+        self.hash_value == other.hash_value && self.direction == other.direction
     }
 }
 
@@ -36,7 +41,7 @@ impl Ord for Relaxer {
         } else if self == other {
             Ordering::Equal
         } else {
-            // rare cases: same hash value but different state
+            // rare cases: same hash value but different state; `direction` uniquely determines the relaxer
             self.direction.cmp(&other.direction)
         }
     }
@@ -52,7 +57,7 @@ pub const RELAXER_ERR_MSG_NEGATIVE_SUMMATION: &str = "the summation of ΔyS is n
 pub const RELAXER_ERR_MSG_USEFUL: &str = "a valid relaxer must either increase overall ΔyS or untighten some edges";
 
 impl Relaxer {
-    pub fn new(direction: BTreeMap<Arc<InvalidSubgraph>, Rational>) -> Self {
+    pub fn new(direction: FastIterMap<Arc<InvalidSubgraph>, Rational>) -> Self {
         let relaxer = Self::new_raw(direction);
         debug_assert_eq!(relaxer.sanity_check(), Ok(()));
         relaxer
@@ -62,19 +67,19 @@ impl Relaxer {
         self.direction.clear();
     }
 
-    pub fn new_raw(direction: BTreeMap<Arc<InvalidSubgraph>, Rational>) -> Self {
-        let mut edges = BTreeMap::new();
+    pub fn new_raw(direction: FastIterMap<Arc<InvalidSubgraph>, Rational>) -> Self {
+        let mut edges = FastIterMap::new();
         for (invalid_subgraph, speed) in direction.iter() {
             for &edge_index in invalid_subgraph.hair.iter() {
-                if let Some(edge) = edges.get_mut(&edge_index) {
+                if let Some(mut edge) = edges.get_mut(&edge_index) {
                     *edge += speed;
-                } else {
-                    edges.insert(edge_index, speed.clone());
+                    continue;
                 }
+                edges.insert(edge_index, speed.clone());
             }
         }
-        let mut untighten_edges = BTreeMap::new();
-        let mut growing_edges = BTreeMap::new();
+        let mut untighten_edges = FastIterMap::new();
+        let mut growing_edges = FastIterMap::new();
         for (edge_index, speed) in edges {
             if speed.is_negative() {
                 untighten_edges.insert(edge_index, speed);
@@ -105,7 +110,7 @@ impl Relaxer {
     }
 
     pub fn update_hash(&mut self) {
-        let mut hasher = DefaultHasher::new();
+        let mut hasher = DefaultHasher::default();
         // only hash the direction since other field are derived from the direction
         self.direction.hash(&mut hasher);
         self.hash_value = hasher.finish();
@@ -119,15 +124,15 @@ impl Relaxer {
         sum_speed
     }
 
-    pub fn get_direction(&self) -> &BTreeMap<Arc<InvalidSubgraph>, Rational> {
+    pub fn get_direction(&self) -> &FastIterMap<Arc<InvalidSubgraph>, Rational> {
         &self.direction
     }
 
-    pub fn get_growing_edges(&self) -> &BTreeMap<EdgeIndex, Rational> {
+    pub fn get_growing_edges(&self) -> &FastIterMap<EdgeIndex, Rational> {
         &self.growing_edges
     }
 
-    pub fn get_untighten_edges(&self) -> &BTreeMap<EdgeIndex, Rational> {
+    pub fn get_untighten_edges(&self) -> &FastIterMap<EdgeIndex, Rational> {
         &self.untighten_edges
     }
 }
@@ -138,7 +143,6 @@ mod tests {
     use crate::decoding_hypergraph::tests::*;
     use crate::invalid_subgraph::tests::*;
     use num_traits::One;
-    use std::collections::BTreeSet;
 
     #[test]
     fn relaxer_good() {
@@ -147,7 +151,7 @@ mod tests {
         let (decoding_graph, ..) = color_code_5_decoding_graph(vec![7, 1], visualize_filename);
         let invalid_subgraph = Arc::new(InvalidSubgraph::new_complete(
             vec![7].into_iter().collect(),
-            BTreeSet::new(),
+            FastIterSet::new(),
             decoding_graph.as_ref(),
         ));
         use num_traits::One;
@@ -164,7 +168,7 @@ mod tests {
         let (decoding_graph, ..) = color_code_5_decoding_graph(vec![7, 1], visualize_filename);
         let invalid_subgraph = Arc::new(InvalidSubgraph::new_complete(
             vec![7].into_iter().collect(),
-            BTreeSet::new(),
+            FastIterSet::new(),
             decoding_graph.as_ref(),
         ));
         let relaxer: Relaxer = Relaxer::new([(invalid_subgraph, Rational::zero())].into());
@@ -174,9 +178,9 @@ mod tests {
     #[test]
     fn relaxer_hash() {
         // cargo test relaxer_hash -- --nocapture
-        let vertices: BTreeSet<VertexIndex> = [1, 2, 3].into();
-        let edges: BTreeSet<EdgeIndex> = [4, 5].into();
-        let hair: BTreeSet<EdgeIndex> = [6, 7, 8].into();
+        let vertices: FastIterSet<VertexIndex> = [1, 2, 3].into();
+        let edges: FastIterSet<EdgeIndex> = [4, 5].into();
+        let hair: FastIterSet<EdgeIndex> = [6, 7, 8].into();
         let invalid_subgraph = InvalidSubgraph::new_raw(vertices.clone(), edges.clone(), hair.clone());
         let relaxer_1 = Relaxer::new([(Arc::new(invalid_subgraph.clone()), Rational::one())].into());
         let relaxer_2 = Relaxer::new([(Arc::new(invalid_subgraph), Rational::one())].into());

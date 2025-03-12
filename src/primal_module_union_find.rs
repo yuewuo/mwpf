@@ -12,11 +12,10 @@ use crate::invalid_subgraph::*;
 use crate::num_traits::Zero;
 use crate::pointers::*;
 use crate::primal_module::*;
-use crate::serde::{Deserialize, Serialize};
 use crate::union_find::*;
 use crate::util::*;
 use crate::visualize::*;
-use std::collections::BTreeSet;
+
 use std::sync::Arc;
 
 #[derive(Derivative)]
@@ -29,10 +28,10 @@ pub struct PrimalModuleUnionFind {
 type UnionFind = UnionFindGeneric<PrimalModuleUnionFindNode>;
 
 /// define your own union-find node data structure like this
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Clone)]
 pub struct PrimalModuleUnionFindNode {
     /// all the internal edges
-    pub internal_edges: BTreeSet<EdgeIndex>,
+    pub internal_edges: FastIterSet<EdgeIndex>,
     /// the corresponding node index with these internal edges
     pub node_index: NodeIndex,
 }
@@ -41,7 +40,7 @@ pub struct PrimalModuleUnionFindNode {
 impl UnionNodeTrait for PrimalModuleUnionFindNode {
     #[inline]
     fn union(left: &Self, right: &Self) -> (bool, Self) {
-        let mut internal_edges = BTreeSet::new();
+        let mut internal_edges = FastIterSet::new();
         internal_edges.extend(left.internal_edges.iter().cloned());
         internal_edges.extend(right.internal_edges.iter().cloned());
         let result = Self {
@@ -58,7 +57,7 @@ impl UnionNodeTrait for PrimalModuleUnionFindNode {
     #[inline]
     fn default() -> Self {
         Self {
-            internal_edges: BTreeSet::new(),
+            internal_edges: FastIterSet::new(),
             node_index: NodeIndex::MAX, // waiting for assignment
         }
     }
@@ -99,7 +98,7 @@ impl PrimalModuleImpl for PrimalModuleUnionFind {
                 "must load defect nodes in order, did you forget to call solver.clear()?"
             );
             self.union_find.insert(PrimalModuleUnionFindNode {
-                internal_edges: BTreeSet::new(),
+                internal_edges: FastIterSet::new(),
                 node_index: node.index,
             });
         }
@@ -113,7 +112,7 @@ impl PrimalModuleImpl for PrimalModuleUnionFind {
         dual_module: &mut impl DualModuleImpl,
     ) -> bool {
         debug_assert!(!dual_report.is_unbounded() && dual_report.get_valid_growth().is_none());
-        let mut active_clusters = BTreeSet::<NodeIndex>::new();
+        let mut active_clusters = FastIterSet::<NodeIndex>::new();
         while let Some(obstacle) = dual_report.pop() {
             match obstacle {
                 Obstacle::Conflict { edge_index } => {
@@ -151,7 +150,7 @@ impl PrimalModuleImpl for PrimalModuleUnionFind {
             } else {
                 let new_cluster_node_index = self.union_find.size() as NodeIndex;
                 self.union_find.insert(PrimalModuleUnionFindNode {
-                    internal_edges: BTreeSet::new(),
+                    internal_edges: FastIterSet::new(),
                     node_index: new_cluster_node_index,
                 });
                 self.union_find.union(cluster_index as usize, new_cluster_node_index as usize);
@@ -170,7 +169,7 @@ impl PrimalModuleImpl for PrimalModuleUnionFind {
         interface_ptr: &DualModuleInterfacePtr,
         _dual_module: &mut impl DualModuleImpl,
     ) -> OutputSubgraph {
-        let mut valid_clusters = BTreeSet::new();
+        let mut valid_clusters = FastIterSet::new();
         let mut subgraph = vec![];
         for i in 0..self.union_find.size() {
             let root_index = self.union_find.find(i);

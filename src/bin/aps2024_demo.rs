@@ -16,7 +16,6 @@ use num_traits::{FromPrimitive, Zero};
 #[cfg(feature = "progress_bar")]
 use pbr::ProgressBar;
 use std::sync::Arc;
-use sugar::*;
 
 fn debug_demo() {
     for is_example in [true, false] {
@@ -56,7 +55,11 @@ fn debug_demo() {
                 .snapshot_combined("begin".to_string(), vec![&interface_ptr, &dual_module])
                 .unwrap();
             let decoding_graph = interface_ptr.read_recursive().decoding_graph.clone();
-            let s0 = Arc::new(InvalidSubgraph::new_complete(btreeset! {3}, btreeset! {}, &decoding_graph));
+            let s0 = Arc::new(InvalidSubgraph::new_complete(
+                fast_iter_set! {3},
+                fast_iter_set! {},
+                &decoding_graph,
+            ));
             let (_, s0_ptr) = interface_ptr.find_or_create_node(&s0, &mut dual_module);
             dual_module.set_grow_rate(&s0_ptr, Rational::from_usize(1).unwrap());
             for _ in 0..3 {
@@ -66,7 +69,11 @@ fn debug_demo() {
                     .unwrap();
             }
             // create another node
-            let s1 = Arc::new(InvalidSubgraph::new_complete(btreeset! {6}, btreeset! {}, &decoding_graph));
+            let s1 = Arc::new(InvalidSubgraph::new_complete(
+                fast_iter_set! {6},
+                fast_iter_set! {},
+                &decoding_graph,
+            ));
             let (_, s1_ptr) = interface_ptr.find_or_create_node(&s1, &mut dual_module);
             dual_module.set_grow_rate(&s0_ptr, -Rational::from_usize(1).unwrap());
             dual_module.set_grow_rate(&s1_ptr, Rational::from_usize(1).unwrap());
@@ -126,7 +133,11 @@ fn simple_demo() {
                 .snapshot_combined("begin".to_string(), vec![&interface_ptr, &dual_module])
                 .unwrap();
             let decoding_graph = interface_ptr.read_recursive().decoding_graph.clone();
-            let s0 = Arc::new(InvalidSubgraph::new_complete(btreeset! {3}, btreeset! {}, &decoding_graph));
+            let s0 = Arc::new(InvalidSubgraph::new_complete(
+                fast_iter_set! {3},
+                fast_iter_set! {},
+                &decoding_graph,
+            ));
             let (_, s0_ptr) = interface_ptr.find_or_create_node(&s0, &mut dual_module);
             dual_module.set_grow_rate(&s0_ptr, Rational::from_usize(1).unwrap());
             visualizer
@@ -195,13 +206,25 @@ fn challenge_demo() {
                 .unwrap();
             let decoding_graph = interface_ptr.read_recursive().decoding_graph.clone();
             let invalid_subgraphs = vec![
-                (btreeset! {10}, btreeset! {}),                                                  // s0, y0
-                (btreeset! {5, 6, 7, 9, 10, 11, 15, 16, 17}, btreeset! {6, 7, 11, 12}),          // s1, y3
-                (btreeset! {15}, btreeset! {}),                                                  // s2, y1
-                (btreeset! {}, btreeset! {0, 1, 2, 3, 6, 7, 8, 10, 11, 12, 13, 15, 16, 17, 18}), // s3, y4
-                (btreeset! {}, btreeset! {1, 2, 3, 5, 6, 7, 8, 10, 11, 12, 13, 15, 16, 17, 18}), // s4, y5
-                (btreeset! {}, btreeset! {0, 4, 9, 10, 11, 14, 15, 16, 19, 20, 21, 22, 23, 24}), // s5, y6
-                (btreeset! {}, btreeset! {4, 5, 9, 10, 11, 14, 15, 16, 19, 20, 21, 22, 23, 24}), // s6, y7
+                (fast_iter_set! {10}, fast_iter_set! {}), // s0, y0
+                (fast_iter_set! {5, 6, 7, 9, 10, 11, 15, 16, 17}, fast_iter_set! {6, 7, 11, 12}), // s1, y3
+                (fast_iter_set! {15}, fast_iter_set! {}), // s2, y1
+                (
+                    fast_iter_set! {},
+                    fast_iter_set! {0, 1, 2, 3, 6, 7, 8, 10, 11, 12, 13, 15, 16, 17, 18},
+                ), // s3, y4
+                (
+                    fast_iter_set! {},
+                    fast_iter_set! {1, 2, 3, 5, 6, 7, 8, 10, 11, 12, 13, 15, 16, 17, 18},
+                ), // s4, y5
+                (
+                    fast_iter_set! {},
+                    fast_iter_set! {0, 4, 9, 10, 11, 14, 15, 16, 19, 20, 21, 22, 23, 24},
+                ), // s5, y6
+                (
+                    fast_iter_set! {},
+                    fast_iter_set! {4, 5, 9, 10, 11, 14, 15, 16, 19, 20, 21, 22, 23, 24},
+                ), // s6, y7
             ];
             let mut s_ptr = vec![];
             let set_grow_rate =

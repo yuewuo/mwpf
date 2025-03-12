@@ -13,7 +13,6 @@ use crate::num_traits::One;
 use crate::plugin::*;
 use crate::relaxer::*;
 use crate::util::*;
-use std::collections::BTreeSet;
 
 #[derive(Debug, Clone, Default)]
 pub struct PluginUnionFind {}
@@ -26,7 +25,7 @@ impl PluginUnionFind {
         }
         let invalid_subgraph = InvalidSubgraph::new_complete_ptr(
             matrix.get_vertices(),
-            BTreeSet::from_iter(matrix.get_view_edges()),
+            FastIterSet::from_iter(matrix.get_view_edges()),
             decoding_graph,
         );
         Some(Relaxer::new([(invalid_subgraph, Rational::one())].into()))

@@ -14,12 +14,10 @@ use crate::primal_module_serial::PrimalClusterPtr;
 use crate::relaxer_optimizer::OptimizerResult;
 use crate::util::*;
 use crate::visualize::*;
-use hashbrown::HashSet;
+use hashbrown::{HashMap, HashSet};
 #[cfg(feature = "python_binding")]
 use pyo3::prelude::*;
 
-use std::collections::BTreeMap;
-use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
 // this is not effectively doing much right now due to the My (Leo's) desire for ultra performance (inlining function > branches)
@@ -189,6 +187,12 @@ impl std::fmt::Debug for DualModuleInterfaceWeak {
 pub struct OrderedDualNodePtr {
     pub index: NodeIndex,
     pub ptr: DualNodePtr,
+}
+
+impl std::hash::Hash for OrderedDualNodePtr {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.index.hash(state);
+    }
 }
 
 impl OrderedDualNodePtr {
@@ -374,9 +378,9 @@ pub trait DualModuleImpl {
     fn get_obstacles_tune(
         &self,
         optimizer_result: OptimizerResult,
-        dual_node_deltas: BTreeMap<OrderedDualNodePtr, (Rational, NodeIndex)>,
-    ) -> BTreeSet<Obstacle> {
-        let mut obstacles = BTreeSet::new();
+        dual_node_deltas: FastIterMap<OrderedDualNodePtr, (Rational, NodeIndex)>,
+    ) -> FastIterSet<Obstacle> {
+        let mut obstacles = FastIterSet::new();
         match optimizer_result {
             OptimizerResult::EarlyReturned => {
                 // if early returned, meaning optimizer didn't optimize, but simply should find current obstacles and return
@@ -441,7 +445,7 @@ pub trait DualModuleImpl {
                 // in other cases, optimizer should have optimized, so we should apply the deltas and return the nwe obstacles
 
                 // edge deltas needs to be applied at once for accurate obstacles calculation
-                let mut edge_deltas = BTreeMap::new();
+                let mut edge_deltas = FastIterMap::new();
                 for (dual_node_ptr, (grow_rate, _cluster_index)) in dual_node_deltas.into_iter() {
                     // update the dual node and check for obstacles
                     let mut node_ptr_write = dual_node_ptr.ptr.write();
@@ -455,14 +459,14 @@ pub trait DualModuleImpl {
                     // calculate the total edge deltas
                     for edge_index in node_ptr_write.invalid_subgraph.hair.iter() {
                         match edge_deltas.entry(*edge_index) {
-                            std::collections::btree_map::Entry::Vacant(v) => {
+                            FastIterEntry::Vacant(v) => {
                                 v.insert(grow_rate.clone());
                             }
-                            std::collections::btree_map::Entry::Occupied(mut o) => {
-                                let current = o.get_mut();
-                                *current += grow_rate.clone();
+                            FastIterEntry::Occupied(mut o) => {
+                                o.insert(o.get() + grow_rate.clone());
                             }
                         }
+
                         #[cfg(feature = "incr_lp")]
                         self.update_edge_cluster_weights(*edge_index, _cluster_index, grow_rate.clone());
                         // note: comment out if not using cluster-based
@@ -526,7 +530,7 @@ pub trait DualModuleImpl {
     }
 
     /// force set the weights given the indices and new weights
-    fn set_weights(&mut self, _new_weights: BTreeMap<EdgeIndex, Weight>) {
+    fn set_weights(&mut self, _new_weights: FastIterMap<EdgeIndex, Weight>) {
         unimplemented!()
     }
 
@@ -664,7 +668,7 @@ impl DualModuleInterfacePtr {
         let mut interface = self.write();
         let invalid_subgraph = Arc::new(InvalidSubgraph::new_complete(
             vec![vertex_idx].into_iter().collect(),
-            BTreeSet::new(),
+            FastIterSet::new(),
             &interface.decoding_graph,
         ));
         let node_index = interface.nodes.len() as NodeIndex;
@@ -802,6 +806,19 @@ impl MWPSVisualizer for DualModuleInterfacePtr {
         let mut dual_nodes = Vec::<serde_json::Value>::new();
         for dual_node_ptr in interface.nodes.iter() {
             let dual_node = dual_node_ptr.read_recursive();
+            #[cfg(feature = "fast_ds")]
+            dual_nodes.push(json!({
+                if abbrev { "e" } else { "edges" }: dual_node.invalid_subgraph.edges.iter().copied().collect::<Vec<_>>(),
+                if abbrev { "v" } else { "vertices" }: dual_node.invalid_subgraph.vertices.iter().copied().collect::<Vec<_>>(),
+                if abbrev { "h" } else { "hair" }: dual_node.invalid_subgraph.hair.iter().copied().collect::<Vec<_>>(),
+                if abbrev { "d" } else { "dual_variable" }: dual_node.get_dual_variable().to_f64(),
+                if abbrev { "dn" } else { "dual_variable_numerator" }: numer_of(&dual_node.get_dual_variable()),
+                if abbrev { "dd" } else { "dual_variable_denominator" }: denom_of(&dual_node.get_dual_variable()),
+                if abbrev { "r" } else { "grow_rate" }: dual_node.grow_rate.to_f64(),
+                if abbrev { "rn" } else { "grow_rate_numerator" }: numer_of(&dual_node.grow_rate),
+                if abbrev { "rd" } else { "grow_rate_denominator" }: denom_of(&dual_node.grow_rate),
+            }));
+            #[cfg(not(feature = "fast_ds"))]
             dual_nodes.push(json!({
                 if abbrev { "e" } else { "edges" }: dual_node.invalid_subgraph.edges,
                 if abbrev { "v" } else { "vertices" }: dual_node.invalid_subgraph.vertices,
