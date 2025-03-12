@@ -136,7 +136,7 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
 
       - name: build source distribution (ubuntu only)
         if: matrix.os == 'ubuntu'
-        run: maturin sdist --output-dir wheelhouse/
+        run: maturin sdist --out wheelhouse/
 
       - uses: actions/upload-artifact@v4
         with:
