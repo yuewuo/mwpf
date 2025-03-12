@@ -37,17 +37,6 @@ impl Ord for InvalidSubgraph {
             Ordering::Equal
         } else {
             // rare cases: same hash value but different state
-
-            #[cfg(feature = "index_map")]
-            return match self.vertices.iter().cmp(other.vertices.iter()) {
-                Ordering::Equal => match self.edges.iter().cmp(other.edges.iter()) {
-                    Ordering::Equal => self.hair.iter().cmp(other.hair.iter()),
-                    other => return other,
-                },
-                other => return other,
-            };
-
-            #[cfg(not(feature = "index_map"))]
             (&self.vertices, &self.edges, &self.hair).cmp(&(&other.vertices, &other.edges, &other.hair))
         }
     }
@@ -106,16 +95,6 @@ impl InvalidSubgraph {
         invalid_subgraph
     }
 
-    #[cfg(feature = "index_map")]
-    pub fn update_hash(&mut self) {
-        let mut hasher = DefaultHasher::new();
-        self.vertices.iter().for_each(|x| x.hash(&mut hasher));
-        self.edges.iter().for_each(|x| x.hash(&mut hasher));
-        self.hair.iter().for_each(|x| x.hash(&mut hasher));
-        self.hash_value = hasher.finish();
-    }
-
-    #[cfg(not(feature = "index_map"))]
     pub fn update_hash(&mut self) {
         let mut hasher = DefaultHasher::default();
         self.vertices.hash(&mut hasher);

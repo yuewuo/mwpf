@@ -42,10 +42,6 @@ impl Ord for Relaxer {
             Ordering::Equal
         } else {
             // rare cases: same hash value but different state; `direction` uniquely determines the relaxer
-            #[cfg(feature = "index_map")]
-            return self.direction.iter().cmp(other.direction.iter());
-
-            #[cfg(not(feature = "index_map"))]
             self.direction.cmp(&other.direction)
         }
     }
@@ -116,10 +112,7 @@ impl Relaxer {
     pub fn update_hash(&mut self) {
         let mut hasher = DefaultHasher::default();
         // only hash the direction since other field are derived from the direction
-        #[cfg(not(feature = "index_map"))]
         self.direction.hash(&mut hasher);
-        #[cfg(feature = "index_map")]
-        self.direction.iter().sorted().for_each(|x| x.hash(&mut hasher));
         self.hash_value = hasher.finish();
     }
 

@@ -1599,7 +1599,6 @@ dependencies = [
  "hashbrown 0.15.2",
  "heapz",
  "highs",
- "indexmap 2.7.1",
  "itertools 0.14.0",
  "lazy_static",
  "lnexp",

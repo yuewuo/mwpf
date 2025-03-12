@@ -9,8 +9,6 @@ use crate::rand_xoshiro::rand_core::RngCore;
 #[cfg(feature = "python_binding")]
 use crate::util_py::*;
 use crate::visualize::*;
-#[cfg(feature = "index_map")]
-use indexmap::{IndexMap, IndexSet};
 use itertools::izip;
 use lnexp::LnExp;
 use num_traits::Zero;
@@ -86,28 +84,17 @@ cfg_if::cfg_if! {
         pub type FastIterMap<K, V> = std::collections::BTreeMap<K, V>;
         pub type FastIterEntry<'a, K, V> = std::collections::btree_map::Entry<'a, K, V>;
     }
-    else if #[cfg(feature="indexmap")] {
-        pub type FastIterSet<T> = indexmap::IndexSet<T>;
-        pub type FastIterMap<K, V> = indexmap::IndexMap<K, V>;
-        pub type FastIterEntry<'a, K, V> = indexmap::map::Entry<'a, K, V>;
-    }
     else if #[cfg(feature="fast_ds")] {
         pub type FastIterSet<T> = fast_ds::Set<T>;
         pub type FastIterMap<K, V> = fast_ds::Map<K, V>;
         pub type FastIterEntry<'a, K, V> = fast_ds::Entry<'a, K, V>;
     } else {
-        panic!("no iteration datastructure feature selected!");
+        panic!("no iteration data structure feature selected!");
     }
 }
 
-#[cfg(all(feature = "btrees", feature = "indexmap"))]
-compile_error!("Features `btrees` and `indexmap` are mutually exclusive.");
-
 #[cfg(all(feature = "btrees", feature = "fast_ds"))]
 compile_error!("Features `btrees` and `fast_ds` are mutually exclusive.");
-
-#[cfg(all(feature = "fast_ds", feature = "indexmap"))]
-compile_error!("Features `fast_ds` and `indexmap` are mutually exclusive.");
 
 #[macro_export]
 macro_rules! fast_iter_set {
