@@ -9,5 +9,6 @@ try:
     from .sinter_decoders import *
     from . import heralded_dem
     from . import ref_circuit
-except:
+except BaseException as e:
+    # raise e
     ...

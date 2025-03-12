@@ -9,6 +9,7 @@ from mwpf import (  # type: ignore
     Solver,
     BP,
     BenchmarkSuite,
+    WeightRange,
 )
 from dataclasses import dataclass, field
 import pickle
@@ -422,7 +423,7 @@ def decode_common(
                         syndrome, np.flatnonzero(bp_solution)
                     )
                 else:
-                    syndrome = mwpf.SyndromePattern(
+                    syndrome = SyndromePattern(
                         defect_vertices=syndrome.defect_vertices,
                         override_weights=list(bp_decoder.log_prob_ratios),
                         override_ratio=bp_weight_mix_ratio,
@@ -462,7 +463,7 @@ def decode_common(
     return prediction
 
 
-def record_trace(trace_f: BufferedWriter, elapsed: float, bound: mwpf.WeightRange):
+def record_trace(trace_f: BufferedWriter, elapsed: float, bound: WeightRange):
     trace_f.write(struct.pack("f", elapsed))
     trace_f.write(struct.pack("f", bound.lower.float()))
     trace_f.write(struct.pack("f", bound.upper.float()))
