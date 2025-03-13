@@ -1,17 +1,18 @@
-use crate::{decoding_hypergraph::*, invalid_subgraph};
 use crate::derivative::Derivative;
 use crate::matrix::*;
 use crate::plugin::EchelonMatrix;
 use crate::util::*;
+use crate::{decoding_hypergraph::*, invalid_subgraph};
 use std::cmp::Ordering;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::BTreeSet;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
-use crate::dual_module_pq::{EdgePtr, VertexPtr};
-use crate::pointers::UnsafePtr;
 use crate::dual_module::DualModuleImpl;
+use crate::dual_module_pq::{EdgePtr, VertexPtr};
+#[cfg(feature = "unsafe_pointer")]
+use crate::pointers::UnsafePtr;
 
 /// an invalid subgraph $S = (V_S, E_S)$, also store the hair $\delta(S)$
 #[derive(Clone, PartialEq, Eq, Derivative)]
@@ -68,10 +69,7 @@ impl InvalidSubgraph {
 
     /// complete definition of invalid subgraph $S = (V_S, E_S)$
     #[allow(clippy::unnecessary_cast)]
-    pub fn new_complete(
-        vertices: &BTreeSet<VertexPtr>,
-        edges: &BTreeSet<EdgePtr>,
-    ) -> Self {
+    pub fn new_complete(vertices: &BTreeSet<VertexPtr>, edges: &BTreeSet<EdgePtr>) -> Self {
         let mut hair = BTreeSet::new();
         for vertex_ptr in vertices.iter() {
             for edge_weak in vertex_ptr.read_recursive().edges.iter() {
@@ -115,16 +113,31 @@ impl InvalidSubgraph {
     }
 
     // note that only new_from_indices and new_complete_from_indices have sanity_check
-    pub fn new_complete_from_indices(vertices: BTreeSet<VertexIndex>, edges: BTreeSet<EdgeIndex>, dual_module: &mut impl DualModuleImpl) -> Self {
-        let vertices_ptr = vertices.iter().map(|i| dual_module.get_vertex_ptr(*i)).collect::<BTreeSet<_>>();
+    pub fn new_complete_from_indices(
+        vertices: BTreeSet<VertexIndex>,
+        edges: BTreeSet<EdgeIndex>,
+        dual_module: &mut impl DualModuleImpl,
+    ) -> Self {
+        let vertices_ptr = vertices
+            .iter()
+            .map(|i| dual_module.get_vertex_ptr(*i))
+            .collect::<BTreeSet<_>>();
         let edges_ptr = edges.iter().map(|i| dual_module.get_edge_ptr(*i)).collect::<BTreeSet<_>>();
         let invalid_subgraph = Self::new_complete(&vertices_ptr, &edges_ptr);
         debug_assert_eq!(invalid_subgraph.sanity_check(dual_module), Ok(()));
         invalid_subgraph
     }
 
-    pub fn new_raw_from_indices(vertices: BTreeSet<VertexIndex>, edges: BTreeSet<EdgeIndex>, hair: BTreeSet<EdgeIndex>, dual_module: &mut impl DualModuleImpl) -> Self {
-        let vertices_ptr = vertices.iter().map(|i| dual_module.get_vertex_ptr(*i)).collect::<BTreeSet<_>>();
+    pub fn new_raw_from_indices(
+        vertices: BTreeSet<VertexIndex>,
+        edges: BTreeSet<EdgeIndex>,
+        hair: BTreeSet<EdgeIndex>,
+        dual_module: &mut impl DualModuleImpl,
+    ) -> Self {
+        let vertices_ptr = vertices
+            .iter()
+            .map(|i| dual_module.get_vertex_ptr(*i))
+            .collect::<BTreeSet<_>>();
         let edges_ptr = edges.iter().map(|i| dual_module.get_edge_ptr(*i)).collect::<BTreeSet<_>>();
         let hair_ptr = hair.iter().map(|i| dual_module.get_edge_ptr(*i)).collect::<BTreeSet<_>>();
         Self::new_raw(&vertices_ptr, &edges_ptr, &hair_ptr)
@@ -155,8 +168,10 @@ impl InvalidSubgraph {
                 if !self.vertices.contains(&vertex_weak.upgrade_force()) {
                     return Err(format!(
                         "hyperedge {edge_index} connects vertices {:?}, \
-                    but vertex {:?} is not in the invalid subgraph vertices {:?}", 
-                        edge.vertices, vertex_weak.upgrade_force().read_recursive().vertex_index, self.vertices
+                    but vertex {:?} is not in the invalid subgraph vertices {:?}",
+                        edge.vertices,
+                        vertex_weak.upgrade_force().read_recursive().vertex_index,
+                        self.vertices
                     ));
                 }
             }
@@ -209,21 +224,12 @@ impl InvalidSubgraph {
         let strong_edges: BTreeSet<EdgePtr> = edges.iter().cloned().collect::<BTreeSet<_>>();
         Self::new_ptr(&strong_edges)
     }
-    pub fn new_complete_ptr(
-        vertices: &BTreeSet<VertexPtr>,
-        edges: &BTreeSet<EdgePtr>,
-    ) -> Arc<Self> {
+    pub fn new_complete_ptr(vertices: &BTreeSet<VertexPtr>, edges: &BTreeSet<EdgePtr>) -> Arc<Self> {
         Arc::new(Self::new_complete(vertices, edges))
     }
-    pub fn new_complete_vec_ptr(
-        vertices: &BTreeSet<VertexPtr>,
-        edges: &[EdgePtr],
-    ) -> Arc<Self> {
+    pub fn new_complete_vec_ptr(vertices: &BTreeSet<VertexPtr>, edges: &[EdgePtr]) -> Arc<Self> {
         let strong_edges: BTreeSet<EdgePtr> = edges.iter().cloned().collect::<BTreeSet<_>>();
-        Self::new_complete_ptr(
-            vertices,
-            &strong_edges,
-        )
+        Self::new_complete_ptr(vertices, &strong_edges)
     }
 }
 
@@ -231,10 +237,10 @@ impl InvalidSubgraph {
 pub mod tests {
     use super::*;
     use crate::decoding_hypergraph::tests::*;
-    use crate::dual_module_pq::{Vertex, Edge, VertexPtr, EdgePtr};
-    use std::collections::HashSet;
-    use crate::dual_module_pq::DualModulePQ;
     use crate::dual_module::DualModuleInterfacePtr;
+    use crate::dual_module_pq::DualModulePQ;
+    use crate::dual_module_pq::{Edge, EdgePtr, Vertex, VertexPtr};
+    use std::collections::HashSet;
     use sugar::*;
 
     #[test]
@@ -245,19 +251,34 @@ pub mod tests {
         let initializer = decoding_graph.model_graph.initializer.clone();
         let mut dual_module = DualModulePQ::new_empty(&initializer);
         let interface_ptr = DualModuleInterfacePtr::new(decoding_graph.model_graph.clone());
-        interface_ptr.load(decoding_graph.syndrome_pattern.clone(), &mut dual_module); // this is needed to load the defect vertices
+        interface_ptr.load(decoding_graph.syndrome_pattern.clone(), &mut dual_module, 0); // this is needed to load the defect vertices
 
         let invalid_subgraph_1 = InvalidSubgraph::new_from_indices(btreeset! {13}, &mut dual_module);
         println!("invalid_subgraph_1: {invalid_subgraph_1:?}");
         assert_eq!(
-            invalid_subgraph_1.vertices.iter().map(|v| v.read_recursive().vertex_index).collect::<HashSet<_>>(),
-            vec![2, 6, 7].into_iter().collect::<HashSet<_>>());
+            invalid_subgraph_1
+                .vertices
+                .iter()
+                .map(|v| v.read_recursive().vertex_index)
+                .collect::<HashSet<_>>(),
+            vec![2, 6, 7].into_iter().collect::<HashSet<_>>()
+        );
         assert_eq!(
-            invalid_subgraph_1.edges.iter().map(|e| e.read_recursive().edge_index).collect::<HashSet<_>>(), 
-            vec![13].into_iter().collect::<HashSet<_>>());
+            invalid_subgraph_1
+                .edges
+                .iter()
+                .map(|e| e.read_recursive().edge_index)
+                .collect::<HashSet<_>>(),
+            vec![13].into_iter().collect::<HashSet<_>>()
+        );
         assert_eq!(
-            invalid_subgraph_1.hair.iter().map(|e| e.read_recursive().edge_index).collect::<HashSet<_>>(),
-            vec![5, 6, 9, 10, 11, 12, 14, 15, 16, 17].into_iter().collect::<HashSet<_>>());
+            invalid_subgraph_1
+                .hair
+                .iter()
+                .map(|e| e.read_recursive().edge_index)
+                .collect::<HashSet<_>>(),
+            vec![5, 6, 9, 10, 11, 12, 14, 15, 16, 17].into_iter().collect::<HashSet<_>>()
+        );
     }
 
     #[test]
@@ -283,16 +304,18 @@ pub mod tests {
         // cargo test invalid_subgraph_hash -- --nocapture
         let visualize_filename = "invalid_subgraph_good.json".to_string();
         // we use an arbitrary decoding graph, the defect vertices here are not loaded
-        let (decoding_graph, ..) = color_code_5_decoding_graph(vec![7, 1], visualize_filename); 
+        let (decoding_graph, ..) = color_code_5_decoding_graph(vec![7, 1], visualize_filename);
         let initializer = decoding_graph.model_graph.initializer.clone();
         let mut dual_module = DualModulePQ::new_empty(&initializer);
 
         let vertices: BTreeSet<VertexIndex> = [1, 2, 3].into();
         let edges: BTreeSet<EdgeIndex> = [4, 5].into();
         let hair: BTreeSet<EdgeIndex> = [6, 7, 8].into();
-        
-        let invalid_subgraph_1 = InvalidSubgraph::new_raw_from_indices(vertices.clone(), edges.clone(), hair.clone(), &mut dual_module);
-        let invalid_subgraph_2 = InvalidSubgraph::new_raw_from_indices(vertices.clone(), edges.clone(), hair.clone(), &mut dual_module);
+
+        let invalid_subgraph_1 =
+            InvalidSubgraph::new_raw_from_indices(vertices.clone(), edges.clone(), hair.clone(), &mut dual_module);
+        let invalid_subgraph_2 =
+            InvalidSubgraph::new_raw_from_indices(vertices.clone(), edges.clone(), hair.clone(), &mut dual_module);
         assert_eq!(invalid_subgraph_1, invalid_subgraph_2);
         // they should have the same hash value
         assert_eq!(

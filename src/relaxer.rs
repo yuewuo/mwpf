@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
-use crate::dual_module_pq::{EdgePtr};
+use crate::dual_module_pq::EdgePtr;
 
 #[derive(Clone, PartialEq, Eq, Derivative)]
 #[derivative(Debug)]
@@ -138,12 +138,12 @@ impl Relaxer {
 mod tests {
     use super::*;
     use crate::decoding_hypergraph::tests::*;
+    use crate::dual_module::DualModuleImpl;
+    use crate::dual_module::DualModuleInterfacePtr;
+    use crate::dual_module_pq::DualModulePQ;
     use crate::invalid_subgraph::tests::*;
     use num_traits::One;
     use std::collections::BTreeSet;
-    use crate::dual_module_pq::DualModulePQ;
-    use crate::dual_module::DualModuleImpl;
-    use crate::dual_module::DualModuleInterfacePtr;
 
     #[test]
     fn relaxer_good() {
@@ -153,12 +153,12 @@ mod tests {
         let initializer = decoding_graph.model_graph.initializer.clone();
         let mut dual_module = DualModulePQ::new_empty(&initializer); // initialize vertex and edge pointers
         let interface_ptr = DualModuleInterfacePtr::new(decoding_graph.model_graph.clone());
-        interface_ptr.load(decoding_graph.syndrome_pattern.clone(), &mut dual_module); // this is needed to load the defect vertices
+        interface_ptr.load(decoding_graph.syndrome_pattern.clone(), &mut dual_module, 0); // this is needed to load the defect vertices
 
         let invalid_subgraph = Arc::new(InvalidSubgraph::new_complete_from_indices(
             vec![7].into_iter().collect(),
             BTreeSet::new(),
-            &mut dual_module
+            &mut dual_module,
         ));
         use num_traits::One;
         let relaxer = Relaxer::new([(invalid_subgraph, Rational::one())].into());
@@ -175,12 +175,12 @@ mod tests {
         let initializer = decoding_graph.model_graph.initializer.clone();
         let mut dual_module = DualModulePQ::new_empty(&initializer); // initialize vertex and edge pointers
         let interface_ptr = DualModuleInterfacePtr::new(decoding_graph.model_graph.clone());
-        interface_ptr.load(decoding_graph.syndrome_pattern.clone(), &mut dual_module); // this is needed to load the defect vertices
+        interface_ptr.load(decoding_graph.syndrome_pattern.clone(), &mut dual_module, 0); // this is needed to load the defect vertices
 
         let invalid_subgraph = Arc::new(InvalidSubgraph::new_complete_from_indices(
             vec![7].into_iter().collect(),
             BTreeSet::new(),
-            &mut dual_module
+            &mut dual_module,
         ));
         let relaxer: Relaxer = Relaxer::new([(invalid_subgraph, Rational::zero())].into());
         println!("relaxer: {relaxer:?}"); // should not print because it panics
@@ -194,12 +194,13 @@ mod tests {
         let initializer = decoding_graph.model_graph.initializer.clone();
         let mut dual_module = DualModulePQ::new_empty(&initializer); // initialize vertex and edge pointers
         let interface_ptr = DualModuleInterfacePtr::new(decoding_graph.model_graph.clone());
-        interface_ptr.load(decoding_graph.syndrome_pattern.clone(), &mut dual_module); // this is needed to load the defect vertices
+        interface_ptr.load(decoding_graph.syndrome_pattern.clone(), &mut dual_module, 0); // this is needed to load the defect vertices
 
         let vertices: BTreeSet<VertexIndex> = [1, 2, 3].into();
         let edges: BTreeSet<EdgeIndex> = [4, 5].into();
         let hair: BTreeSet<EdgeIndex> = [6, 7, 8].into();
-        let invalid_subgraph = InvalidSubgraph::new_raw_from_indices(vertices.clone(), edges.clone(), hair.clone(), &mut dual_module);
+        let invalid_subgraph =
+            InvalidSubgraph::new_raw_from_indices(vertices.clone(), edges.clone(), hair.clone(), &mut dual_module);
         let relaxer_1 = Relaxer::new([(Arc::new(invalid_subgraph.clone()), Rational::one())].into());
         let relaxer_2 = Relaxer::new([(Arc::new(invalid_subgraph), Rational::one())].into());
         assert_eq!(relaxer_1, relaxer_2);

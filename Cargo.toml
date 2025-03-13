@@ -39,7 +39,7 @@ debug = true
 
 [features]
 # to enable a feature, use `--features xxx`
-default = ["f64_weight", "qecp_integrate", "embed_visualizer", "progress_bar", "unsafe_pointer"]
+default = ["f64_weight", "qecp_integrate", "embed_visualizer", "progress_bar"]
 f64_weight = ["float_lp"] # use f64 instead of BigRational as weight type
 rational_weight = ["slp"]
 python_binding = ["pyo3"] # bind to Python
@@ -93,7 +93,7 @@ qecp = { version = "0.2.5", optional = true, default-features = false, features 
 serde_variant = "0.1.3"
 priority-queue = "2.1.1"
 heapz = { path = "src/heapz" }
-hashbrown = { version = "0.15.1", features = ["serde"]}
+hashbrown = { version = "0.15.1", features = ["serde"] }
 pheap = { path = "src/pheap" }
 tempfile = "3.14.0"
 flate2 = "1.0.34"
@@ -103,7 +103,6 @@ rayon = "1.10.0"
 petgraph = { version = "0.6.0", features = ["serde-1"] }
 core_affinity = "0.8.1"
 weak-table = "0.3.2"
-
 
 
 [dev-dependencies]

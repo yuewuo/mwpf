@@ -7,17 +7,20 @@
 
 use crate::cluster::*;
 use crate::dual_module::*;
-use crate::dual_module_pq::*;
 use crate::dual_module_parallel::*;
+use crate::dual_module_pq::*;
 use crate::example_codes::*;
 use crate::matrix::*;
 use crate::model_hypergraph::*;
+use crate::num_traits::Zero;
 use crate::plugin::*;
 use crate::plugin_single_hair::*;
 use crate::plugin_union_find::PluginUnionFind;
+#[cfg(feature = "unsafe_pointer")]
+use crate::pointers::UnsafePtr;
 use crate::primal_module::*;
-use crate::primal_module_serial::*;
 use crate::primal_module_parallel::*;
+use crate::primal_module_serial::*;
 use crate::util::*;
 use crate::visualize::*;
 use core::panic;
@@ -29,8 +32,6 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufWriter;
 use std::sync::Arc;
-use crate::pointers::UnsafePtr;
-use crate::num_traits::Zero;
 
 cfg_if::cfg_if! {
     if #[cfg(feature="python_binding")] {
@@ -306,8 +307,8 @@ impl SolverSerialPlugins {
     ) {
         if !skip_initial_duals {
             self.interface_ptr
-                .load(Arc::new(syndrome_pattern.clone()), &mut self.dual_module);
-            self.primal_module.load(&self.interface_ptr, &mut self.dual_module);
+                .load(Arc::new(syndrome_pattern.clone()), &mut self.dual_module, 0);
+            self.primal_module.load(&self.interface_ptr, &mut self.dual_module, 0);
         } else {
             self.interface_ptr
                 .write()
@@ -665,7 +666,6 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     Ok(())
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SolverParallelConfig {
@@ -677,8 +677,8 @@ pub struct SolverParallelConfig {
 }
 
 pub mod parallel_hyperion_default_configs {
-    use crate::primal_module_parallel::PrimalModuleParallelConfig;
     use crate::mwpf_solver::DualModuleParallelConfig;
+    use crate::primal_module_parallel::PrimalModuleParallelConfig;
 
     pub fn primal() -> PrimalModuleParallelConfig {
         serde_json::from_value(json!({})).unwrap()
@@ -689,14 +689,13 @@ pub mod parallel_hyperion_default_configs {
     }
 }
 
-
 #[cfg(feature = "python_binding")]
 bind_trait_to_python!(SolverParallel);
 
 #[cfg_attr(feature = "python_binding", cfg_eval)]
 #[cfg_attr(feature = "python_binding", pyclass)]
 pub struct SolverParallel {
-    dual_module: DualModuleParallel<DualModulePQGeneric<FutureObstacleQueue<Rational>>, FutureObstacleQueue<Rational>>, 
+    dual_module: DualModuleParallel<DualModulePQGeneric<FutureObstacleQueue<Rational>>, FutureObstacleQueue<Rational>>,
     primal_module: PrimalModuleParallel,
     // interface_ptr: DualModuleInterfacePtr,
     model_graph: Arc<ModelHyperGraph>,
@@ -713,13 +712,26 @@ pub struct SolverParallel {
 // }
 
 impl SolverParallel {
-    pub fn new(initializer: &SolverInitializer, partition_info: &PartitionInfo, plugins: Vec<PluginEntry>, config: serde_json::Value,) -> Self {
+    pub fn new(
+        initializer: &SolverInitializer,
+        partition_info: &PartitionInfo,
+        plugins: Vec<PluginEntry>,
+        config: serde_json::Value,
+    ) -> Self {
         let model_graph = Arc::new(ModelHyperGraph::new(Arc::new(initializer.clone())));
         let config: SolverParallelConfig = serde_json::from_value(config).unwrap();
-        let primal_module = PrimalModuleParallel::new_config(&model_graph.initializer.clone(), &partition_info, config.primal.clone(), plugins, model_graph.clone());
-        let dual_module: DualModuleParallel<DualModulePQGeneric<FutureObstacleQueue<Rational>>, FutureObstacleQueue<Rational>> =
-            DualModuleParallel::new_config(&initializer, &partition_info, config.dual.clone());
-        
+        let primal_module = PrimalModuleParallel::new_config(
+            &model_graph.initializer.clone(),
+            &partition_info,
+            config.primal.clone(),
+            plugins,
+            model_graph.clone(),
+        );
+        let dual_module: DualModuleParallel<
+            DualModulePQGeneric<FutureObstacleQueue<Rational>>,
+            FutureObstacleQueue<Rational>,
+        > = DualModuleParallel::new_config(&initializer, &partition_info, config.dual.clone());
+
         Self {
             dual_module,
             primal_module,
@@ -757,15 +769,14 @@ impl SolverTrait for SolverParallel {
         if !syndrome_pattern.erasures.is_empty() {
             unimplemented!();
         }
-        self.primal_module.parallel_solve_visualizer(
-            syndrome_pattern.clone(),
-            &mut self.dual_module,
-            visualizer,
-        );
+        self.primal_module
+            .parallel_solve_visualizer(syndrome_pattern.clone(), &mut self.dual_module, visualizer);
         let useless_interface_ptr = DualModuleInterfacePtr::new(self.model_graph.clone());
-        let (subgraph, weight_range) = self.primal_module.subgraph_range(&useless_interface_ptr, &mut self.dual_module);
+        let (subgraph, weight_range) = self
+            .primal_module
+            .subgraph_range(&useless_interface_ptr, &mut self.dual_module);
         // println!("subgraph here: {:?}", subgraph.subgraph);
-       
+
         debug_assert!(
             {
                 self.model_graph
@@ -825,7 +836,6 @@ impl SolverTrait for SolverParallel {
     }
 }
 
-
 #[cfg_attr(feature = "python_binding", pyclass)]
 pub struct SolverParallelUnionFind(SolverParallel);
 
@@ -882,7 +892,6 @@ bind_solver_trait!(SolverParallelSingleHair);
 #[cfg(feature = "python_binding")]
 bind_trait_to_python!(SolverParallelSingleHair);
 
-
 #[cfg_attr(feature = "python_binding", pyclass)]
 pub struct SolverParallelJointSingleHair(SolverParallel);
 
@@ -930,4 +939,3 @@ pub(crate) fn register(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<SolverParallelJointSingleHair>()?;
     Ok(())
 }
-

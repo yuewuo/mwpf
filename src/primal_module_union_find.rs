@@ -77,7 +77,12 @@ impl PrimalModuleImpl for PrimalModuleUnionFind {
     }
 
     #[allow(clippy::unnecessary_cast)]
-    fn load<D: DualModuleImpl>(&mut self, interface_ptr: &DualModuleInterfacePtr, _dual_module: &mut D) {
+    fn load<D: DualModuleImpl>(
+        &mut self,
+        interface_ptr: &DualModuleInterfacePtr,
+        _dual_module: &mut D,
+        partition_id: usize,
+    ) {
         let interface = interface_ptr.read_recursive();
         for index in 0..interface.nodes.len() as NodeIndex {
             let node_ptr = &interface.nodes[index as usize];
@@ -139,9 +144,7 @@ impl PrimalModuleImpl for PrimalModuleUnionFind {
             }
         }
         for &cluster_index in active_clusters.iter() {
-            if interface_ptr
-                .is_valid_cluster_auto_vertices(&self.union_find.get(cluster_index as usize).internal_edges)
-            {
+            if interface_ptr.is_valid_cluster_auto_vertices(&self.union_find.get(cluster_index as usize).internal_edges) {
                 // do nothing
             } else {
                 let new_cluster_node_index = self.union_find.size() as NodeIndex;
@@ -150,20 +153,15 @@ impl PrimalModuleImpl for PrimalModuleUnionFind {
                     node_index: new_cluster_node_index,
                 });
                 self.union_find.union(cluster_index as usize, new_cluster_node_index as usize);
-                let invalid_subgraph = InvalidSubgraph::new_ptr(
-                    &self.union_find.get(cluster_index as usize).internal_edges.clone(),
-                );
-                interface_ptr.create_node(invalid_subgraph, dual_module);
+                let invalid_subgraph =
+                    InvalidSubgraph::new_ptr(&self.union_find.get(cluster_index as usize).internal_edges.clone());
+                interface_ptr.create_node(invalid_subgraph, dual_module, 0);
             }
         }
         false
     }
 
-    fn subgraph(
-        &mut self,
-        interface_ptr: &DualModuleInterfacePtr,
-        _dual_module: &impl DualModuleImpl,
-    ) -> OutputSubgraph {
+    fn subgraph(&mut self, interface_ptr: &DualModuleInterfacePtr, _dual_module: &impl DualModuleImpl) -> OutputSubgraph {
         let mut valid_clusters = BTreeSet::new();
         let mut internal_subgraph = vec![];
         for i in 0..self.union_find.size() {
@@ -176,7 +174,11 @@ impl PrimalModuleImpl for PrimalModuleUnionFind {
                 internal_subgraph.extend(cluster_subgraph);
             }
         }
-        let subgraph = internal_subgraph.clone().into_iter().map(|e| e.upgrade_force().read_recursive().edge_index).collect::<Vec<_>>();
+        let subgraph = internal_subgraph
+            .clone()
+            .into_iter()
+            .map(|e| e.upgrade_force().read_recursive().edge_index)
+            .collect::<Vec<_>>();
 
         // let mut subgraph_set = subgraph.into_iter().collect::<hashbrown::HashSet<EdgeIndex>>();
         // for to_flip in _dual_module.get_negative_edges().iter() {

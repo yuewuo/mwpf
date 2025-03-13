@@ -7,6 +7,7 @@ use prettytable::*;
 use std::collections::BTreeSet;
 
 use crate::dual_module_pq::{EdgeWeak, VertexWeak, VertexPtr};
+#[cfg(feature = "unsafe_pointer")]
 use crate::pointers::UnsafePtr;
 
 #[derive(Clone, Derivative)]

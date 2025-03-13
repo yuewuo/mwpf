@@ -15,6 +15,7 @@ use crate::relaxer_forest::*;
 use num_traits::Signed;
 use parking_lot::RwLock;
 use std::sync::Arc;
+#[cfg(feature = "unsafe_pointer")]
 use crate::pointers::UnsafePtr;
 
 pub type EchelonMatrix = Echelon<Tail<Tight<BasicMatrix>>>;

@@ -19,6 +19,7 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use crate::dual_module_pq::{EdgePtr, VertexPtr};
+#[cfg(feature = "unsafe_pointer")]
 use crate::pointers::UnsafePtr;
 
 #[derive(Debug, Clone, Default)]

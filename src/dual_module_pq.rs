@@ -4,7 +4,7 @@
 //!
 //! Only debug tests are failing, which aligns with the dual_module_serial behavior
 //!
-#![cfg_attr(feature="unsafe_pointer", allow(dropping_references))]
+#![cfg_attr(feature = "unsafe_pointer", allow(dropping_references))]
 
 use crate::num_traits::{FromPrimitive, ToPrimitive, Zero};
 use crate::pointers::*;
@@ -20,6 +20,7 @@ use std::{
     time::Instant,
 };
 
+use crate::pointers::*;
 use derivative::Derivative;
 use hashbrown::hash_map::Entry;
 use hashbrown::{HashMap, HashSet};
@@ -29,7 +30,6 @@ use num_traits::Signed;
 use parking_lot::{lock_api::RwLockWriteGuard, RawRwLock};
 use pheap::PairingHeap;
 use priority_queue::PriorityQueue;
-use crate::pointers::UnsafePtr;
 
 /* Helper structs for events/obstacles during growing */
 #[derive(Debug, Clone)]
@@ -136,7 +136,7 @@ pub struct Vertex {
     pub is_defect: bool,
     /// all neighbor edges, in surface code this should be constant number of edges
     pub edges: Vec<EdgeWeak>,
-    /// if this vertex is in boundary unit, find its corresponding mirror vertices in the other units. If this vertex is in non-boundary unit but a mirrored vertex, 
+    /// if this vertex is in boundary unit, find its corresponding mirror vertices in the other units. If this vertex is in non-boundary unit but a mirrored vertex,
     /// find its other mirrored vertices in other units (both boundary and non-boundary units)
     pub mirrored_vertices: Vec<VertexWeak>,
 }
@@ -165,7 +165,6 @@ impl std::fmt::Debug for VertexWeak {
     }
 }
 
-
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct Edge {
@@ -188,7 +187,7 @@ pub struct Edge {
     /// the partition unit this edge belongs to. For non-parallel implementation, this value is set to None.
     pub unit_index: Option<usize>,
     /// whether this edge is connected to a boundary vertex, (this edges must belong to non-boundary unit)
-    pub connected_to_boundary_vertex: bool, 
+    pub connected_to_boundary_vertex: bool,
 
     #[cfg(feature = "incr_lp")]
     /// storing the weights of the clusters that are currently contributing to this edge
@@ -222,11 +221,7 @@ impl std::fmt::Debug for EdgePtr {
         //     edge.last_updated_time,
         //     edge.dual_nodes.iter().filter(|node| !node.weak_ptr.upgrade_force().read_recursive().grow_rate.is_zero()).collect::<Vec<_>>()
         // )
-        write!(
-            f,
-            "[edge: {}]",
-            edge.edge_index,
-        )
+        write!(f, "[edge: {}]", edge.edge_index,)
     }
 }
 
@@ -281,14 +276,14 @@ where
     original_weights: Vec<Rational>,
 
     /// the number of all vertices (including those partitioned into other serial module)
-    pub vertex_num: VertexNum, 
+    pub vertex_num: VertexNum,
     /// the number of all edges (including those partitioned into other seiral module)
     pub edge_num: usize,
     /// all mirrored vertices of this unit, mainly for parallel implementation
     pub all_mirrored_vertices: Vec<VertexPtr>,
 
-    /// unit is active if it has an edge connected to a boundary vertex with non-zero growth 
-    pub unit_active: ArcManualSafeLock<bool>, 
+    /// unit is active if it has an edge connected to a boundary vertex with non-zero growth
+    pub unit_active: ArcManualSafeLock<bool>,
 }
 
 impl<Queue> DualModulePQGeneric<Queue>
@@ -427,74 +422,75 @@ where
     /// initialize the dual module, which is supposed to be reused for multiple decoding tasks with the same structure
     #[allow(clippy::unnecessary_cast)]
     fn new_empty(initializer: &SolverInitializer) -> Self {
-        #[cfg(not(feature = "loose_sanity_check"))]
-        initializer.sanity_check().unwrap();
+        panic!("new empyt called");
+        // #[cfg(not(feature = "loose_sanity_check"))]
+        // initializer.sanity_check().unwrap();
 
-        #[cfg(feature = "loose_sanity_check")]
-        if let Err(error_message) = initializer.sanity_check() {
-            eprintln!("[warning] {}", error_message);
-        }
+        // #[cfg(feature = "loose_sanity_check")]
+        // if let Err(error_message) = initializer.sanity_check() {
+        //     eprintln!("[warning] {}", error_message);
+        // }
 
-        // create vertices
-        let vertices: Vec<VertexPtr> = (0..initializer.vertex_num)
-            .map(|vertex_index| {
-                VertexPtr::new_value(Vertex {
-                    vertex_index,
-                    is_defect: false,
-                    edges: vec![],
-                    mirrored_vertices: vec![],
-                })
-            })
-            .collect();
-        // set edges
-        let mut edges = Vec::<EdgePtr>::new();
-        let mut original_weights = Vec::<Rational>::with_capacity(initializer.weighted_edges.len());
-        for hyperedge in initializer.weighted_edges.iter() {
-            let edge = Edge {
-                edge_index: edges.len() as EdgeIndex,
-                weight: hyperedge.weight.clone(),
-                dual_nodes: vec![],
-                vertices: hyperedge
-                    .vertices
-                    .iter()
-                    .map(|i| vertices[*i as usize].downgrade())
-                    .collect::<Vec<_>>(),
-                last_updated_time: Rational::zero(),
-                growth_at_last_updated_time: Rational::zero(),
-                grow_rate: Rational::zero(),
-                unit_index: None,
-                connected_to_boundary_vertex: false,
-                #[cfg(feature = "incr_lp")]
-                cluster_weights: hashbrown::HashMap::new(),
-            };
+        // // create vertices
+        // let vertices: Vec<VertexPtr> = (0..initializer.vertex_num)
+        //     .map(|vertex_index| {
+        //         VertexPtr::new_value(Vertex {
+        //             vertex_index,
+        //             is_defect: false,
+        //             edges: vec![],
+        //             mirrored_vertices: vec![],
+        //         })
+        //     })
+        //     .collect();
+        // // set edges
+        // let mut edges = Vec::<EdgePtr>::new();
+        // let mut original_weights = Vec::<Rational>::with_capacity(initializer.weighted_edges.len());
+        // for hyperedge in initializer.weighted_edges.iter() {
+        //     let edge = Edge {
+        //         edge_index: edges.len() as EdgeIndex,
+        //         weight: hyperedge.weight.clone(),
+        //         dual_nodes: vec![],
+        //         vertices: hyperedge
+        //             .vertices
+        //             .iter()
+        //             .map(|i| vertices[*i as usize].downgrade())
+        //             .collect::<Vec<_>>(),
+        //         last_updated_time: Rational::zero(),
+        //         growth_at_last_updated_time: Rational::zero(),
+        //         grow_rate: Rational::zero(),
+        //         unit_index: None,
+        //         connected_to_boundary_vertex: false,
+        //         #[cfg(feature = "incr_lp")]
+        //         cluster_weights: hashbrown::HashMap::new(),
+        //     };
 
-            original_weights.push(edge.weight.clone());
+        //     original_weights.push(edge.weight.clone());
 
-            let edge_ptr = EdgePtr::new_value(edge);
+        //     let edge_ptr = EdgePtr::new_value(edge);
 
-            for &vertex_index in hyperedge.vertices.iter() {
-                vertices[vertex_index as usize].write().edges.push(edge_ptr.downgrade());
-            }
+        //     for &vertex_index in hyperedge.vertices.iter() {
+        //         vertices[vertex_index as usize].write().edges.push(edge_ptr.downgrade());
+        //     }
 
-            edges.push(edge_ptr);
-        }
-        Self {
-            vertices,
-            edges,
-            obstacle_queue: Queue::default(),
-            global_time: ArcManualSafeLock::new_value(Rational::zero()),
-            mode: DualModuleMode::default(),
-            tuning_start_time: None,
-            total_tuning_time: None,
-            negative_weight_sum: Default::default(),
-            negative_edges: Default::default(),
-            flip_vertices: Default::default(),
-            original_weights,
-            vertex_num: initializer.vertex_num,
-            edge_num: initializer.weighted_edges.len(),
-            all_mirrored_vertices: vec![],
-            unit_active: ArcManualSafeLock::new_value(false),
-        }
+        //     edges.push(edge_ptr);
+        // }
+        // Self {
+        //     vertices,
+        //     edges,
+        //     obstacle_queue: Queue::default(),
+        //     global_time: ArcManualSafeLock::new_value(Rational::zero()),
+        //     mode: DualModuleMode::default(),
+        //     tuning_start_time: None,
+        //     total_tuning_time: None,
+        //     negative_weight_sum: Default::default(),
+        //     negative_edges: Default::default(),
+        //     flip_vertices: Default::default(),
+        //     original_weights,
+        //     vertex_num: initializer.vertex_num,
+        //     edge_num: initializer.weighted_edges.len(),
+        //     all_mirrored_vertices: vec![],
+        //     unit_active: ArcManualSafeLock::new_value(false),
+        // }
     }
 
     /// clear all growth and existing dual nodes
@@ -556,7 +552,6 @@ where
         }
 
         for edge_ptr in dual_node.invalid_subgraph.hair.iter() {
-
             // should make sure the edge is up-to-speed before making its variables change
             self.update_edge_if_necessary(edge_ptr);
             let mut edge = edge_ptr.write();
@@ -570,7 +565,9 @@ where
                     // it is okay to use global_time now, as this must be up-to-speed
                     (edge.weight.clone() - edge.growth_at_last_updated_time.clone()) / edge.grow_rate.clone()
                         + global_time.clone(),
-                    Obstacle::Conflict { edge_ptr: edge_ptr.clone() },
+                    Obstacle::Conflict {
+                        edge_ptr: edge_ptr.clone(),
+                    },
                 );
             }
         }
@@ -591,10 +588,8 @@ where
 
     #[allow(clippy::unnecessary_cast)]
     fn set_grow_rate(&mut self, dual_node_ptr: &DualNodePtr, grow_rate: Rational) {
-
         self.update_dual_node_if_necessary(dual_node_ptr);
         let mut dual_node = dual_node_ptr.write();
-
 
         // it is okay to use global_time now, as this must be up-to-speed
         let global_time = self.global_time.read_recursive().clone();
@@ -620,7 +615,9 @@ where
                     // it is okay to use global_time now, as this must be up-to-speed
                     (edge.weight.clone() - edge.growth_at_last_updated_time.clone()) / edge.grow_rate.clone()
                         + global_time.clone(),
-                    Obstacle::Conflict { edge_ptr: edge_ptr.clone() },
+                    Obstacle::Conflict {
+                        edge_ptr: edge_ptr.clone(),
+                    },
                 );
             }
         }
@@ -685,11 +682,12 @@ where
     /* identical with the dual_module_serial */
     #[allow(clippy::unnecessary_cast)]
     fn get_edge_nodes(&self, edge_ptr: EdgePtr) -> Vec<DualNodePtr> {
-        edge_ptr.read_recursive()
-                .dual_nodes
-                .iter()
-                .map(|x| x.upgrade_force().ptr)
-                .collect()
+        edge_ptr
+            .read_recursive()
+            .dual_nodes
+            .iter()
+            .map(|x| x.upgrade_force().ptr)
+            .collect()
     }
 
     #[allow(clippy::unnecessary_cast)]
@@ -849,8 +847,7 @@ where
         let mut weight = Rational::zero();
         for edge_ptr in cluster.edges.iter() {
             let edge = edge_ptr.read_recursive();
-            weight +=
-                &edge.growth_at_last_updated_time + (&global_time - &edge.last_updated_time) * &edge.grow_rate;
+            weight += &edge.growth_at_last_updated_time + (&global_time - &edge.last_updated_time) * &edge.grow_rate;
         }
         for node in cluster.nodes.iter() {
             let dual_node = node.read_recursive().dual_node_ptr.clone();
@@ -865,11 +862,7 @@ where
         Some(Affinity::from(start))
     }
 
-    fn get_edge_free_weight(
-        &self,
-        edge_ptr: EdgePtr,
-        participating_dual_variables: &hashbrown::HashSet<usize>,
-    ) -> Rational {
+    fn get_edge_free_weight(&self, edge_ptr: EdgePtr, participating_dual_variables: &hashbrown::HashSet<usize>) -> Rational {
         let edge = edge_ptr.read_recursive();
         let mut free_weight = edge.weight.clone();
         for dual_node in edge.dual_nodes.iter() {
@@ -985,11 +978,19 @@ where
     }
 
     fn get_vertex_ptr_vec(&self, vertex_indices: &[VertexIndex]) -> Vec<VertexPtr> {
-        vertex_indices.to_vec().iter().map(|&i| self.vertices[i as usize].clone()).collect()
+        vertex_indices
+            .to_vec()
+            .iter()
+            .map(|&i| self.vertices[i as usize].clone())
+            .collect()
     }
 
     fn get_edge_ptr_vec(&self, edge_indices: &[EdgeIndex]) -> Vec<EdgePtr> {
-        edge_indices.to_vec().iter().map(|&i| self.edges[i as usize].clone()).collect()
+        edge_indices
+            .to_vec()
+            .iter()
+            .map(|&i| self.edges[i as usize].clone())
+            .collect()
     }
 
     fn get_vertex_num(&self) -> usize {
@@ -1001,61 +1002,80 @@ where
     }
 }
 
-impl<Queue> DualModulePQGeneric<Queue> 
-where Queue: FutureQueueMethods<Rational, Obstacle> + Default + std::fmt::Debug + Clone,
+impl<Queue> DualModulePQGeneric<Queue>
+where
+    Queue: FutureQueueMethods<Rational, Obstacle> + Default + std::fmt::Debug + Clone,
 {
     /// to be called in dual_module_parallel.rs
-    pub fn new_partitioned(partitioned_initializer: &PartitionedSolverInitializer) -> Self {
+    pub fn new_partitioned(partitioned_initializer: &PartitionedSolverInitializer, partition_id: usize) -> Self {
         // println!("///////////////////////////////////////////////////////////////////////////////");
         // println!("for new_partitioned: {partitioned_initializer:?}");
         // println!("///////////////////////////////////////////////////////////////////////////////");
         /// debug printing
-
         let mut all_defect_vertices = vec![];
-        // create vertices 
-        let mut vertices: Vec<VertexPtr> = partitioned_initializer.owning_range.iter().map(|vertex_index| {
-            VertexPtr::new_value(Vertex {
-                vertex_index,
-                is_defect: if partitioned_initializer.defect_vertices.contains(&vertex_index) {all_defect_vertices.push(vertex_index); true} else {false},
-                edges: Vec::new(),
-                mirrored_vertices: vec![], // initialized to empty, to be filled in `new_config()` in parallel implementation
+        // create vertices
+        let mut vertices: Vec<VertexPtr> = partitioned_initializer
+            .owning_range
+            .iter()
+            .map(|vertex_index| {
+                VertexPtr::new_value(
+                    Vertex {
+                        vertex_index,
+                        is_defect: if partitioned_initializer.defect_vertices.contains(&vertex_index) {
+                            all_defect_vertices.push(vertex_index);
+                            true
+                        } else {
+                            false
+                        },
+                        edges: Vec::new(),
+                        mirrored_vertices: vec![], // initialized to empty, to be filled in `new_config()` in parallel implementation
+                    },
+                    (partition_id, vertex_index),
+                )
             })
-        }).collect::<Vec<_>>();
+            .collect::<Vec<_>>();
 
-        
-        // now we want to 'add' the boundary vertices into the vertices for this partition (if this partition is non-boundary unit). We create new (mirrored) vertices of these 
-        // boundary vertices, and add them to the vertices list of the non-boundary-unit. These mirrored vertices are not connected to any edges yet, as the edges are not created yet. 
-        // They are specifically tracked by `all_mirrored_vertices` of DualModulePQGeneric. 
+        // now we want to 'add' the boundary vertices into the vertices for this partition (if this partition is non-boundary unit). We create new (mirrored) vertices of these
+        // boundary vertices, and add them to the vertices list of the non-boundary-unit. These mirrored vertices are not connected to any edges yet, as the edges are not created yet.
+        // They are specifically tracked by `all_mirrored_vertices` of DualModulePQGeneric.
         let mut total_boundary_vertices = HashMap::<VertexIndex, VertexIndex>::new(); // all boundary vertices mapping to the specific local partition index
         let mut all_mirrored_vertices = vec![];
         if !partitioned_initializer.is_boundary_unit {
             // only the index_range matters here, the units of the adjacent partitions do not matter here
-            for adjacent_index_range in partitioned_initializer.boundary_vertices.iter(){
+            for adjacent_index_range in partitioned_initializer.boundary_vertices.iter() {
                 for vertex_index in adjacent_index_range.range[0]..adjacent_index_range.range[1] {
                     if !partitioned_initializer.owning_range.contains(vertex_index) {
                         total_boundary_vertices.insert(vertex_index, vertices.len() as VertexIndex);
-                        let vertex_ptr0 = VertexPtr::new_value(Vertex {
-                            vertex_index: vertex_index,
-                            is_defect: if partitioned_initializer.defect_vertices.contains(&vertex_index) {all_defect_vertices.push(vertex_index); true} else {false},
-                            edges: Vec::new(),
-                            mirrored_vertices: vec![], // set to empty, to be filled in `new_config()` in parallel implementation
-                        });
+                        let vertex_ptr0 = VertexPtr::new_value(
+                            Vertex {
+                                vertex_index,
+                                is_defect: if partitioned_initializer.defect_vertices.contains(&vertex_index) {
+                                    all_defect_vertices.push(vertex_index);
+                                    true
+                                } else {
+                                    false
+                                },
+                                edges: Vec::new(),
+                                mirrored_vertices: vec![], // set to empty, to be filled in `new_config()` in parallel implementation
+                            },
+                            (partition_id, vertex_index),
+                        );
                         vertices.push(vertex_ptr0.clone());
                         all_mirrored_vertices.push(vertex_ptr0);
                     }
                 }
             }
-        } 
+        }
 
-        // initialize global time 
-        let global_time = ArcManualSafeLock::new_value(Rational::zero());
-        
-        // set edges 
+        // initialize global time
+        let global_time = ArcManualSafeLock::new_value(Rational::zero(), (0, 0));
+
+        // set edges
         let mut edges = Vec::<EdgePtr>::new();
         let mut original_weights = Vec::<Rational>::with_capacity(partitioned_initializer.weighted_edges.len());
         for (hyper_edge, edge_index) in partitioned_initializer.weighted_edges.iter() {
             // above, we have created the vertices that follow its own numbering rule for the index
-            // so we need to calculate the vertex indices of the hyper_edge to make it match the local index of each partition unit. then, we can create EdgePtr 
+            // so we need to calculate the vertex indices of the hyper_edge to make it match the local index of each partition unit. then, we can create EdgePtr
             let mut local_hyper_edge_vertices = Vec::<VertexWeak>::new();
             for vertex_index in hyper_edge.vertices.iter() {
                 // println!("vertex_index: {:?}", vertex_index);
@@ -1067,17 +1087,20 @@ where Queue: FutureQueueMethods<Rational, Obstacle> + Default + std::fmt::Debug 
                 local_hyper_edge_vertices.push(vertices[local_index].downgrade());
             }
             // now we create the edgeptr
-            let edge_ptr = EdgePtr::new_value(Edge {
-                edge_index: *edge_index,
-                weight: hyper_edge.weight.clone(),
-                dual_nodes: vec![],
-                vertices: local_hyper_edge_vertices,
-                last_updated_time: Rational::zero(),
-                growth_at_last_updated_time: Rational::zero(),
-                grow_rate: Rational::zero(),
-                unit_index: Some(partitioned_initializer.unit_index),
-                connected_to_boundary_vertex: hyper_edge.connected_to_boundary_vertex,
-            });
+            let edge_ptr = EdgePtr::new_value(
+                Edge {
+                    edge_index: *edge_index,
+                    weight: hyper_edge.weight.clone(),
+                    dual_nodes: vec![],
+                    vertices: local_hyper_edge_vertices,
+                    last_updated_time: Rational::zero(),
+                    growth_at_last_updated_time: Rational::zero(),
+                    grow_rate: Rational::zero(),
+                    unit_index: Some(partitioned_initializer.unit_index),
+                    connected_to_boundary_vertex: hyper_edge.connected_to_boundary_vertex,
+                },
+                (partition_id, *edge_index),
+            );
 
             // we also need to update the vertices of this hyper_edge
             for vertex_index in hyper_edge.vertices.iter() {
@@ -1088,13 +1111,11 @@ where Queue: FutureQueueMethods<Rational, Obstacle> + Default + std::fmt::Debug 
                 };
                 vertices[local_index].write().edges.push(edge_ptr.downgrade());
             }
-            
+
             edges.push(edge_ptr.clone());
             original_weights.push(edge_ptr.read_recursive().weight.clone());
             // println!("edge: {:?}, edge_weight: {:?}", edge_ptr.clone().read_recursive().edge_index, edge_ptr.read_recursive().weight);
         }
-
-        
 
         Self {
             vertices,
@@ -1105,52 +1126,58 @@ where Queue: FutureQueueMethods<Rational, Obstacle> + Default + std::fmt::Debug 
             vertex_num: partitioned_initializer.vertex_num,
             edge_num: partitioned_initializer.edge_num,
             all_mirrored_vertices,
-            unit_active: ArcManualSafeLock::new_value(false), // false by default, to be updated later when edge_growth are calcualted
+            unit_active: ArcManualSafeLock::new_value(false, (0, 0)), // false by default, to be updated later when edge_growth are calcualted
             tuning_start_time: None,
             total_tuning_time: None,
             negative_weight_sum: Default::default(),
             negative_edges: Default::default(),
             flip_vertices: Default::default(),
-            original_weights: original_weights,
+            original_weights,
         }
     }
 
-    pub fn new_seperate_unit(new_seperate_initializer: &PartitionedSolverInitializer) -> Self {
+    pub fn new_seperate_unit(new_seperate_initializer: &PartitionedSolverInitializer, partition_id: usize) -> Self {
         // initializer.sanity_check().unwrap();
         // create vertices, might need to offset the vertex index by the total number of vertex in the already existing blocks
         let vertices: Vec<VertexPtr> = (0..new_seperate_initializer.vertex_num)
             .map(|vertex_index| {
-                VertexPtr::new_value(Vertex {
-                    vertex_index,
-                    is_defect: false,
-                    edges: vec![],
-                    mirrored_vertices: vec![], // set to empty for non-parallel implementation
-                })
+                VertexPtr::new_value(
+                    Vertex {
+                        vertex_index,
+                        is_defect: false,
+                        edges: vec![],
+                        mirrored_vertices: vec![], // set to empty for non-parallel implementation
+                    },
+                    (partition_id, vertex_index),
+                )
             })
             .collect::<Vec<_>>();
-        // set global time 
-        let global_time = ArcManualSafeLock::new_value(Rational::zero());
+        // set global time
+        let global_time = ArcManualSafeLock::new_value(Rational::zero(), (0, 0));
         // set edges
         let mut edges = Vec::<EdgePtr>::new();
         let mut original_weights = Vec::<Rational>::with_capacity(new_seperate_initializer.weighted_edges.len());
         for (hyperedge, _) in new_seperate_initializer.weighted_edges.iter() {
-            let edge_ptr = EdgePtr::new_value(Edge {
-                edge_index: edges.len() as EdgeIndex,
-                weight: hyperedge.weight.clone(),
-                dual_nodes: vec![],
-                vertices: hyperedge
-                    .vertices
-                    .iter()
-                    .map(|i| vertices[*i as usize].downgrade())
-                    .collect::<Vec<_>>(),
-                last_updated_time: Rational::zero(),
-                growth_at_last_updated_time: Rational::zero(),
-                grow_rate: Rational::zero(),
-                unit_index: None,
-                connected_to_boundary_vertex: false,
-                #[cfg(feature = "incr_lp")]
-                cluster_weights: hashbrown::HashMap::new(),
-            });
+            let edge_ptr = EdgePtr::new_value(
+                Edge {
+                    edge_index: edges.len() as EdgeIndex,
+                    weight: hyperedge.weight.clone(),
+                    dual_nodes: vec![],
+                    vertices: hyperedge
+                        .vertices
+                        .iter()
+                        .map(|i| vertices[*i as usize].downgrade())
+                        .collect::<Vec<_>>(),
+                    last_updated_time: Rational::zero(),
+                    growth_at_last_updated_time: Rational::zero(),
+                    grow_rate: Rational::zero(),
+                    unit_index: None,
+                    connected_to_boundary_vertex: false,
+                    #[cfg(feature = "incr_lp")]
+                    cluster_weights: hashbrown::HashMap::new(),
+                },
+                (partition_id, edges.len() as EdgeIndex),
+            );
             for &vertex_index in hyperedge.vertices.iter() {
                 vertices[vertex_index as usize].write().edges.push(edge_ptr.downgrade());
             }
@@ -1167,13 +1194,13 @@ where Queue: FutureQueueMethods<Rational, Obstacle> + Default + std::fmt::Debug 
             edge_num: new_seperate_initializer.weighted_edges.len(),
             all_mirrored_vertices: vec![],
             // all_defect_vertices: vec![], // used only for parallel implementation
-            unit_active: ArcManualSafeLock::new_value(false), // used only for parallel implementation
+            unit_active: ArcManualSafeLock::new_value(false, (0, 0)), // used only for parallel implementation
             tuning_start_time: None,
             total_tuning_time: None,
             negative_weight_sum: Default::default(),
             negative_edges: Default::default(),
             flip_vertices: Default::default(),
-            original_weights: original_weights,
+            original_weights,
         }
     }
 }
@@ -1232,36 +1259,66 @@ mod tests {
         assert_eq!(0, future_obstacle_queue.len());
         macro_rules! ref_event {
             ($index:expr, $edges:expr) => {
-            Some((&$index, &Obstacle::Conflict { edge_ptr: $edges[$index].clone() }))
+                Some((
+                    &$index,
+                    &Obstacle::Conflict {
+                        edge_ptr: $edges[$index].clone(),
+                    },
+                ))
             };
         }
         macro_rules! value_event {
             ($index:expr, $edges:expr) => {
-                Some(($index, Obstacle::Conflict { edge_ptr: $edges[$index].clone() }))
+                Some((
+                    $index,
+                    Obstacle::Conflict {
+                        edge_ptr: $edges[$index].clone(),
+                    },
+                ))
             };
         }
-        // initialize edges 
-        let edges: Vec<EdgePtr> = vec![0, 1, 2, 3].into_iter()
+        // initialize edges
+        let edges: Vec<EdgePtr> = vec![0, 1, 2, 3]
+            .into_iter()
             .map(|edge_index| {
-                EdgePtr::new_value(Edge {
-                    edge_index: edge_index,
-                    weight: Rational::zero(),
-                    dual_nodes: vec![],
-                    vertices: vec![],
-                    last_updated_time: Rational::zero(),
-                    growth_at_last_updated_time: Rational::zero(),
-                    grow_rate: Rational::zero(),
-                    unit_index: None,
-                    connected_to_boundary_vertex: false,
-                    #[cfg(feature = "incr_lp")]
-                    cluster_weights: hashbrown::HashMap::new(),
-                })
-            }).collect();
+                EdgePtr::new_value(
+                    Edge {
+                        edge_index,
+                        weight: Rational::zero(),
+                        dual_nodes: vec![],
+                        vertices: vec![],
+                        last_updated_time: Rational::zero(),
+                        growth_at_last_updated_time: Rational::zero(),
+                        grow_rate: Rational::zero(),
+                        unit_index: None,
+                        connected_to_boundary_vertex: false,
+                        #[cfg(feature = "incr_lp")]
+                        cluster_weights: hashbrown::HashMap::new(),
+                    },
+                    (0, 0),
+                )
+            })
+            .collect();
 
         // test basic order
-        future_obstacle_queue.will_happen(2, Obstacle::Conflict { edge_ptr: edges[2].clone() });
-        future_obstacle_queue.will_happen(1, Obstacle::Conflict { edge_ptr: edges[1].clone() });
-        future_obstacle_queue.will_happen(3, Obstacle::Conflict { edge_ptr: edges[3].clone() });
+        future_obstacle_queue.will_happen(
+            2,
+            Obstacle::Conflict {
+                edge_ptr: edges[2].clone(),
+            },
+        );
+        future_obstacle_queue.will_happen(
+            1,
+            Obstacle::Conflict {
+                edge_ptr: edges[1].clone(),
+            },
+        );
+        future_obstacle_queue.will_happen(
+            3,
+            Obstacle::Conflict {
+                edge_ptr: edges[3].clone(),
+            },
+        );
         assert_eq!(future_obstacle_queue.peek_event(), ref_event!(1, edges));
         assert_eq!(future_obstacle_queue.peek_event(), ref_event!(1, edges));
         assert_eq!(future_obstacle_queue.pop_event(), value_event!(1, edges));
@@ -1270,17 +1327,47 @@ mod tests {
         assert_eq!(future_obstacle_queue.pop_event(), value_event!(3, edges));
         assert_eq!(future_obstacle_queue.peek_event(), None);
         // test duplicate elements, the queue must be able to hold all the duplicate events
-        future_obstacle_queue.will_happen(1, Obstacle::Conflict { edge_ptr: edges[1].clone() });
-        future_obstacle_queue.will_happen(1, Obstacle::Conflict { edge_ptr: edges[1].clone() });
-        future_obstacle_queue.will_happen(1, Obstacle::Conflict { edge_ptr: edges[1].clone() });
+        future_obstacle_queue.will_happen(
+            1,
+            Obstacle::Conflict {
+                edge_ptr: edges[1].clone(),
+            },
+        );
+        future_obstacle_queue.will_happen(
+            1,
+            Obstacle::Conflict {
+                edge_ptr: edges[1].clone(),
+            },
+        );
+        future_obstacle_queue.will_happen(
+            1,
+            Obstacle::Conflict {
+                edge_ptr: edges[1].clone(),
+            },
+        );
         assert_eq!(future_obstacle_queue.pop_event(), value_event!(1, edges));
         assert_eq!(future_obstacle_queue.pop_event(), value_event!(1, edges));
         assert_eq!(future_obstacle_queue.pop_event(), value_event!(1, edges));
         assert_eq!(future_obstacle_queue.peek_event(), None);
         // test order of events at the same time
-        future_obstacle_queue.will_happen(1, Obstacle::Conflict { edge_ptr: edges[2].clone() });
-        future_obstacle_queue.will_happen(1, Obstacle::Conflict { edge_ptr: edges[1].clone() });
-        future_obstacle_queue.will_happen(1, Obstacle::Conflict { edge_ptr: edges[3].clone() });
+        future_obstacle_queue.will_happen(
+            1,
+            Obstacle::Conflict {
+                edge_ptr: edges[2].clone(),
+            },
+        );
+        future_obstacle_queue.will_happen(
+            1,
+            Obstacle::Conflict {
+                edge_ptr: edges[1].clone(),
+            },
+        );
+        future_obstacle_queue.will_happen(
+            1,
+            Obstacle::Conflict {
+                edge_ptr: edges[3].clone(),
+            },
+        );
         let mut events = vec![];
         while let Some((time, event)) = future_obstacle_queue.pop_event() {
             assert_eq!(time, 1);

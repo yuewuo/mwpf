@@ -8,6 +8,7 @@ use mwpf::model_hypergraph::*;
 use mwpf::plugin::*;
 use mwpf::plugin_single_hair::*;
 use mwpf::plugin_union_find::*;
+use mwpf::pointers::*;
 use mwpf::primal_module::*;
 use mwpf::primal_module_serial::*;
 use mwpf::util::*;
@@ -16,7 +17,6 @@ use num_traits::{FromPrimitive, Zero};
 use pbr::ProgressBar;
 use std::sync::Arc;
 use sugar::*;
-use mwpf::pointers::UnsafePtr;
 
 fn debug_demo() {
     for is_example in [true, false] {
@@ -56,8 +56,12 @@ fn debug_demo() {
                 .snapshot_combined("begin".to_string(), vec![&interface_ptr, &dual_module])
                 .unwrap();
             let decoding_graph = interface_ptr.read_recursive().decoding_graph.clone();
-            let s0 = Arc::new(InvalidSubgraph::new_complete_from_indices(btreeset! {3}, btreeset! {}, &mut dual_module));
-            let (_, s0_ptr) = interface_ptr.find_or_create_node(&s0, &mut dual_module);
+            let s0 = Arc::new(InvalidSubgraph::new_complete_from_indices(
+                btreeset! {3},
+                btreeset! {},
+                &mut dual_module,
+            ));
+            let (_, s0_ptr) = interface_ptr.find_or_create_node(&s0, &mut dual_module, 0);
             dual_module.set_grow_rate(&s0_ptr, Rational::from_usize(1).unwrap());
             for _ in 0..3 {
                 dual_module.grow(Rational::new_raw(1.into(), 3.into()));
@@ -66,8 +70,12 @@ fn debug_demo() {
                     .unwrap();
             }
             // create another node
-            let s1 = Arc::new(InvalidSubgraph::new_complete_from_indices(btreeset! {6}, btreeset! {}, &mut dual_module));
-            let (_, s1_ptr) = interface_ptr.find_or_create_node(&s1, &mut dual_module);
+            let s1 = Arc::new(InvalidSubgraph::new_complete_from_indices(
+                btreeset! {6},
+                btreeset! {},
+                &mut dual_module,
+            ));
+            let (_, s1_ptr) = interface_ptr.find_or_create_node(&s1, &mut dual_module, 0);
             dual_module.set_grow_rate(&s0_ptr, -Rational::from_usize(1).unwrap());
             dual_module.set_grow_rate(&s1_ptr, Rational::from_usize(1).unwrap());
             for _ in 0..3 {
@@ -126,8 +134,12 @@ fn simple_demo() {
                 .snapshot_combined("begin".to_string(), vec![&interface_ptr, &dual_module])
                 .unwrap();
             let decoding_graph = interface_ptr.read_recursive().decoding_graph.clone();
-            let s0 = Arc::new(InvalidSubgraph::new_complete_from_indices(btreeset! {3}, btreeset! {}, &mut dual_module));
-            let (_, s0_ptr) = interface_ptr.find_or_create_node(&s0, &mut dual_module);
+            let s0 = Arc::new(InvalidSubgraph::new_complete_from_indices(
+                btreeset! {3},
+                btreeset! {},
+                &mut dual_module,
+            ));
+            let (_, s0_ptr) = interface_ptr.find_or_create_node(&s0, &mut dual_module, 0);
             dual_module.set_grow_rate(&s0_ptr, Rational::from_usize(1).unwrap());
             visualizer
                 .snapshot_combined("create s0".to_string(), vec![&interface_ptr, &dual_module])
@@ -217,7 +229,7 @@ fn challenge_demo() {
                             } else {
                                 Arc::new(InvalidSubgraph::new_complete_from_indices(vertices, edges, dual_module))
                             };
-                            let (_, ptr) = interface_ptr.find_or_create_node(&s, dual_module);
+                            let (_, ptr) = interface_ptr.find_or_create_node(&s, dual_module, 0);
                             dual_module.set_grow_rate(&ptr, Rational::zero());
                             s_ptr.push(ptr);
                         }

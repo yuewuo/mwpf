@@ -1,8 +1,14 @@
 #![allow(warnings)]
 
+use crate::dual_module_pq::{Edge, EdgePtr, EdgeWeak, Vertex, VertexPtr, VertexWeak};
 use crate::example_codes::*;
 use crate::matrix::*;
 use crate::mwpf_solver::*;
+use crate::num_traits::Zero;
+#[cfg(feature = "unsafe_pointer")]
+#[cfg(feature = "unsafe_pointer")]
+use crate::pointers::UnsafePtr;
+use crate::pointers::*;
 use crate::util::*;
 use crate::visualize::*;
 use bp::bp::{BpDecoder, BpSparse};
@@ -19,14 +25,9 @@ use rand::RngCore;
 use rand::{thread_rng, Rng, SeedableRng};
 use serde::Serialize;
 use serde_variant::to_variant_name;
-use std::env;
-use crate::num_traits::Zero;
-use crate::dual_module_pq::{Vertex, Edge, VertexPtr, VertexWeak, EdgePtr, EdgeWeak};
-use crate::pointers::UnsafePtr;
-use std::usize::MAX;
 use std::collections::BTreeSet;
-
-
+use std::env;
+use std::usize::MAX;
 
 const TEST_EACH_ROUNDS: usize = 100;
 
@@ -281,10 +282,13 @@ impl TypedValueParser for SerdeJsonParser {
 
 impl MatrixSpeedClass {
     pub fn run(&self, parameters: MatrixSpeedParameters, samples: Vec<Vec<(Vec<usize>, bool)>>) {
-        let (vertices, edges) = Self::initialize_vertex_edges_for_matrix_testing((0..parameters.height).collect(), (0..parameters.width).collect());
+        let (vertices, edges) = Self::initialize_vertex_edges_for_matrix_testing(
+            (0..parameters.height).collect(),
+            (0..parameters.width).collect(),
+        );
         let vertices_weak: Vec<_> = vertices.into_iter().map(|v| v.downgrade()).collect();
         let edges_weak: Vec<_> = edges.into_iter().map(|e| e.downgrade()).collect();
-        
+
         match *self {
             MatrixSpeedClass::EchelonTailTight => {
                 let mut matrix = Echelon::<Tail<Tight<BasicMatrix>>>::new();
@@ -310,7 +314,12 @@ impl MatrixSpeedClass {
         }
     }
 
-    pub fn run_on_matrix_interface<M: MatrixView + Clone>(matrix: &M, samples: Vec<Vec<(Vec<usize>, bool)>>, vertices: &Vec<VertexWeak>, edges: &Vec<EdgeWeak>) {
+    pub fn run_on_matrix_interface<M: MatrixView + Clone>(
+        matrix: &M,
+        samples: Vec<Vec<(Vec<usize>, bool)>>,
+        vertices: &Vec<VertexWeak>,
+        edges: &Vec<EdgeWeak>,
+    ) {
         for parity_checks in samples.iter() {
             let mut matrix = matrix.clone();
             for (vertex_index, (incident_edges, parity)) in parity_checks.iter().enumerate() {
@@ -328,50 +337,65 @@ impl MatrixSpeedClass {
         edge_indices: Vec<EdgeIndex>,
     ) -> (Vec<VertexPtr>, Vec<EdgePtr>) {
         // create edges
-        let edges: Vec<EdgePtr> = edge_indices.into_iter()
+        let edges: Vec<EdgePtr> = edge_indices
+            .into_iter()
             .map(|edge_index| {
-                EdgePtr::new_value(Edge {
-                    edge_index: edge_index,
-                    weight: Rational::zero(),
-                    dual_nodes: vec![],
-                    vertices: vec![],
-                    last_updated_time: Rational::zero(),
-                    growth_at_last_updated_time: Rational::zero(),
-                    grow_rate: Rational::zero(),
-                    unit_index: Some(0), // dummy value
-                    connected_to_boundary_vertex: false, // dummy value
-                    #[cfg(feature = "incr_lp")]
-                    cluster_weights: hashbrown::HashMap::new(),
-                })
-            }).collect();
-
-        // create vertices 
-        let vertices: Vec<VertexPtr> = vertex_indices.into_iter()
-            .map(|vertex_index| {
-                VertexPtr::new_value(Vertex {
-                    vertex_index,
-                    is_defect: false,
-                    edges: vec![],
-                    mirrored_vertices: vec![], // dummy vlaue
-                })
+                EdgePtr::new_value(
+                    Edge {
+                        edge_index,
+                        weight: Rational::zero(),
+                        dual_nodes: vec![],
+                        vertices: vec![],
+                        last_updated_time: Rational::zero(),
+                        growth_at_last_updated_time: Rational::zero(),
+                        grow_rate: Rational::zero(),
+                        unit_index: Some(0),                 // dummy value
+                        connected_to_boundary_vertex: false, // dummy value
+                        #[cfg(feature = "incr_lp")]
+                        cluster_weights: hashbrown::HashMap::new(),
+                    },
+                    (edge_index, edge_index),
+                )
             })
             .collect();
-        
+
+        // create vertices
+        let vertices: Vec<VertexPtr> = vertex_indices
+            .into_iter()
+            .map(|vertex_index| {
+                VertexPtr::new_value(
+                    Vertex {
+                        vertex_index,
+                        is_defect: false,
+                        edges: vec![],
+                        mirrored_vertices: vec![], // dummy vlaue
+                    },
+                    (vertex_index, vertex_index),
+                )
+            })
+            .collect();
+
         (vertices, edges)
     }
 }
 
-
 /// test for time partition
 #[allow(clippy::unnecessary_cast)]
-pub fn graph_time_partition(initializer: &SolverInitializer, positions: &Vec<VisualizePosition>, split_num: usize) -> PartitionConfig  {
+pub fn graph_time_partition(
+    initializer: &SolverInitializer,
+    positions: &Vec<VisualizePosition>,
+    split_num: usize,
+) -> PartitionConfig {
     assert!(positions.len() > 0, "positive number of positions");
     let mut partition_config = PartitionConfig::new(initializer.vertex_num);
     let mut last_t = positions[0].t;
     let mut t_list: Vec<f64> = vec![];
     t_list.push(last_t);
     for position in positions {
-        assert!(position.t >= last_t, "t not monotonically increasing, vertex reordering must be performed before calling this");
+        assert!(
+            position.t >= last_t,
+            "t not monotonically increasing, vertex reordering must be performed before calling this"
+        );
         if position.t != last_t {
             t_list.push(position.t);
         }
@@ -381,7 +405,7 @@ pub fn graph_time_partition(initializer: &SolverInitializer, positions: &Vec<Vis
     // pick the t value in the middle to split it
     let mut t_split_vec: Vec<f64> = vec![0.0; split_num - 1];
     for i in 0..(split_num - 1) {
-        let index: usize = t_list.len()/split_num * (i + 1);
+        let index: usize = t_list.len() / split_num * (i + 1);
         t_split_vec[i] = t_list[index];
     }
     // find the vertices indices
@@ -399,7 +423,7 @@ pub fn graph_time_partition(initializer: &SolverInitializer, positions: &Vec<Vis
                 start_index += 1;
             }
         }
-        
+
         if end_index < split_num - 1 {
             if position.t == t_split_vec[end_index] {
                 split_end_index_vec[end_index] = vertex_index + 1;
@@ -408,12 +432,15 @@ pub fn graph_time_partition(initializer: &SolverInitializer, positions: &Vec<Vis
         }
     }
 
-    assert!(split_start_index_vec.iter().all(|&x| x != MAX), "Some elements in split_start_index_vec are equal to MAX");
-    
+    assert!(
+        split_start_index_vec.iter().all(|&x| x != MAX),
+        "Some elements in split_start_index_vec are equal to MAX"
+    );
+
     // partitions are found
     let mut graph_nodes = vec![];
     let mut partitions_vec = vec![];
-    for i in 0..split_num  {
+    for i in 0..split_num {
         if i == 0 {
             partitions_vec.push(VertexRange::new(0, split_start_index_vec[0]));
         } else if i == split_num - 1 {
@@ -423,9 +450,9 @@ pub fn graph_time_partition(initializer: &SolverInitializer, positions: &Vec<Vis
         }
 
         if i < split_num - 1 {
-            partition_config.fusions.push((i, i+1));
+            partition_config.fusions.push((i, i + 1));
         }
-        
+
         let a = partition_config.dag_partition_units.add_node(());
         graph_nodes.push(a.clone());
     }
@@ -433,7 +460,9 @@ pub fn graph_time_partition(initializer: &SolverInitializer, positions: &Vec<Vis
 
     for i in 0..split_num {
         if i < split_num - 1 {
-            partition_config.dag_partition_units.add_edge(graph_nodes[i], graph_nodes[i+1], false);
+            partition_config
+                .dag_partition_units
+                .add_edge(graph_nodes[i], graph_nodes[i + 1], false);
         }
     }
     // partition_config.defect_vertices = BTreeSet::from_iter(defect_vertices.clone()); // this can be set outside of this function
@@ -507,7 +536,7 @@ impl Cli {
                 if split_num > 0 {
                     partition_config = graph_time_partition(&initializer, &code.get_positions(), split_num);
                     partition_info = partition_config.info();
-                } 
+                }
                 let mut result_verifier = verifier.build(&initializer);
 
                 // prepare progress bar display
@@ -530,8 +559,8 @@ impl Cli {
                         // partition_config = graph_time_partition(&initializer, &code.get_positions(), split_num);
                         partition_config.defect_vertices = BTreeSet::from_iter(syndrome_pattern.defect_vertices.clone());
                         partition_info = partition_config.info();
-                    } 
-    
+                    }
+
                     // println!("defect_vertices initial: {:?}", partition_info.config.defect_vertices);
                     let mut solver = solver_type.build(&initializer, &*code, solver_config.clone(), Some(&partition_info));
                     // let mut result_verifier = verifier.build(&initializer);
@@ -583,7 +612,8 @@ impl Cli {
                     return;
                 }
 
-                let mut benchmark_profiler = BenchmarkProfiler::new(noisy_measurements, benchmark_profiler_output, &partition_info);
+                let mut benchmark_profiler =
+                    BenchmarkProfiler::new(noisy_measurements, benchmark_profiler_output, &partition_info);
                 thread_rng().gen::<u64>();
                 let mut seed = match apply_deterministic_seed {
                     Some(seed) => seed,
@@ -600,7 +630,7 @@ impl Cli {
                         // partition_config = graph_time_partition(&initializer, &code.get_positions(), &syndrome_pattern.defect_vertices, split_num);
                         partition_config.defect_vertices = BTreeSet::from_iter(syndrome_pattern.defect_vertices.clone());
                         partition_info = partition_config.info();
-                    } 
+                    }
 
                     let mut solver = solver_type.build(&initializer, &*code, solver_config.clone(), Some(&partition_info));
 
@@ -643,6 +673,7 @@ impl Cli {
                     solver.solve_visualizer(syndrome_pattern.clone(), visualizer.as_mut());
                     benchmark_profiler.event("decoded".to_string());
                     result_verifier.verify(&mut solver, &syndrome_pattern, &error_pattern, visualizer.as_mut(), seed);
+
                     benchmark_profiler.event("verified".to_string());
                     solver.clear(); // also count the clear operation
 
@@ -833,9 +864,21 @@ impl SolverType {
             Self::SingleHair => Box::new(SolverSerialSingleHair::new(initializer, solver_config)),
             Self::JointSingleHair => Box::new(SolverSerialJointSingleHair::new(initializer, solver_config)),
             Self::ErrorPatternLogger => Box::new(SolverErrorPatternLogger::new(initializer, code, solver_config)),
-            Self::ParallelUnionFind => Box::new(SolverParallelUnionFind::new(initializer, partition_info.unwrap(), solver_config)),
-            Self::ParallelSingleHair => Box::new(SolverParallelSingleHair::new(initializer, partition_info.unwrap(), solver_config)),
-            Self::ParallelJointSingleHair => Box::new(SolverParallelJointSingleHair::new(initializer, partition_info.unwrap(), solver_config)),
+            Self::ParallelUnionFind => Box::new(SolverParallelUnionFind::new(
+                initializer,
+                partition_info.unwrap(),
+                solver_config,
+            )),
+            Self::ParallelSingleHair => Box::new(SolverParallelSingleHair::new(
+                initializer,
+                partition_info.unwrap(),
+                solver_config,
+            )),
+            Self::ParallelJointSingleHair => Box::new(SolverParallelJointSingleHair::new(
+                initializer,
+                partition_info.unwrap(),
+                solver_config,
+            )),
         }
     }
 }
@@ -923,19 +966,20 @@ impl ResultVerifier for VerifierActualError {
             // error pattern is not generated by the simulator
             Rational::from_usize(usize::MAX).unwrap()
         } else {
-            Rational::from(
-                self.initializer
-                    .get_subgraph_total_weight(&OutputSubgraph::new(error_pattern.clone(), Default::default(), vec![])),
-            )
+            Rational::from(self.initializer.get_subgraph_total_weight(&OutputSubgraph::new(
+                error_pattern.clone(),
+                Default::default(),
+                vec![],
+            )))
         };
         let (subgraph, weight_range) = solver.subgraph_range_visualizer(visualizer);
 
         // solver.print_clusters();
-        // assert!(
-        //     self.initializer
-        //         .matches_subgraph_syndrome(&subgraph, &syndrome_pattern.defect_vertices),
-        //     "bug: the result subgraph does not match the syndrome || the seed is {seed:?}"
-        // );
+        assert!(
+            self.initializer
+                .matches_subgraph_syndrome(&subgraph, &syndrome_pattern.defect_vertices),
+            "bug: the result subgraph does not match the syndrome || the seed is {seed:?}"
+        );
         assert_le!(
             weight_range.lower,
             actual_weight,

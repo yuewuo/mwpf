@@ -18,6 +18,7 @@ use std::fs::{File, create_dir_all};
 use std::io::prelude::*;
 use std::time::Instant;
 use crate::dual_module_pq::EdgeWeak;
+#[cfg(feature = "unsafe_pointer")]
 use crate::pointers::UnsafePtr;
 
 use hashbrown::{HashSet, HashMap};

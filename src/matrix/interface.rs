@@ -25,6 +25,7 @@ use num_traits::{One, Zero};
 use std::collections::BTreeSet;
 
 use crate::dual_module_pq::{EdgeWeak, VertexWeak, VertexPtr};
+#[cfg(feature = "unsafe_pointer")]
 use crate::pointers::UnsafePtr;
 
 

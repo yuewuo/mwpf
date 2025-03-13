@@ -2,20 +2,20 @@
 //!
 //! Generics for primal modules, defining the necessary interfaces for a primal module
 //!
-#![cfg_attr(feature="unsafe_pointer", allow(dropping_references))]
+#![cfg_attr(feature = "unsafe_pointer", allow(dropping_references))]
 
 use std::collections::VecDeque;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use crate::dual_module::*;
+use crate::num_traits::Zero;
 use crate::ordered_float::OrderedFloat;
 use crate::pointers::*;
 use crate::primal_module_serial::{ClusterAffinity, PrimalClusterPtr, PrimalClusterWeak};
 use crate::relaxer_optimizer::OptimizerResult;
 use crate::util::*;
 use crate::visualize::*;
-use crate::num_traits::Zero;
 
 pub type Affinity = OrderedFloat;
 
@@ -30,7 +30,13 @@ pub trait PrimalModuleImpl {
     fn clear(&mut self);
 
     /// load a new decoding problem given dual interface: note that all nodes MUST be defect node
-    fn load<D: DualModuleImpl>(&mut self, interface_ptr: &DualModuleInterfacePtr, dual_module: &mut D);
+    fn load1<D: DualModuleImpl>(&mut self, interface_ptr: &DualModuleInterfacePtr, dual_module: &mut D) {
+        panic!("stupid");
+    }
+
+    fn load<D: DualModuleImpl>(&mut self, interface_ptr: &DualModuleInterfacePtr, dual_module: &mut D, partition_id: usize) {
+        panic!("stupid2");
+    }
 
     /// analyze the reason why dual module cannot further grow, update primal data structure (alternating tree, temporary matches, etc)
     /// and then tell dual module what to do to resolve these conflicts;
@@ -71,8 +77,8 @@ pub trait PrimalModuleImpl {
         syndrome_pattern: Arc<SyndromePattern>,
         dual_module: &mut impl DualModuleImpl,
     ) {
-        interface.load(syndrome_pattern, dual_module);
-        self.load(interface, dual_module);
+        interface.load(syndrome_pattern, dual_module, 0);
+        self.load(interface, dual_module, 0);
         self.solve_step_callback_interface_loaded(interface, dual_module, |_, _, _, _| {})
     }
 
@@ -118,8 +124,9 @@ pub trait PrimalModuleImpl {
     {
         if let Some(visualizer) = visualizer {
             let callback = Self::visualizer_callback(visualizer);
-            interface.load(syndrome_pattern, dual_module);
-            self.load(interface, dual_module);
+            interface.load(syndrome_pattern, dual_module, 0);
+            self.load(interface, dual_module, 0);
+            panic!("bad solver, hihi");
             self.solve_step_callback_interface_loaded(interface, dual_module, callback);
             visualizer
                 .snapshot_combined("solved".to_string(), vec![interface, dual_module, self])
@@ -222,7 +229,11 @@ pub trait PrimalModuleImpl {
         }
     }
 
-    fn subgraph(&mut self, interface: &DualModuleInterfacePtr, dual_module: &(impl DualModuleImpl + Send + Sync)) -> OutputSubgraph;
+    fn subgraph(
+        &mut self,
+        interface: &DualModuleInterfacePtr,
+        dual_module: &(impl DualModuleImpl + Send + Sync),
+    ) -> OutputSubgraph;
 
     fn subgraph_range(
         &mut self,
@@ -236,10 +247,7 @@ pub trait PrimalModuleImpl {
             upper += edge_weak.upgrade_force().read_recursive().weight.clone();
         }
 
-        let weight_range = WeightRange::new(
-            interface.sum_dual_variables() + dual_module.get_negative_weight_sum(),
-            upper
-        );
+        let weight_range = WeightRange::new(interface.sum_dual_variables() + dual_module.get_negative_weight_sum(), upper);
         (output_subgraph, weight_range)
     }
 

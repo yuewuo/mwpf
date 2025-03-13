@@ -11,7 +11,8 @@ use num_traits::Signed;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
-use crate::dual_module_pq::{EdgeWeak, EdgePtr};
+use crate::dual_module_pq::{EdgePtr, EdgeWeak};
+#[cfg(feature = "unsafe_pointer")]
 use crate::pointers::UnsafePtr;
 
 pub type RelaxerVec = Vec<Relaxer>;
@@ -79,7 +80,8 @@ impl RelaxerForest {
         for (edge_ptr, speed) in relaxer.get_untighten_edges() {
             debug_assert!(speed.is_negative());
             if !self.edge_untightener.contains_key(edge_ptr) {
-                self.edge_untightener.insert(edge_ptr.clone(), (relaxer.clone(), -speed.recip()));
+                self.edge_untightener
+                    .insert(edge_ptr.clone(), (relaxer.clone(), -speed.recip()));
             }
         }
     }
@@ -155,11 +157,11 @@ impl RelaxerForest {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use num_traits::{FromPrimitive, One};
-    use crate::dual_module::DualModuleInterfacePtr;
     use crate::decoding_hypergraph::tests::color_code_5_decoding_graph;
-    use crate::dual_module_pq::DualModulePQ;
     use crate::dual_module::DualModuleImpl;
+    use crate::dual_module::DualModuleInterfacePtr;
+    use crate::dual_module_pq::DualModulePQ;
+    use num_traits::{FromPrimitive, One};
 
     #[test]
     fn relaxer_forest_example() {
@@ -170,16 +172,35 @@ pub mod tests {
         let initializer = decoding_graph.model_graph.initializer.clone();
         let mut dual_module = DualModulePQ::new_empty(&initializer);
         let interface_ptr = DualModuleInterfacePtr::new(decoding_graph.model_graph.clone());
-        interface_ptr.load(decoding_graph.syndrome_pattern.clone(), &mut dual_module); // this is needed to load the defect vertices
+        interface_ptr.load(decoding_graph.syndrome_pattern.clone(), &mut dual_module, 0); // this is needed to load the defect vertices
 
         let tight_edges = [0, 1, 2, 3, 4, 5, 6];
         let shrinkable_subgraphs = [
-            Arc::new(InvalidSubgraph::new_raw_from_indices([].into(), [].into(), [1, 2, 3].into(), &mut dual_module)),
-            Arc::new(InvalidSubgraph::new_raw_from_indices([].into(), [].into(), [4, 5].into(), &mut dual_module)),
+            Arc::new(InvalidSubgraph::new_raw_from_indices(
+                [].into(),
+                [].into(),
+                [1, 2, 3].into(),
+                &mut dual_module,
+            )),
+            Arc::new(InvalidSubgraph::new_raw_from_indices(
+                [].into(),
+                [].into(),
+                [4, 5].into(),
+                &mut dual_module,
+            )),
         ];
-        let tight_edges_weak = dual_module.get_edge_ptr_vec(&tight_edges).into_iter().map(|e| e.downgrade()).collect::<Vec<_>>();
+        let tight_edges_weak = dual_module
+            .get_edge_ptr_vec(&tight_edges)
+            .into_iter()
+            .map(|e| e.downgrade())
+            .collect::<Vec<_>>();
         let mut relaxer_forest = RelaxerForest::new(tight_edges_weak.into_iter(), shrinkable_subgraphs.iter().cloned());
-        let invalid_subgraph_1 = Arc::new(InvalidSubgraph::new_raw_from_indices([].into(), [].into(), [7, 8, 9].into(), &mut dual_module));
+        let invalid_subgraph_1 = Arc::new(InvalidSubgraph::new_raw_from_indices(
+            [].into(),
+            [].into(),
+            [7, 8, 9].into(),
+            &mut dual_module,
+        ));
         let relaxer_1 = Arc::new(Relaxer::new_raw(
             [
                 (invalid_subgraph_1.clone(), Rational::one()),
@@ -191,7 +212,12 @@ pub mod tests {
         assert_eq!(expanded_1, *relaxer_1);
         relaxer_forest.add(relaxer_1);
         // now add a relaxer that is relying on relaxer_1
-        let invalid_subgraph_2 = Arc::new(InvalidSubgraph::new_raw_from_indices([].into(), [].into(), [1, 2, 7].into(), &mut dual_module));
+        let invalid_subgraph_2 = Arc::new(InvalidSubgraph::new_raw_from_indices(
+            [].into(),
+            [].into(),
+            [1, 2, 7].into(),
+            &mut dual_module,
+        ));
         let relaxer_2 = Arc::new(Relaxer::new_raw([(invalid_subgraph_2.clone(), Rational::one())].into()));
         let expanded_2 = relaxer_forest.expand(&relaxer_2);
         assert_eq!(
@@ -217,16 +243,35 @@ pub mod tests {
         let initializer = decoding_graph.model_graph.initializer.clone();
         let mut dual_module = DualModulePQ::new_empty(&initializer);
         let interface_ptr = DualModuleInterfacePtr::new(decoding_graph.model_graph.clone());
-        interface_ptr.load(decoding_graph.syndrome_pattern.clone(), &mut dual_module); // this is needed to load the defect vertices
+        interface_ptr.load(decoding_graph.syndrome_pattern.clone(), &mut dual_module, 0); // this is needed to load the defect vertices
 
         let tight_edges = [0, 1, 2, 3, 4, 5, 6];
         let shrinkable_subgraphs = [
-            Arc::new(InvalidSubgraph::new_raw_from_indices([].into(), [].into(), [1, 2].into(), &mut dual_module)),
-            Arc::new(InvalidSubgraph::new_raw_from_indices([].into(), [].into(), [3].into(), &mut dual_module)),
+            Arc::new(InvalidSubgraph::new_raw_from_indices(
+                [].into(),
+                [].into(),
+                [1, 2].into(),
+                &mut dual_module,
+            )),
+            Arc::new(InvalidSubgraph::new_raw_from_indices(
+                [].into(),
+                [].into(),
+                [3].into(),
+                &mut dual_module,
+            )),
         ];
-        let tight_edges_weak = dual_module.get_edge_ptr_vec(&tight_edges).into_iter().map(|e| e.downgrade()).collect::<Vec<_>>();
+        let tight_edges_weak = dual_module
+            .get_edge_ptr_vec(&tight_edges)
+            .into_iter()
+            .map(|e| e.downgrade())
+            .collect::<Vec<_>>();
         let mut relaxer_forest = RelaxerForest::new(tight_edges_weak.into_iter(), shrinkable_subgraphs.iter().cloned());
-        let invalid_subgraph_1 = Arc::new(InvalidSubgraph::new_raw_from_indices([].into(), [].into(), [7, 8, 9].into(), &mut dual_module));
+        let invalid_subgraph_1 = Arc::new(InvalidSubgraph::new_raw_from_indices(
+            [].into(),
+            [].into(),
+            [7, 8, 9].into(),
+            &mut dual_module,
+        ));
         let relaxer_1 = Arc::new(Relaxer::new_raw(
             [
                 (invalid_subgraph_1.clone(), Rational::one()),
@@ -235,8 +280,18 @@ pub mod tests {
             .into(),
         ));
         relaxer_forest.add(relaxer_1);
-        let invalid_subgraph_2 = Arc::new(InvalidSubgraph::new_raw_from_indices([].into(), [].into(), [1, 2, 7].into(), &mut dual_module));
-        let invalid_subgraph_3 = Arc::new(InvalidSubgraph::new_raw_from_indices([].into(), [].into(), [2].into(), &mut dual_module));
+        let invalid_subgraph_2 = Arc::new(InvalidSubgraph::new_raw_from_indices(
+            [].into(),
+            [].into(),
+            [1, 2, 7].into(),
+            &mut dual_module,
+        ));
+        let invalid_subgraph_3 = Arc::new(InvalidSubgraph::new_raw_from_indices(
+            [].into(),
+            [].into(),
+            [2].into(),
+            &mut dual_module,
+        ));
         let relaxer_2 = Arc::new(Relaxer::new_raw(
             [
                 (invalid_subgraph_2.clone(), Rational::one()),
@@ -269,16 +324,35 @@ pub mod tests {
         let initializer = decoding_graph.model_graph.initializer.clone();
         let mut dual_module = DualModulePQ::new_empty(&initializer); // initialize vertex and edge pointers
         let interface_ptr = DualModuleInterfacePtr::new(decoding_graph.model_graph.clone());
-        interface_ptr.load(decoding_graph.syndrome_pattern.clone(), &mut dual_module); // this is needed to load the defect vertices
+        interface_ptr.load(decoding_graph.syndrome_pattern.clone(), &mut dual_module, 0); // this is needed to load the defect vertices
 
         let tight_edges = [0, 1, 2, 3, 4, 5, 6];
         let shrinkable_subgraphs = [
-            Arc::new(InvalidSubgraph::new_raw_from_indices([].into(), [].into(), [1, 2].into(), &mut dual_module)),
-            Arc::new(InvalidSubgraph::new_raw_from_indices([].into(), [].into(), [2, 3].into(), &mut dual_module)),
+            Arc::new(InvalidSubgraph::new_raw_from_indices(
+                [].into(),
+                [].into(),
+                [1, 2].into(),
+                &mut dual_module,
+            )),
+            Arc::new(InvalidSubgraph::new_raw_from_indices(
+                [].into(),
+                [].into(),
+                [2, 3].into(),
+                &mut dual_module,
+            )),
         ];
-        let tight_edges_weak = dual_module.get_edge_ptr_vec(&tight_edges).into_iter().map(|e| e.downgrade()).collect::<Vec<_>>();
+        let tight_edges_weak = dual_module
+            .get_edge_ptr_vec(&tight_edges)
+            .into_iter()
+            .map(|e| e.downgrade())
+            .collect::<Vec<_>>();
         let mut relaxer_forest = RelaxerForest::new(tight_edges_weak.into_iter(), shrinkable_subgraphs.iter().cloned());
-        let invalid_subgraph_1 = Arc::new(InvalidSubgraph::new_raw_from_indices([].into(), [].into(), [7, 8, 9].into(), &mut dual_module));
+        let invalid_subgraph_1 = Arc::new(InvalidSubgraph::new_raw_from_indices(
+            [].into(),
+            [].into(),
+            [7, 8, 9].into(),
+            &mut dual_module,
+        ));
         let relaxer_1 = Arc::new(Relaxer::new_raw(
             [
                 (invalid_subgraph_1.clone(), Rational::one()),
@@ -287,7 +361,12 @@ pub mod tests {
             .into(),
         ));
         relaxer_forest.add(relaxer_1);
-        let invalid_subgraph_2 = Arc::new(InvalidSubgraph::new_raw_from_indices([].into(), [].into(), [10, 11].into(), &mut dual_module));
+        let invalid_subgraph_2 = Arc::new(InvalidSubgraph::new_raw_from_indices(
+            [].into(),
+            [].into(),
+            [10, 11].into(),
+            &mut dual_module,
+        ));
         let relaxer_2 = Arc::new(Relaxer::new_raw(
             [
                 (invalid_subgraph_2.clone(), Rational::one()),
@@ -307,20 +386,39 @@ pub mod tests {
         let initializer = decoding_graph.model_graph.initializer.clone();
         let mut dual_module = DualModulePQ::new_empty(&initializer); // initialize vertex and edge pointers
         let interface_ptr = DualModuleInterfacePtr::new(decoding_graph.model_graph.clone());
-        interface_ptr.load(decoding_graph.syndrome_pattern.clone(), &mut dual_module); // this is needed to load the defect vertices
- 
+        interface_ptr.load(decoding_graph.syndrome_pattern.clone(), &mut dual_module, 0); // this is needed to load the defect vertices
+
         let tight_edges = [0, 1, 2, 3, 4, 5, 6];
         let shrinkable_subgraphs = [
-            Arc::new(InvalidSubgraph::new_raw_from_indices([1].into(), [].into(), [1, 2].into(), &mut dual_module)),
-            Arc::new(InvalidSubgraph::new_raw_from_indices([].into(), [].into(), [].into(), &mut dual_module)),
+            Arc::new(InvalidSubgraph::new_raw_from_indices(
+                [1].into(),
+                [].into(),
+                [1, 2].into(),
+                &mut dual_module,
+            )),
+            Arc::new(InvalidSubgraph::new_raw_from_indices(
+                [].into(),
+                [].into(),
+                [].into(),
+                &mut dual_module,
+            )),
         ];
-        let tight_edges_weak = dual_module.get_edge_ptr_vec(&tight_edges).into_iter().map(|e| e.downgrade()).collect::<Vec<_>>();
+        let tight_edges_weak = dual_module
+            .get_edge_ptr_vec(&tight_edges)
+            .into_iter()
+            .map(|e| e.downgrade())
+            .collect::<Vec<_>>();
         let relaxer_forest = RelaxerForest::new(tight_edges_weak.into_iter(), shrinkable_subgraphs.iter().cloned());
         println!("relaxer_forest: {:?}", relaxer_forest.shrinkable_subgraphs);
         // invalid relaxer is forbidden
         let invalid_relaxer = Relaxer::new_raw(
             [(
-                Arc::new(InvalidSubgraph::new_raw_from_indices([].into(), [].into(), [].into(), &mut dual_module)),
+                Arc::new(InvalidSubgraph::new_raw_from_indices(
+                    [].into(),
+                    [].into(),
+                    [].into(),
+                    &mut dual_module,
+                )),
                 -Rational::one(),
             )]
             .into(),
@@ -333,7 +431,12 @@ pub mod tests {
         // relaxer that increases a tight edge is forbidden
         let relaxer = Relaxer::new_raw(
             [(
-                Arc::new(InvalidSubgraph::new_raw_from_indices([].into(), [].into(), [1].into(), &mut dual_module)),
+                Arc::new(InvalidSubgraph::new_raw_from_indices(
+                    [].into(),
+                    [].into(),
+                    [1].into(),
+                    &mut dual_module,
+                )),
                 Rational::one(),
             )]
             .into(),
@@ -347,11 +450,21 @@ pub mod tests {
         let relaxer = Relaxer::new_raw(
             [
                 (
-                    Arc::new(InvalidSubgraph::new_raw_from_indices([].into(), [].into(), [9].into(), &mut dual_module)),
+                    Arc::new(InvalidSubgraph::new_raw_from_indices(
+                        [].into(),
+                        [].into(),
+                        [9].into(),
+                        &mut dual_module,
+                    )),
                     Rational::one(),
                 ),
                 (
-                    Arc::new(InvalidSubgraph::new_raw_from_indices([].into(), [].into(), [2, 3].into(), &mut dual_module)),
+                    Arc::new(InvalidSubgraph::new_raw_from_indices(
+                        [].into(),
+                        [].into(),
+                        [2, 3].into(),
+                        &mut dual_module,
+                    )),
                     -Rational::one(),
                 ),
             ]
@@ -365,7 +478,12 @@ pub mod tests {
         // otherwise a relaxer is ok
         let relaxer = Relaxer::new_raw(
             [(
-                Arc::new(InvalidSubgraph::new_raw_from_indices([].into(), [].into(), [9].into(), &mut dual_module)),
+                Arc::new(InvalidSubgraph::new_raw_from_indices(
+                    [].into(),
+                    [].into(),
+                    [9].into(),
+                    &mut dual_module,
+                )),
                 Rational::one(),
             )]
             .into(),

@@ -1,10 +1,11 @@
 //! Pointer Types
 //!
-#![cfg_attr(feature="unsafe_pointer", allow(dropping_references))]
+#![cfg_attr(feature = "unsafe_pointer", allow(dropping_references))]
 
 use crate::parking_lot::lock_api::{RwLockReadGuard, RwLockWriteGuard};
 use crate::parking_lot::{RawRwLock, RwLock};
 use std::collections::BTreeSet;
+use std::hash::Hash;
 use std::sync::{Arc, Weak};
 
 pub trait RwLockPtr<ObjType> {
@@ -37,13 +38,32 @@ pub struct ArcRwLock<T> {
     ptr: Arc<RwLock<T>>,
 }
 
+pub struct OrdArcRwLock<T, U: Ord + Copy + Default + Hash> {
+    ord: U,
+    ptr: Arc<RwLock<T>>,
+}
+
 pub struct WeakRwLock<T> {
+    ptr: Weak<RwLock<T>>,
+}
+
+pub struct OrdWeakRwLock<T, U: Ord + Copy + Default + Hash> {
+    ord: U,
     ptr: Weak<RwLock<T>>,
 }
 
 impl<T> ArcRwLock<T> {
     pub fn downgrade(&self) -> WeakRwLock<T> {
         WeakRwLock::<T> {
+            ptr: Arc::downgrade(&self.ptr),
+        }
+    }
+}
+
+impl<T, U: Ord + Copy + Default + Hash> OrdArcRwLock<T, U> {
+    pub fn downgrade(&self) -> OrdWeakRwLock<T, U> {
+        OrdWeakRwLock::<T, U> {
+            ord: self.ord,
             ptr: Arc::downgrade(&self.ptr),
         }
     }
@@ -63,9 +83,30 @@ impl<T> WeakRwLock<T> {
     }
 }
 
+impl<T, U: Ord + Copy + Default + Hash> OrdWeakRwLock<T, U> {
+    pub fn upgrade_force(&self) -> OrdArcRwLock<T, U> {
+        OrdArcRwLock::<T, U> {
+            ord: self.ord,
+            ptr: self.ptr.upgrade().unwrap(),
+        }
+    }
+    pub fn upgrade(&self) -> Option<OrdArcRwLock<T, U>> {
+        self.ptr.upgrade().map(|x| OrdArcRwLock::<T, U> { ord: self.ord, ptr: x })
+    }
+    pub fn ptr_eq(&self, other: &Self) -> bool {
+        Weak::ptr_eq(&self.ptr, &other.ptr)
+    }
+}
+
 impl<T: Send + Sync> Clone for ArcRwLock<T> {
     fn clone(&self) -> Self {
         Self::new_ptr(Arc::clone(self.ptr()))
+    }
+}
+
+impl<T: Send + Sync, U: Ord + Copy + Default + Hash + Default> Clone for OrdArcRwLock<T, U> {
+    fn clone(&self) -> Self {
+        Self::new_ptr(Arc::clone(self.ptr()), self.ord)
     }
 }
 
@@ -86,6 +127,23 @@ impl<T: Send + Sync> RwLockPtr<T> for ArcRwLock<T> {
     }
 }
 
+impl<T: Send + Sync, U: Ord + Copy + Default + Hash + Default> OrdArcRwLock<T, U> {
+    pub fn new_ptr(ptr: Arc<RwLock<T>>, ord: U) -> Self {
+        Self { ord, ptr }
+    }
+    pub fn new_value(obj: T, ord: U) -> Self {
+        Self::new_ptr(Arc::new(RwLock::new(obj)), ord)
+    }
+    #[inline(always)]
+    pub fn ptr(&self) -> &Arc<RwLock<T>> {
+        &self.ptr
+    }
+    #[inline(always)]
+    pub fn ptr_mut(&mut self) -> &mut Arc<RwLock<T>> {
+        &mut self.ptr
+    }
+}
+
 impl<T: Send + Sync> WeakRwLock<T> {
     #[inline(always)]
     pub fn ptr(&self) -> &Weak<RwLock<T>> {
@@ -97,37 +155,88 @@ impl<T: Send + Sync> WeakRwLock<T> {
     }
 }
 
-impl<T: Send + Sync> PartialEq for ArcRwLock<T> {
+impl<T: Send + Sync, U: Ord + Copy + Default + Hash> OrdWeakRwLock<T, U> {
+    #[inline(always)]
+    pub fn ptr(&self) -> &Weak<RwLock<T>> {
+        &self.ptr
+    }
+    #[inline(always)]
+    fn ptr_mut(&mut self) -> &mut Weak<RwLock<T>> {
+        &mut self.ptr
+    }
+}
+
+// impl<T: Send + Sync> PartialEq for ArcRwLock<T> {
+//     fn eq(&self, other: &Self) -> bool {
+//         self.ptr_eq(other)
+//     }
+// }
+
+impl<T: Send + Sync, U: Ord + Copy + Default + Hash> PartialEq for OrdArcRwLock<T, U> {
     fn eq(&self, other: &Self) -> bool {
-        self.ptr_eq(other)
+        self.ord.eq(&other.ord)
     }
 }
 
-impl<T: Send + Sync> Eq for ArcRwLock<T> {}
+// impl<T: Send + Sync> Eq for ArcRwLock<T> {}
 
-impl<T: Send + Sync> Ord for ArcRwLock<T> {
+impl<T: Send + Sync, U: Ord + Copy + Default + Hash> Eq for OrdArcRwLock<T, U> {}
+
+// impl<T: Send + Sync> Ord for ArcRwLock<T> {
+//     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+//         let ptr1 = Arc::as_ptr(self.ptr());
+//         let ptr2 = Arc::as_ptr(other.ptr());
+//         ptr1.cmp(&ptr2)
+//     }
+// }
+
+impl<T: Send + Sync, U: Ord + Copy + Default + Hash> Ord for OrdArcRwLock<T, U> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let ptr1 = Arc::as_ptr(self.ptr());
-        let ptr2 = Arc::as_ptr(other.ptr());
-        ptr1.cmp(&ptr2)
+        self.ord.cmp(&other.ord)
     }
 }
 
-impl<T: Send + Sync> Ord for WeakRwLock<T> {
+// impl<T: Send + Sync> Ord for WeakRwLock<T> {
+//     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+//         let ptr1 = Weak::as_ptr(self.ptr());
+//         let ptr2 = Weak::as_ptr(other.ptr());
+//         ptr1.cmp(&ptr2)
+//     }
+// }
+
+impl<T: Send + Sync, U: Ord + Copy + Default + Hash> Ord for OrdWeakRwLock<T, U> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let ptr1 = Weak::as_ptr(self.ptr());
-        let ptr2 = Weak::as_ptr(other.ptr());
-        ptr1.cmp(&ptr2)
+        self.ord.cmp(&other.ord)
     }
 }
 
-impl<T: Send + Sync> PartialOrd for ArcRwLock<T> {
+impl<T: Send + Sync, U: Ord + Copy + Default + Hash> Eq for OrdWeakRwLock<T, U> {}
+
+impl<T: Send + Sync, U: Ord + Copy + Default + Hash> PartialEq for OrdWeakRwLock<T, U> {
+    fn eq(&self, other: &Self) -> bool {
+        self.ord.eq(&other.ord)
+    }
+}
+
+// impl<T: Send + Sync> PartialOrd for ArcRwLock<T> {
+//     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+//         Some(self.cmp(other))
+//     }
+// }
+
+impl<T: Send + Sync, U: Ord + Copy + Default + Hash> PartialOrd for OrdArcRwLock<T, U> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<T: Send + Sync> PartialOrd for WeakRwLock<T> {
+// impl<T: Send + Sync> PartialOrd for WeakRwLock<T> {
+//     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+//         Some(self.cmp(other))
+//     }
+// }
+
+impl<T: Send + Sync, U: Ord + Copy + Default + Hash> PartialOrd for OrdWeakRwLock<T, U> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
@@ -139,13 +248,22 @@ impl<T> Clone for WeakRwLock<T> {
     }
 }
 
-impl<T> PartialEq for WeakRwLock<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.ptr.ptr_eq(&other.ptr)
+impl<T, U: Ord + Copy + Default + Hash> Clone for OrdWeakRwLock<T, U> {
+    fn clone(&self) -> Self {
+        Self {
+            ord: self.ord,
+            ptr: self.ptr.clone(),
+        }
     }
 }
 
-impl<T> Eq for WeakRwLock<T> {}
+// impl<T> PartialEq for WeakRwLock<T> {
+//     fn eq(&self, other: &Self) -> bool {
+//         self.ptr.ptr_eq(&other.ptr)
+//     }
+// }
+
+// impl<T> Eq for WeakRwLock<T> {}
 
 impl<T> std::ops::Deref for ArcRwLock<T> {
     type Target = RwLock<T>;
@@ -154,26 +272,64 @@ impl<T> std::ops::Deref for ArcRwLock<T> {
     }
 }
 
-impl<T: Send + Sync> std::hash::Hash for ArcRwLock<T> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        let address = Arc::as_ptr(&self.ptr);
-        address.hash(state);
-        // self.ptr.hash(state);
-
-    //    std::ptr::hash(self.ptr(), state);
+impl<T, U: Ord + Copy + Default + Hash> std::ops::Deref for OrdArcRwLock<T, U> {
+    type Target = RwLock<T>;
+    fn deref(&self) -> &Self::Target {
+        &self.ptr
     }
 }
 
-impl<T: Send + Sync> std::hash::Hash for WeakRwLock<T> {
+// impl<T: Send + Sync> std::hash::Hash for ArcRwLock<T> {
+//     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+//         let address = Arc::as_ptr(&self.ptr);
+//         address.hash(state);
+//         // self.ptr.hash(state);
+
+//         //    std::ptr::hash(self.ptr(), state);
+//     }
+// }
+
+impl<T: Send + Sync, U: Ord + Copy + Default + Hash> std::hash::Hash for OrdArcRwLock<T, U> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        let address = Weak::as_ptr(&self.ptr);
-        address.hash(state);
-    //    std::ptr::hash(self, state);
+        self.ord.hash(state);
+        // self.ptr.hash(state);
+
+        //    std::ptr::hash(self.ptr(), state);
+    }
+}
+
+// impl<T: Send + Sync> std::hash::Hash for WeakRwLock<T> {
+//     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+//         let address = Weak::as_ptr(&self.ptr);
+//         address.hash(state);
+//         //    std::ptr::hash(self, state);
+//     }
+// }
+
+impl<T: Send + Sync, U: Ord + Copy + Default + Hash> std::hash::Hash for OrdWeakRwLock<T, U> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.ord.hash(state);
+        // self.ptr.hash(state);
+
+        //    std::ptr::hash(self, state);
     }
 }
 
 impl<T: Send + Sync> weak_table::traits::WeakElement for WeakRwLock<T> {
     type Strong = ArcRwLock<T>;
+    fn new(view: &Self::Strong) -> Self {
+        view.downgrade()
+    }
+    fn view(&self) -> Option<Self::Strong> {
+        self.upgrade()
+    }
+    fn clone(view: &Self::Strong) -> Self::Strong {
+        view.clone()
+    }
+}
+
+impl<T: Send + Sync, U: Ord + Copy + Default + Hash> weak_table::traits::WeakElement for OrdWeakRwLock<T, U> {
+    type Strong = OrdArcRwLock<T, U>;
     fn new(view: &Self::Strong) -> Self {
         view.downgrade()
     }
@@ -383,11 +539,11 @@ cfg_if::cfg_if! {
                 let address = Arc::as_ptr(&self.ptr);
                 address.hash(state);
                 // self.ptr.hash(state);
-        
+
             //    std::ptr::hash(self.ptr(), state);
             }
         }
-        
+
         impl<T: Send + Sync> std::hash::Hash for WeakUnsafe<T> {
             fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
                 let address = Weak::as_ptr(&self.ptr);
@@ -403,7 +559,7 @@ cfg_if::cfg_if! {
                 ptr1.cmp(&ptr2)
             }
         }
-        
+
         impl<T: Send + Sync> Ord for WeakUnsafe<T> {
             fn cmp(&self, other: &Self) -> std::cmp::Ordering {
                 let ptr1 = Weak::as_ptr(self.ptr());
@@ -417,7 +573,7 @@ cfg_if::cfg_if! {
                 Some(self.cmp(other))
             }
         }
-        
+
         impl<T: Send + Sync> PartialOrd for WeakUnsafe<T> {
             fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
                 Some(self.cmp(other))
@@ -455,13 +611,15 @@ cfg_if::cfg_if! {
         //     }
         // }
     } else {
-        pub type ArcManualSafeLock<T> = ArcRwLock<T>;
-        pub type WeakManualSafeLock<T> = WeakRwLock<T>;
+        // pub type ArcManualSafeLock<T> = ArcRwLock<T>;
+        // pub type WeakManualSafeLock<T> = WeakRwLock<T>;
         // pub type FastClearArcManualSafeLockDangerous<T> = FastClearArcRwLock<T>;
         // pub type FastClearWeakManualSafeLockDangerous<T> = FastClearWeakRwLock<T>;
+
+        pub type ArcManualSafeLock<T> = OrdArcRwLock<T, (usize, usize)>;
+        pub type WeakManualSafeLock<T> = OrdWeakRwLock<T, (usize, usize)>;
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -499,7 +657,6 @@ mod tests {
         assert_eq!(ptr.read_recursive().idx, 2);
     }
 }
-
 
 // //! Pointer Types
 // //!
@@ -674,7 +831,6 @@ mod tests {
 // /*
 //     unsafe APIs, used when maximizing speed performance
 // */
-
 // cfg_if::cfg_if! {
 //     if #[cfg(feature="unsafe_pointer")] {
 //         pub trait UnsafePtr<ObjType> {
@@ -805,7 +961,7 @@ mod tests {
 //                 address.hash(state);
 //             }
 //         }
-        
+
 //         impl<T: Send + Sync> std::hash::Hash for WeakUnsafe<T> {
 //             fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
 //                 let address = Weak::as_ptr(&self.ptr);
@@ -820,7 +976,7 @@ mod tests {
 //                 ptr1.cmp(&ptr2)
 //             }
 //         }
-        
+
 //         impl<T: Send + Sync> Ord for WeakUnsafe<T> {
 //             fn cmp(&self, other: &Self) -> std::cmp::Ordering {
 //                 let ptr1 = Weak::as_ptr(self.ptr());
@@ -834,7 +990,7 @@ mod tests {
 //                 Some(self.cmp(other))
 //             }
 //         }
-        
+
 //         impl<T: Send + Sync> PartialOrd for WeakUnsafe<T> {
 //             fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
 //                 Some(self.cmp(other))
@@ -852,7 +1008,6 @@ mod tests {
 //         pub type WeakManualSafeLock<T> = WeakRwLock<T>;
 //     }
 // }
-
 
 // #[cfg(test)]
 // mod tests {
