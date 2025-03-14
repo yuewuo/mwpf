@@ -67,6 +67,10 @@ pub type FutureObstacleQueue<T> = MinPriorityQueue<Obstacle, T>;
 
 pub type BTreeMapPQ<T> = BTreeMap<T, HashSet<Obstacle>>;
 impl<T: Ord + PartialEq + Eq + std::fmt::Debug + Clone> FutureQueueMethods<T, Obstacle> for BTreeMapPQ<T> {
+    type EventIter<'a> = hashbrown::hash_set::Iter<'a, Obstacle>
+    where
+        Self: 'a;
+
     fn will_happen(&mut self, time: T, event: Obstacle) {
         // Note: this may have multiple distinct yet valid behaviors, e,g, weather there are duplicates allowed in the data strcture
         match self.entry(time) {
@@ -107,16 +111,24 @@ impl<T: Ord + PartialEq + Eq + std::fmt::Debug + Clone> FutureQueueMethods<T, Ob
     fn is_empty(&self) -> bool {
         self.is_empty()
     }
-    fn top_events(&self) -> Option<(&T, Vec<&Obstacle>)> {
-        self.iter().next().map(|(time, events)| {
-            // Return the first k events from the set
-            (time, events.iter().collect())
-        })
+    fn top_events(&self) -> Option<(&T, Self::EventIter<'_>)> {
+        self.iter().next().map(|(time, events)| (time, events.iter()))
+    }
+    fn pop_events(&mut self) -> Option<(T, HashSet<Obstacle>)> {
+        // Get the first (smallest) entry as an occupied entry for mutable access
+        self.first_entry().map(|entry| entry.remove_entry())
+    }
+    fn insert_events(&mut self, time: &T, events: HashSet<Obstacle>) {
+        self.insert(time.clone(), events);
     }
 }
 
 pub type IndexsetBTreeMapPQ<T> = indexset::BTreeMap<T, HashSet<Obstacle>>;
 impl<T: Ord + PartialEq + Eq + std::fmt::Debug + Clone> FutureQueueMethods<T, Obstacle> for IndexsetBTreeMapPQ<T> {
+    type EventIter<'a> = hashbrown::hash_set::Iter<'a, Obstacle>
+    where
+        Self: 'a;
+
     fn will_happen(&mut self, time: T, event: Obstacle) {
         // Note: this may have multiple distinct yet valid behaviors, e,g, weather there are duplicates allowed in the data strcture
         match self.entry(time) {
@@ -157,15 +169,16 @@ impl<T: Ord + PartialEq + Eq + std::fmt::Debug + Clone> FutureQueueMethods<T, Ob
     fn is_empty(&self) -> bool {
         self.is_empty()
     }
-    fn top_events(&self) -> Option<(&T, Vec<&Obstacle>)> {
-        self.iter().next().map(|(time, events)| {
-            // Return the first k events from the set
-            (time, events.iter().collect())
-        })
+    fn top_events(&self) -> Option<(&T, Self::EventIter<'_>)> {
+        self.iter().next().map(|(time, events)| (time, events.iter()))
     }
 }
 
 impl<T: Ord + PartialEq + Eq + std::fmt::Debug> FutureQueueMethods<T, Obstacle> for FutureObstacleQueue<T> {
+    type EventIter<'a> = hashbrown::hash_set::Iter<'a, Obstacle>
+    where
+        Self: 'a;
+
     fn will_happen(&mut self, time: T, event: Obstacle) {
         self.push(event, Reverse(time));
     }
@@ -184,6 +197,11 @@ impl<T: Ord + PartialEq + Eq + std::fmt::Debug> FutureQueueMethods<T, Obstacle> 
 }
 
 pub trait FutureQueueMethods<T: Ord + PartialEq + Eq + std::fmt::Debug, E: std::fmt::Debug> {
+    type EventIter<'a>: Iterator<Item = &'a E>
+    where
+        Self: 'a,
+        E: 'a;
+
     /// Append an event at time T
     ///     Note: this may have multiple distinct yet valid behaviors, e,g, weather there are duplicates allowed in the data strcture, default to allow
     fn will_happen(&mut self, time: T, event: E);
@@ -205,14 +223,26 @@ pub trait FutureQueueMethods<T: Ord + PartialEq + Eq + std::fmt::Debug, E: std::
         self.len() == 0
     }
 
-    fn top_events(&self) -> Option<(&T, Vec<&E>)> {
+    fn top_events(&self) -> Option<(&T, Self::EventIter<'_>)> {
         panic!("top_events is not implemented for this queue type, please use a different queue type");
+    }
+
+    fn pop_events(&mut self) -> Option<(T, HashSet<E>)> {
+        panic!("pop_events is not implemented for this queue type, please use a different queue type");
+    }
+
+    fn insert_events(&mut self, time: &T, events: HashSet<E>) {
+        panic!("insert_events is not implemented for this queue type, please use a different queue type");
     }
 }
 
 impl<T: Ord + PartialEq + Eq + std::fmt::Debug, E: std::fmt::Debug> FutureQueueMethods<T, E>
     for MinBinaryHeap<FutureEvent<T, E>>
 {
+    type EventIter<'a> = hashbrown::hash_set::Iter<'a, E>
+    where
+        Self: 'a;
+
     fn will_happen(&mut self, time: T, event: E) {
         self.push(Reverse(FutureEvent { time, event }))
     }
@@ -442,21 +472,40 @@ where
     }
 
     pub fn compute_max_valid_grow(&mut self) -> Option<Rational> {
+        // println!("one round: {:?}\n", self.obstacle_queue.len());
         let global_time = self.global_time.read_recursive().clone();
+
         // getting rid of all the invalid events
-        while let Some((time, event)) = self.obstacle_queue.peek_event() {
-            // found a valid event
-            if self.is_valid_obstacle(event, time) {
-                // valid grow
-                if time != &global_time {
-                    return Some(time - global_time.clone());
+        // while let Some((time, event)) = self.obstacle_queue.peek_event() {
+        //     // found a valid event
+        //     if self.is_valid_obstacle(event, time) {
+        //         // valid grow
+        //         if time != &global_time {
+        //             println!("did not pop event {:?} at time: {:?}", event, time);
+        //             return Some(time - global_time.clone());
+        //         }
+        //         // goto else
+        //         break;
+        //     }
+        //     println!("popping event: {:?}", self.obstacle_queue.pop_event());
+        // }
+
+        loop {
+            if let Some((time, mut events)) = self.obstacle_queue.top_events() {
+                if events.any(|event| self.is_valid_obstacle(event, time)) {
+                    // valid grow
+                    // println!("valid event: {:?} at time: {:?}", events, time);
+                    return if time != &global_time {
+                        Some(time - global_time.clone())
+                    } else {
+                        None
+                    };
                 }
-                // goto else
-                break;
+            } else {
+                return None;
             }
-            self.obstacle_queue.pop_event();
+            self.obstacle_queue.pop_events();
         }
-        None
     }
 
     /// return if the current obstacle is valid
@@ -699,10 +748,15 @@ where
             return DualReport::ValidGrow(max_valid_grow);
         }
 
+        // /* for those data structures that don't support `top_events` */
+        // // we could unify them, but didn't do that just yet
+        // // TODO: unify
+
         // let global_time = self.global_time.read_recursive().clone();
 
-        // else , it is a valid conflict to resolve
+        // // else , it is a valid conflict to resolve
         // if let Some((_, event)) = self.obstacle_queue.pop_event() {
+        //     let mut popped = 1;
         //     // this is used, since queues are not sets, and can contain duplicate events
         //     // Note: check that this is the assumption, though not much more overhead anyway
         //     // let mut group_max_update_length_set = FastIterSet::default();
@@ -716,6 +770,7 @@ where
         //     while let Some((time, _)) = self.obstacle_queue.peek_event() {
         //         if global_time == *time {
         //             let (time, event) = self.obstacle_queue.pop_event().unwrap();
+        //             popped += 1;
         //             if !self.is_valid_obstacle(&event, &time) {
         //                 continue;
         //             }
@@ -729,10 +784,15 @@ where
         //     for obstacle in dual_report.iter().unwrap() {
         //         self.obstacle_queue.will_happen(global_time.clone(), obstacle.clone());
         //     }
+
+        //     println!("pooped: {}, reinserted: {}", popped, dual_report.iter().unwrap().count());
         //     return dual_report;
         // }
 
-        // for those data structures that suport `top_events`
+        // // nothing useful could be done, return unbounded
+        // DualReport::new()
+
+        /* for those data structures that support `top_events` */
         let mut dual_report = DualReport::new();
         if let Some((time, top_events)) = self.obstacle_queue.top_events() {
             for event in top_events {
@@ -741,9 +801,7 @@ where
                 }
             }
         }
-
-        // nothing useful could be done, return unbounded
-        DualReport::new()
+        dual_report
     }
 
     /// for pq implementation, simply updating the global time is enough, could be part of the `report` function
@@ -1360,6 +1418,9 @@ impl<T: Ord + PartialEq + Eq + std::fmt::Debug + Clone> Default for PairingPQ<T>
 impl<T: Ord + PartialEq + Eq + std::fmt::Debug + Clone + std::ops::Sub<Output = T> + std::ops::SubAssign>
     FutureQueueMethods<T, Obstacle> for PairingPQ<T>
 {
+    type EventIter<'a> = hashbrown::hash_set::Iter<'a, Obstacle>
+    where
+        Self: 'a;
     fn will_happen(&mut self, time: T, event: Obstacle) {
         match self.container.entry(event.clone()) {
             Entry::Vacant(entry) => {
@@ -1378,11 +1439,8 @@ impl<T: Ord + PartialEq + Eq + std::fmt::Debug + Clone + std::ops::Sub<Output = 
     }
     fn pop_event(&mut self) -> Option<(T, Obstacle)> {
         let res = self.heap.delete_min().map(|future| (future.1, future.0));
-        match &res {
-            Some((_, event)) => {
-                self.container.remove(event);
-            }
-            None => {}
+        if let Some((_, event)) = &res {
+            self.container.remove(event);
         }
         res
     }
@@ -1413,6 +1471,9 @@ impl<T: Ord + PartialEq + Eq + std::fmt::Debug + Clone> Default for RankPairingP
 }
 
 impl<T: Ord + PartialEq + Eq + std::fmt::Debug + Clone> FutureQueueMethods<T, Obstacle> for RankPairingPQ<T> {
+    type EventIter<'a> = hashbrown::hash_set::Iter<'a, Obstacle>
+    where
+        Self: 'a;
     fn will_happen(&mut self, time: T, event: Obstacle) {
         if self.container.contains_key(&event) {
             self.heap.update(&event, time.clone());
