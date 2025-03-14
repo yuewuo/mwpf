@@ -245,29 +245,56 @@ pub trait PrimalModuleImpl {
                     let (_obstacles, _resolved) = self.resolve_tune(obstacles.clone(), interface, dual_module);
 
                     // cycle resolution
+                    // process current sequences and try to extend them
                     let drained: Vec<(usize, FastIterSet<Obstacle>)> = std::mem::take(&mut current_sequences);
                     for (idx, start) in drained.into_iter() {
+                        // if the current obstacles match a starting state, we have a cycle
                         if _obstacles.eq(&start) {
                             dual_module.end_tuning();
                             break '_resolving;
                         }
-                        if _obstacles.eq(order
-                            .get(MAX_HISTORY - idx - 1)
-                            .unwrap_or(order.get(order.len() - idx - 1).unwrap()))
-                        {
-                            current_sequences.push((idx + 1, start));
+
+                        // determine which candidate in the history to compare with
+                        let candidate_index = order.len() - idx - 1;
+
+                        if let Some(candidate) = order.get(candidate_index) {
+                            if _obstacles.eq(candidate) {
+                                // extend this sequence by increasing its offset
+                                current_sequences.push((idx + 1, start));
+                            }
+                        } else {
+                            eprintln!(
+                                "Warning: candidate index {} out of bounds, order length {}, idx {}, start {:?}, candidate {:?}",
+                                candidate_index,
+                                order.len(),
+                                idx,
+                                start,
+                                order.get(candidate_index)
+                            );
                         }
                     }
 
+                    // add the current obstacles state to the history
                     order.push_back(_obstacles.clone());
                     if order.len() > MAX_HISTORY {
+                        // remove the oldest state
                         order.pop_front();
+                        // because the deque shifted left, update each sequence by subtracting 1 from its index
                         current_sequences = current_sequences
                             .into_iter()
-                            .filter_map(|(x, start)| if x >= MAX_HISTORY { None } else { Some((x + 1, start)) })
+                            .filter_map(|(x, start)| {
+                                if x == 0 {
+                                    // this element is popped
+                                    None
+                                } else {
+                                    // the previous bug, everything should be shifted left/forward instead right/to the right
+                                    Some((x - 1, start))
+                                }
+                            })
                             .collect();
                     }
 
+                    // add new sequences from matching obstacles in the history
                     for (idx, c) in order.iter().enumerate() {
                         if c.eq(&_obstacles) {
                             current_sequences.push((idx, c.clone()));
