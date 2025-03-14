@@ -7,6 +7,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use crate::dual_module::*;
+use crate::itertools::Itertools;
 use crate::ordered_float::OrderedFloat;
 use crate::primal_module_serial::ClusterAffinity;
 use crate::relaxer_optimizer::OptimizerResult;
@@ -228,7 +229,7 @@ pub trait PrimalModuleImpl {
             self.update_sorted_clusters_aff(dual_module);
             let cluster_affs = self.get_sorted_clusters_aff();
 
-            for cluster_affinity in cluster_affs.into_iter() {
+            for cluster_affinity in cluster_affs.into_iter().sorted() {
                 let cluster_index = cluster_affinity.cluster_index;
                 let mut dual_node_deltas = FastIterMap::new();
                 let (mut resolved, optimizer_result) =

@@ -78,7 +78,7 @@ impl Ord for ClusterAffinity {
                 // If affinities are equal, compare cluster_index in ascending order
                 self.cluster_index.cmp(&other.cluster_index)
             }
-            other => other,
+            other => other.reverse(),
         }
     }
 }
