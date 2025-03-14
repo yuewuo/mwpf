@@ -66,6 +66,11 @@ static_patches = [
         "README.md",
         [
             ("pip install -U mwpf\n", "pip install -U mwpf_$name$\n", 1),
+            (
+                "pip install -U 'mwpf[stim]'\n",
+                "pip install -U 'mwpf_$name$[stim]'\n",
+                1,
+            ),
             ('decoders = ["mwpf"],', 'decoders = ["mwpf_$name$"],', 1),
             (
                 '"mwpf": SinterMWPFDecoder',
