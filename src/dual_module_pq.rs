@@ -13,6 +13,7 @@ use crate::util::*;
 use crate::visualize::*;
 use crate::{add_shared_methods, dual_module::*};
 
+use std::collections::BTreeMap;
 use std::{
     cmp::{Ordering, Reverse},
     collections::BinaryHeap,
@@ -64,6 +65,56 @@ pub type _FutureObstacleQueue<T> = MinBinaryHeap<FutureObstacle<T>>;
 pub type MinPriorityQueue<O, T> = PriorityQueue<O, Reverse<T>>;
 pub type FutureObstacleQueue<T> = MinPriorityQueue<Obstacle, T>;
 
+pub type BTreeMapPQ<T> = BTreeMap<T, HashSet<Obstacle>>;
+impl<T: Ord + PartialEq + Eq + std::fmt::Debug + Clone> FutureQueueMethods<T, Obstacle> for BTreeMapPQ<T> {
+    fn will_happen(&mut self, time: T, event: Obstacle) {
+        // Note: this may have multiple distinct yet valid behaviors, e,g, weather there are duplicates allowed in the data strcture
+        match self.entry(time) {
+            std::collections::btree_map::Entry::Occupied(mut o) => {
+                o.get_mut().insert(event);
+            }
+            std::collections::btree_map::Entry::Vacant(v) => {
+                v.insert(hashbrown::HashSet::from([event]));
+            }
+        }
+    }
+    fn peek_event(&self) -> Option<(&T, &Obstacle)> {
+        self.iter().next().map(|(time, events)| (time, events.iter().next().unwrap()))
+    }
+    fn pop_event(&mut self) -> Option<(T, Obstacle)> {
+        // Get the first (smallest) entry as an occupied entry for mutable access
+        if let Some(mut entry) = self.first_entry() {
+            let time = entry.key().clone(); // Clone the time key before modifying
+
+            // Get the set of events
+            let events = entry.get_mut();
+            if let Some(event) = events.iter().next().cloned() {
+                events.remove(&event);
+                if events.is_empty() {
+                    entry.remove(); // Remove the entry if no more events exist
+                }
+                return Some((time, event));
+            }
+        }
+        None
+    }
+    fn clear(&mut self) {
+        self.clear();
+    }
+    fn len(&self) -> usize {
+        self.len()
+    }
+    fn is_empty(&self) -> bool {
+        self.is_empty()
+    }
+    fn top_events(&self) -> Option<(&T, Vec<&Obstacle>)> {
+        self.iter().next().map(|(time, events)| {
+            // Return the first k events from the set
+            (time, events.iter().collect())
+        })
+    }
+}
+
 impl<T: Ord + PartialEq + Eq + std::fmt::Debug> FutureQueueMethods<T, Obstacle> for FutureObstacleQueue<T> {
     fn will_happen(&mut self, time: T, event: Obstacle) {
         self.push(event, Reverse(time));
@@ -102,6 +153,10 @@ pub trait FutureQueueMethods<T: Ord + PartialEq + Eq + std::fmt::Debug, E: std::
     /// is empty
     fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    fn top_events(&self) -> Option<(&T, Vec<&E>)> {
+        panic!("top_events is not implemented for this queue type, please use a different queue type");
     }
 }
 
@@ -234,7 +289,8 @@ impl std::fmt::Debug for EdgeWeak {
     }
 }
 
-pub type DualModulePQ = DualModulePQGeneric<FutureObstacleQueue<Rational>>;
+// pub type DualModulePQ = DualModulePQGeneric<FutureObstacleQueue<Rational>>;
+pub type DualModulePQ = DualModulePQGeneric<BTreeMapPQ<Rational>>;
 
 /* the actual dual module */
 #[derive(Clone)]
@@ -592,37 +648,47 @@ where
             return DualReport::ValidGrow(max_valid_grow);
         }
 
-        let global_time = self.global_time.read_recursive().clone();
+        // let global_time = self.global_time.read_recursive().clone();
 
         // else , it is a valid conflict to resolve
-        if let Some((_, event)) = self.obstacle_queue.pop_event() {
-            // this is used, since queues are not sets, and can contain duplicate events
-            // Note: check that this is the assumption, though not much more overhead anyway
-            // let mut group_max_update_length_set = FastIterSet::default();
+        // if let Some((_, event)) = self.obstacle_queue.pop_event() {
+        //     // this is used, since queues are not sets, and can contain duplicate events
+        //     // Note: check that this is the assumption, though not much more overhead anyway
+        //     // let mut group_max_update_length_set = FastIterSet::default();
 
-            // Note: With de-dup queue implementation, we could use vectors here
-            let mut dual_report = DualReport::new();
-            dual_report.add_obstacle(event);
+        //     // Note: With de-dup queue implementation, we could use vectors here
+        //     let mut dual_report = DualReport::new();
+        //     dual_report.add_obstacle(event);
 
-            // append all conflicts that happen at the same time as now
-            // Note: This is Top-of-K operation, BTreeSets could be used.
-            while let Some((time, _)) = self.obstacle_queue.peek_event() {
-                if global_time == *time {
-                    let (time, event) = self.obstacle_queue.pop_event().unwrap();
-                    if !self.is_valid_obstacle(&event, &time) {
-                        continue;
-                    }
-                    // add
-                    dual_report.add_obstacle(event);
-                } else {
-                    break;
+        //     // append all conflicts that happen at the same time as now
+        //     // Note: This is Top-of-K operation, BTreeSets could be used.
+        //     while let Some((time, _)) = self.obstacle_queue.peek_event() {
+        //         if global_time == *time {
+        //             let (time, event) = self.obstacle_queue.pop_event().unwrap();
+        //             if !self.is_valid_obstacle(&event, &time) {
+        //                 continue;
+        //             }
+        //             // add
+        //             dual_report.add_obstacle(event);
+        //         } else {
+        //             break;
+        //         }
+        //     }
+
+        //     for obstacle in dual_report.iter().unwrap() {
+        //         self.obstacle_queue.will_happen(global_time.clone(), obstacle.clone());
+        //     }
+        //     return dual_report;
+        // }
+
+        // for those data structures that suport `top_events`
+        let mut dual_report = DualReport::new();
+        if let Some((time, top_events)) = self.obstacle_queue.top_events() {
+            for event in top_events {
+                if self.is_valid_obstacle(event, time) {
+                    dual_report.add_obstacle(event.clone())
                 }
             }
-
-            for obstacle in dual_report.iter().unwrap() {
-                self.obstacle_queue.will_happen(global_time.clone(), obstacle.clone());
-            }
-            return dual_report;
         }
 
         // nothing useful could be done, return unbounded
