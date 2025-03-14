@@ -115,6 +115,56 @@ impl<T: Ord + PartialEq + Eq + std::fmt::Debug + Clone> FutureQueueMethods<T, Ob
     }
 }
 
+pub type IndexsetBTreeMapPQ<T> = indexset::BTreeMap<T, HashSet<Obstacle>>;
+impl<T: Ord + PartialEq + Eq + std::fmt::Debug + Clone> FutureQueueMethods<T, Obstacle> for IndexsetBTreeMapPQ<T> {
+    fn will_happen(&mut self, time: T, event: Obstacle) {
+        // Note: this may have multiple distinct yet valid behaviors, e,g, weather there are duplicates allowed in the data strcture
+        match self.entry(time) {
+            indexset::Entry::Occupied(mut o) => {
+                o.get_mut().insert(event);
+            }
+            indexset::Entry::Vacant(v) => {
+                v.insert(hashbrown::HashSet::from([event]));
+            }
+        }
+    }
+    fn peek_event(&self) -> Option<(&T, &Obstacle)> {
+        self.iter().next().map(|(time, events)| (time, events.iter().next().unwrap()))
+    }
+    fn pop_event(&mut self) -> Option<(T, Obstacle)> {
+        // Get the first (smallest) entry as an occupied entry for mutable access
+        if let Some(mut entry) = self.first_entry() {
+            let time = entry.key().clone(); // Clone the time key before modifying
+
+            // Get the set of events
+            let events = entry.get_mut();
+            if let Some(event) = events.iter().next().cloned() {
+                events.remove(&event);
+                if events.is_empty() {
+                    entry.remove(); // Remove the entry if no more events exist
+                }
+                return Some((time, event));
+            }
+        }
+        None
+    }
+    fn clear(&mut self) {
+        self.clear();
+    }
+    fn len(&self) -> usize {
+        self.len()
+    }
+    fn is_empty(&self) -> bool {
+        self.is_empty()
+    }
+    fn top_events(&self) -> Option<(&T, Vec<&Obstacle>)> {
+        self.iter().next().map(|(time, events)| {
+            // Return the first k events from the set
+            (time, events.iter().collect())
+        })
+    }
+}
+
 impl<T: Ord + PartialEq + Eq + std::fmt::Debug> FutureQueueMethods<T, Obstacle> for FutureObstacleQueue<T> {
     fn will_happen(&mut self, time: T, event: Obstacle) {
         self.push(event, Reverse(time));
@@ -291,6 +341,7 @@ impl std::fmt::Debug for EdgeWeak {
 
 // pub type DualModulePQ = DualModulePQGeneric<FutureObstacleQueue<Rational>>;
 pub type DualModulePQ = DualModulePQGeneric<BTreeMapPQ<Rational>>;
+// pub type DualModulePQ = DualModulePQGeneric<IndexsetBTreeMapPQ<Rational>>;
 
 /* the actual dual module */
 #[derive(Clone)]

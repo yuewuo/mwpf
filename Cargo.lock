@@ -943,6 +943,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ftree"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ae0379499242d3b9355c5069b43b9417def8c9b09903b930db1fe49318dc9e9"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "futures-core"
 version = "0.3.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1345,6 +1354,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "indexset"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eae10f70dd2d0653f29cb768ce0ea2e73a0d671bf44f7540a7545b39edace802"
+dependencies = [
+ "ftree",
+]
+
+[[package]]
 name = "indoc"
 version = "2.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1599,6 +1617,7 @@ dependencies = [
  "hashbrown 0.15.2",
  "heapz",
  "highs",
+ "indexset",
  "itertools 0.14.0",
  "lazy_static",
  "lnexp",

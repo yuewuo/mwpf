@@ -107,6 +107,7 @@ bp = { path = "src/bp" }
 thread-priority = "1.2.0"
 lnexp = "0.2.1"
 gxhash = { version = "3.5.0", optional = true }
+indexset = "0.11.2"
 
 [dev-dependencies]
 test-case = "3.1.0"
