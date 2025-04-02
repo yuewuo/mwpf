@@ -678,19 +678,35 @@ impl PyEchelonMatrix {
 #[pymethods]
 impl PyEchelonMatrix {
     #[new]
-    #[pyo3(signature = (matrix=None))]
-    fn new(matrix: Option<&Bound<PyAny>>) -> PyResult<Self> {
+    #[pyo3(signature = (matrix=None, all_tight=false))]
+    fn new(matrix: Option<&Bound<PyAny>>, all_tight: bool) -> PyResult<Self> {
         if let Some(matrix) = matrix {
             if let Ok(matrix) = matrix.extract::<PyTailMatrix>() {
-                return Ok(Self(EchelonMatrix::from_base(matrix.0.clone())));
+                let mut echelon = EchelonMatrix::from_base(matrix.0.clone());
+                if all_tight {
+                    for edge_index in echelon.get_edges() {
+                        echelon.update_edge_tightness(edge_index, true);
+                    }
+                }
+                return Ok(Self(echelon));
             }
             if let Ok(matrix) = matrix.extract::<PyTightMatrix>() {
-                return Ok(Self(EchelonMatrix::from_base(TailMatrix::from_base(matrix.0.clone()))));
+                let mut echelon = EchelonMatrix::from_base(TailMatrix::from_base(matrix.0.clone()));
+                if all_tight {
+                    for edge_index in echelon.get_edges() {
+                        echelon.update_edge_tightness(edge_index, true);
+                    }
+                }
+                return Ok(Self(echelon));
             }
             if let Ok(matrix) = matrix.extract::<PyBasicMatrix>() {
-                return Ok(Self(EchelonMatrix::from_base(TailMatrix::from_base(TightMatrix::from_base(
-                    matrix.0.clone(),
-                )))));
+                let mut echelon = EchelonMatrix::from_base(TailMatrix::from_base(TightMatrix::from_base(matrix.0.clone())));
+                if all_tight {
+                    for edge_index in echelon.get_edges() {
+                        echelon.update_edge_tightness(edge_index, true);
+                    }
+                }
+                return Ok(Self(echelon));
             }
             panic!("unknown input type: {}", matrix.get_type().name()?);
         } else {
@@ -786,17 +802,35 @@ impl PyTightMatrix {
 #[pymethods]
 impl PyTightMatrix {
     #[new]
-    #[pyo3(signature = (matrix=None))]
-    fn new(matrix: Option<&Bound<PyAny>>) -> PyResult<Self> {
+    #[pyo3(signature = (matrix=None, all_tight=false))]
+    fn new(matrix: Option<&Bound<PyAny>>, all_tight: bool) -> PyResult<Self> {
         if let Some(matrix) = matrix {
             if let Ok(matrix) = matrix.extract::<PyBasicMatrix>() {
-                return Ok(Self(TightMatrix::from_base(matrix.0.clone())));
+                let mut tight = TightMatrix::from_base(matrix.0.clone());
+                if all_tight {
+                    for edge_index in tight.get_edges() {
+                        tight.update_edge_tightness(edge_index, true);
+                    }
+                }
+                return Ok(Self(tight));
             }
             if let Ok(matrix) = matrix.extract::<PyTailMatrix>() {
-                return Ok(matrix.get_base());
+                let mut tight = matrix.get_base();
+                if all_tight {
+                    for edge_index in tight.get_edges() {
+                        tight.update_edge_tightness(edge_index, true);
+                    }
+                }
+                return Ok(tight);
             }
             if let Ok(matrix) = matrix.extract::<PyEchelonMatrix>() {
-                return Ok(matrix.get_base().get_base());
+                let mut tight = matrix.get_base().get_base();
+                if all_tight {
+                    for edge_index in tight.get_edges() {
+                        tight.update_edge_tightness(edge_index, true);
+                    }
+                }
+                return Ok(tight);
             }
             panic!("unknown input type: {}", matrix.get_type().name()?);
         } else {
