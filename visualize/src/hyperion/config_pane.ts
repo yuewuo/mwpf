@@ -6,7 +6,7 @@ import { assert, bigInt, tweakpane_find_value } from '@/util'
 import * as HTMLExport from './html_export'
 import { Vector3, OrthographicCamera, WebGLRenderer, Vector2 } from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { RuntimeData, ConfigProps, renderer_params, type Snapshot } from './hyperion'
+import { RuntimeData, ConfigProps, renderer_params, type Snapshot, recursive_config_set_children } from './hyperion'
 import { Prism } from 'prism-esm'
 import { loader as JsonLoader } from 'prism-esm/components/prism-json.js'
 import prismCSS from 'prism-esm/themes/prism.min.css?raw'
@@ -105,6 +105,14 @@ export class Config {
         // if the config is passed from props, import it (must execute after all elements are created)
         if (this.config_prop.visualizer_config != undefined) {
             this.parameters = JSON.stringify(this.config_prop.visualizer_config)
+            this.import_visualizer_parameters()
+        }
+        // if children_setter is specified, modify the parameters
+        if (this.config_prop.__children_setters__ != undefined) {
+            const parameters = this.pane.exportState()
+            const __children_setters__ = JSON.parse(JSON.stringify(this.config_prop.__children_setters__))
+            recursive_config_set_children(parameters, __children_setters__)
+            this.parameters = JSON.stringify(parameters)
             this.import_visualizer_parameters()
         }
         // by default showing the most recent snapshot; user can move back if they want

@@ -75,3 +75,7 @@ exposed `hyperion_exposed` variable in visualization tool so that user can progr
 
 - add BP decoder options in front of MWPF to better handle LDPC codes
 - optimize performance with optional `fastds` feature: faster set data structure than `BTreeSet`
+
+## 0.2.10 - 2025-04-02
+
+- add `__children_setters__` in frontend configuration for more flexible config
