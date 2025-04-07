@@ -1121,6 +1121,7 @@ macro_rules! SolverTrait_solve_with_bp {
             .map(|v| Weight::from_float(*v).unwrap())
             .collect();
 
+        #[cfg(feature = "f64_weight")]
         debug_assert!(
             llrs.iter().all(|x| x.is_number()),
             "llrs must be all numbers, but got: {:?}",

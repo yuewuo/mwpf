@@ -189,6 +189,7 @@ pub fn exclusive_weight_sum(w1: &Weight, w2: &Weight) -> Weight {
 
 impl SolverInitializer {
     pub fn new(vertex_num: VertexNum, weighted_edges: Vec<HyperEdge>) -> Self {
+        #[cfg(feature = "f64_weight")]
         assert!(
             weighted_edges.iter().all(|h| h.weight.is_number()),
             "weight must be a number, but (index, weight) = {:?}",
@@ -233,6 +234,7 @@ impl SolverInitializer {
                         .into_iter()
                         .map(|(k, v)| -> (EdgeIndex, Weight) {
                             let weight: Weight = PyRational::from(v.bind(py)).into();
+                            #[cfg(feature = "f64_weight")]
                             assert!(
                                 weight.is_number(),
                                 "weight must be a number, but at index {:?} got {:?}",
@@ -245,6 +247,7 @@ impl SolverInitializer {
                 );
             }
         }
+        #[cfg(feature = "f64_weight")]
         assert!(
             weighted_edges.iter().all(|h| h.weight.is_number()),
             "weight must be a number, but (index, weight) = {:?}",
