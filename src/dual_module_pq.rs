@@ -291,10 +291,10 @@ where
         edge.growth_at_last_updated_time += newly_grown_amount;
         edge.last_updated_time = global_time.clone();
 
-        // debug_assert!(
-        //     edge.growth_at_last_updated_time <= edge.weight,
-        //     "growth larger than weight: check if events are 1) inserted and 2) handled correctly",
-        // );
+        debug_assert!(
+            edge.growth_at_last_updated_time <= edge.weight,
+            "growth larger than weight: check if events are 1) inserted and 2) handled correctly",
+        );
     }
 
     /// helper function to bring a dual node update to speed with current time if needed

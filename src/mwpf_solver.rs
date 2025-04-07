@@ -1114,12 +1114,18 @@ macro_rules! SolverTrait_solve_with_bp {
 
         // Solve the BP and update weights
         $self.bp_decoder.decode(&syndrome_array);
-        let llrs = $self
+        let llrs: Vec<Weight> = $self
             .bp_decoder
             .log_prob_ratios
             .iter()
             .map(|v| Weight::from_float(*v).unwrap())
             .collect();
+
+        debug_assert!(
+            llrs.iter().all(|x| x.is_number()),
+            "llrs must be all numbers, but got: {:?}",
+            llrs
+        );
 
         $solver.update_weights(llrs, Weight::from_float($self.bp_application_ratio).unwrap());
         $solver.solve_visualizer($syndrome_pattern, $visualizer);

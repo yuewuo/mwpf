@@ -189,6 +189,16 @@ pub fn exclusive_weight_sum(w1: &Weight, w2: &Weight) -> Weight {
 
 impl SolverInitializer {
     pub fn new(vertex_num: VertexNum, weighted_edges: Vec<HyperEdge>) -> Self {
+        assert!(
+            weighted_edges.iter().all(|h| h.weight.is_number()),
+            "weight must be a number, but (index, weight) = {:?}",
+            weighted_edges
+                .iter()
+                .enumerate()
+                .find(|(_, h)| !h.weight.is_number())
+                .map(|(i, h)| (i, h.weight.clone()))
+                .unwrap()
+        );
         Self::new_with_heralds(vertex_num, weighted_edges, vec![])
     }
     pub fn new_with_heralds(
@@ -221,11 +231,30 @@ impl SolverInitializer {
                 heralds_vec.push(
                     py_into_map::<EdgeIndex, Py<PyAny>>(&herald)?
                         .into_iter()
-                        .map(|(k, v)| -> (EdgeIndex, Weight) { (k, PyRational::from(v.bind(py)).into()) })
+                        .map(|(k, v)| -> (EdgeIndex, Weight) {
+                            let weight: Weight = PyRational::from(v.bind(py)).into();
+                            assert!(
+                                weight.is_number(),
+                                "weight must be a number, but at index {:?} got {:?}",
+                                k,
+                                weight
+                            );
+                            (k, weight)
+                        })
                         .collect(),
                 );
             }
         }
+        assert!(
+            weighted_edges.iter().all(|h| h.weight.is_number()),
+            "weight must be a number, but (index, weight) = {:?}",
+            weighted_edges
+                .iter()
+                .enumerate()
+                .find(|(_, h)| !h.weight.is_number())
+                .map(|(i, h)| (i, h.weight.clone()))
+                .unwrap()
+        );
         Ok(Self::new_with_heralds(vertex_num, weighted_edges, heralds_vec))
     }
     fn __repr__(&self) -> String {
