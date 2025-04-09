@@ -91,6 +91,9 @@ class SinterMWPFDecoder:
     floor_weight: Optional[float] = (
         None  # when updating the mwpf weights, all the weights are enforced to be no less than this value; by default 0 which enforces all the weights to be non-negative
     )
+    # by default BP may converge and directly return the result;
+    # sometimes it's better if BP cannot directly return and always use the post-processing to decode
+    bp_converge: bool = True
 
     @property
     def _cluster_node_limit(self) -> int:
@@ -194,6 +197,7 @@ class SinterMWPFDecoder:
             bp_decoder=bp_decoder,
             bp_weight_mix_ratio=self.bp_weight_mix_ratio,
             floor_weight=self.floor_weight,
+            bp_converge=self.bp_converge,
         )
 
     def decode_via_files(
@@ -243,6 +247,7 @@ class SinterMWPFDecoder:
                             bp_decoder=bp_decoder,
                             bp_weight_mix_ratio=self.bp_weight_mix_ratio,
                             floor_weight=self.floor_weight,
+                            bp_converge=self.bp_converge,
                         )
                         obs_out_f.write(
                             int(prediction).to_bytes(
@@ -346,6 +351,7 @@ class MwpfCompiledDecoder:
     bp_decoder: Any
     bp_weight_mix_ratio: float
     floor_weight: Optional[float]
+    bp_converge: bool = True
 
     def decode_shots_bit_packed(
         self,
@@ -376,6 +382,7 @@ class MwpfCompiledDecoder:
                     bp_decoder=self.bp_decoder,
                     bp_weight_mix_ratio=self.bp_weight_mix_ratio,
                     floor_weight=self.floor_weight,
+                    bp_converge=self.bp_converge,
                 )
                 predictions[shot] = np.packbits(
                     np.array(
@@ -404,6 +411,7 @@ def decode_common(
     bp_decoder: Any,
     bp_weight_mix_ratio: float,
     floor_weight: Optional[float],
+    bp_converge: bool = True,
 ):
     syndrome = predictor.syndrome_of(dets_bit_packed)
     if solver is None:
@@ -418,7 +426,7 @@ def decode_common(
                     dets_bit_packed, count=num_dets, bitorder="little"
                 )
                 bp_solution = bp_decoder.decode(dets_bits)
-                if bp_decoder.converge:
+                if bp_decoder.converge and bp_converge:
                     prediction = predictor.prediction_of(
                         syndrome, np.flatnonzero(bp_solution)
                     )
