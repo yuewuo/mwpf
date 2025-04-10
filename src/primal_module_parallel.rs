@@ -932,82 +932,82 @@ impl PrimalModuleParallel {
         ),
         Queue: FutureQueueMethods<Rational, Obstacle> + Default + std::fmt::Debug + Send + Sync + Clone,
     {
-        if parallel_dual_module.config.enable_parallel_execution {
-            // previous implementation of parallel fusion, solve all individual units in parallel,
-            // run `fuse_and_solve` on all odd boundary units in parallel, then run `fuse_and_solve` sequentially on all even
-            // boundary units
-            // parallel implementation using rayon
-            let thread_pool = Arc::clone(&self.thread_pool);
-            *self.last_solve_start_time.write() = Instant::now();
-            thread_pool.scope(|_| {
-                (0..self.partition_info.config.partitions.len())
-                    .into_par_iter()
-                    .for_each(|unit_index| {
-                        let unit_ptr = self.units[unit_index].clone();
-                        unit_ptr.individual_solve::<DualSerialModule, Queue, F>(
-                            self,
-                            PartitionedSyndromePattern::new(&syndrome_pattern),
-                            parallel_dual_module,
-                            &mut None,
-                        );
-                    })
-            });
+        // if parallel_dual_module.config.enable_parallel_execution {
+        //     // previous implementation of parallel fusion, solve all individual units in parallel,
+        //     // run `fuse_and_solve` on all odd boundary units in parallel, then run `fuse_and_solve` sequentially on all even
+        //     // boundary units
+        //     // parallel implementation using rayon
+        //     let thread_pool = Arc::clone(&self.thread_pool);
+        //     *self.last_solve_start_time.write() = Instant::now();
+        //     thread_pool.scope(|_| {
+        //         (0..self.partition_info.config.partitions.len())
+        //             .into_par_iter()
+        //             .for_each(|unit_index| {
+        //                 let unit_ptr = self.units[unit_index].clone();
+        //                 unit_ptr.individual_solve::<DualSerialModule, Queue, F>(
+        //                     self,
+        //                     PartitionedSyndromePattern::new(&syndrome_pattern),
+        //                     parallel_dual_module,
+        //                     &mut None,
+        //                 );
+        //             })
+        //     });
 
-            thread_pool.scope(|_| {
-                (self.partition_info.config.partitions.len()..self.partition_info.units.len())
-                    .into_par_iter()
-                    .for_each(|unit_index| {
-                        if (unit_index - self.partition_info.config.partitions.len()) % 2 == 0 {
-                            let unit_ptr = self.units[unit_index].clone();
-                            unit_ptr.fuse_and_solve::<DualSerialModule, Queue, F>(
-                                self,
-                                PartitionedSyndromePattern::new(&syndrome_pattern),
-                                parallel_dual_module,
-                                &mut None,
-                                false,
-                            );
-                        }
-                    })
-            });
+        //     thread_pool.scope(|_| {
+        //         (self.partition_info.config.partitions.len()..self.partition_info.units.len())
+        //             .into_par_iter()
+        //             .for_each(|unit_index| {
+        //                 if (unit_index - self.partition_info.config.partitions.len()) % 2 == 0 {
+        //                     let unit_ptr = self.units[unit_index].clone();
+        //                     unit_ptr.fuse_and_solve::<DualSerialModule, Queue, F>(
+        //                         self,
+        //                         PartitionedSyndromePattern::new(&syndrome_pattern),
+        //                         parallel_dual_module,
+        //                         &mut None,
+        //                         false,
+        //                     );
+        //                 }
+        //             })
+        //     });
 
-            for unit_index in self.partition_info.config.partitions.len()..self.partition_info.units.len() {
-                if (unit_index - self.partition_info.config.partitions.len()) % 2 == 1 {
-                    let unit_ptr = self.units[unit_index].clone();
-                    unit_ptr.fuse_and_solve::<DualSerialModule, Queue, F>(
-                        self,
-                        PartitionedSyndromePattern::new(&syndrome_pattern),
-                        parallel_dual_module,
-                        &mut None,
-                        false,
-                    );
-                }
-            }
-        } else {
-            // sequential implementation
-            // println!("sequential implementation!");
-            for unit_index in 0..self.partition_info.config.partitions.len() {
-                let unit_ptr = self.units[unit_index].clone();
-                unit_ptr.individual_solve::<DualSerialModule, Queue, F>(
-                    self,
-                    PartitionedSyndromePattern::new(&syndrome_pattern),
-                    parallel_dual_module,
-                    &mut Some(&mut callback),
-                );
-            }
-
-            // println!("fuse and solve");
-            for unit_index in self.partition_info.config.partitions.len()..self.partition_info.units.len() {
-                let unit_ptr = self.units[unit_index].clone();
-                unit_ptr.fuse_and_solve::<DualSerialModule, Queue, F>(
-                    self,
-                    PartitionedSyndromePattern::new(&syndrome_pattern),
-                    parallel_dual_module,
-                    &mut Some(&mut callback),
-                    false,
-                );
-            }
-            // println!("after fuse and solve");
+        //     for unit_index in self.partition_info.config.partitions.len()..self.partition_info.units.len() {
+        //         if (unit_index - self.partition_info.config.partitions.len()) % 2 == 1 {
+        //             let unit_ptr = self.units[unit_index].clone();
+        //             unit_ptr.fuse_and_solve::<DualSerialModule, Queue, F>(
+        //                 self,
+        //                 PartitionedSyndromePattern::new(&syndrome_pattern),
+        //                 parallel_dual_module,
+        //                 &mut None,
+        //                 false,
+        //             );
+        //         }
+        //     }
+        // } else {
+        // sequential implementation
+        // println!("sequential implementation!");
+        for unit_index in 0..self.partition_info.config.partitions.len() {
+            let unit_ptr = self.units[unit_index].clone();
+            unit_ptr.individual_solve::<DualSerialModule, Queue, F>(
+                self,
+                PartitionedSyndromePattern::new(&syndrome_pattern),
+                parallel_dual_module,
+                &mut Some(&mut callback),
+            );
         }
+
+        // println!("fuse and solve");
+        for unit_index in self.partition_info.config.partitions.len()..self.partition_info.units.len() {
+            let unit_ptr = self.units[unit_index].clone();
+            unit_ptr.fuse_and_solve::<DualSerialModule, Queue, F>(
+                self,
+                PartitionedSyndromePattern::new(&syndrome_pattern),
+                parallel_dual_module,
+                &mut Some(&mut callback),
+                false,
+            );
+        }
+        // println!("after fuse and solve");
+        // }
 
         // thread_pool.scope(|_| {
         //     (self.partition_info.config.partitions.len()..self.partition_info.units.len())

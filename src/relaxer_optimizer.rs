@@ -15,8 +15,8 @@ use std::sync::Arc;
 
 use derivative::Derivative;
 
+use crate::dual_module_pq::EdgePtr;
 use num_traits::{Signed, Zero};
-use crate::dual_module_pq::{EdgePtr};
 
 #[cfg(feature = "slp")]
 use num_traits::One;
@@ -239,6 +239,7 @@ impl RelaxerOptimizer {
         let mut model = RowProblem::default().optimise(Sense::Maximise);
         model.set_option("parallel", "off");
         model.set_option("threads", 1);
+        model.set_option("seed", 1);
 
         let mut x_vars = vec![];
         let mut y_vars = vec![];
@@ -436,6 +437,7 @@ impl RelaxerOptimizer {
                 let mut model = RowProblem::default().optimise(Sense::Maximise);
                 model.set_option("parallel", "off");
                 model.set_option("threads", 1);
+                model.set_option("seed", 1);
 
                 let mut edge_row_map: BTreeMap<EdgeIndex, highs::Row> = BTreeMap::new();
                 let mut dv_col_map: BTreeMap<NodeIndex, highs::Col> = BTreeMap::new();
@@ -452,11 +454,7 @@ impl RelaxerOptimizer {
                     dv_col_map.insert(dual_node_index.clone(), col);
 
                     for edge_ptr in invalid_subgraph.hair.iter() {
-                        edge_contributor
-                            .get_mut(edge_ptr)
-                            .unwrap()
-                            .1
-                            .insert(dual_node_index.clone());
+                        edge_contributor.get_mut(edge_ptr).unwrap().1.insert(dual_node_index.clone());
                     }
                 }
 

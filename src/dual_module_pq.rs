@@ -422,75 +422,78 @@ where
     /// initialize the dual module, which is supposed to be reused for multiple decoding tasks with the same structure
     #[allow(clippy::unnecessary_cast)]
     fn new_empty(initializer: &SolverInitializer) -> Self {
-        panic!("new empyt called");
-        // #[cfg(not(feature = "loose_sanity_check"))]
-        // initializer.sanity_check().unwrap();
+        #[cfg(not(feature = "loose_sanity_check"))]
+        initializer.sanity_check().unwrap();
 
-        // #[cfg(feature = "loose_sanity_check")]
-        // if let Err(error_message) = initializer.sanity_check() {
-        //     eprintln!("[warning] {}", error_message);
-        // }
+        #[cfg(feature = "loose_sanity_check")]
+        if let Err(error_message) = initializer.sanity_check() {
+            eprintln!("[warning] {}", error_message);
+        }
 
-        // // create vertices
-        // let vertices: Vec<VertexPtr> = (0..initializer.vertex_num)
-        //     .map(|vertex_index| {
-        //         VertexPtr::new_value(Vertex {
-        //             vertex_index,
-        //             is_defect: false,
-        //             edges: vec![],
-        //             mirrored_vertices: vec![],
-        //         })
-        //     })
-        //     .collect();
-        // // set edges
-        // let mut edges = Vec::<EdgePtr>::new();
-        // let mut original_weights = Vec::<Rational>::with_capacity(initializer.weighted_edges.len());
-        // for hyperedge in initializer.weighted_edges.iter() {
-        //     let edge = Edge {
-        //         edge_index: edges.len() as EdgeIndex,
-        //         weight: hyperedge.weight.clone(),
-        //         dual_nodes: vec![],
-        //         vertices: hyperedge
-        //             .vertices
-        //             .iter()
-        //             .map(|i| vertices[*i as usize].downgrade())
-        //             .collect::<Vec<_>>(),
-        //         last_updated_time: Rational::zero(),
-        //         growth_at_last_updated_time: Rational::zero(),
-        //         grow_rate: Rational::zero(),
-        //         unit_index: None,
-        //         connected_to_boundary_vertex: false,
-        //         #[cfg(feature = "incr_lp")]
-        //         cluster_weights: hashbrown::HashMap::new(),
-        //     };
+        // create vertices
+        let vertices: Vec<VertexPtr> = (0..initializer.vertex_num)
+            .map(|vertex_index| {
+                VertexPtr::new_value(
+                    Vertex {
+                        vertex_index,
+                        is_defect: false,
+                        edges: vec![],
+                        mirrored_vertices: vec![],
+                    },
+                    (vertex_index, 0),
+                )
+            })
+            .collect();
+        // set edges
+        let mut edges = Vec::<EdgePtr>::new();
+        let mut original_weights = Vec::<Rational>::with_capacity(initializer.weighted_edges.len());
+        let edge_id = edges.len() as EdgeIndex;
+        for hyperedge in initializer.weighted_edges.iter() {
+            let edge = Edge {
+                edge_index: edges.len() as EdgeIndex,
+                weight: hyperedge.weight.clone(),
+                dual_nodes: vec![],
+                vertices: hyperedge
+                    .vertices
+                    .iter()
+                    .map(|i| vertices[*i as usize].downgrade())
+                    .collect::<Vec<_>>(),
+                last_updated_time: Rational::zero(),
+                growth_at_last_updated_time: Rational::zero(),
+                grow_rate: Rational::zero(),
+                unit_index: None,
+                connected_to_boundary_vertex: false,
+                #[cfg(feature = "incr_lp")]
+                cluster_weights: hashbrown::HashMap::new(),
+            };
 
-        //     original_weights.push(edge.weight.clone());
+            original_weights.push(edge.weight.clone());
 
-        //     let edge_ptr = EdgePtr::new_value(edge);
+            let edge_ptr = EdgePtr::new_value(edge, (edge_id, 0));
 
-        //     for &vertex_index in hyperedge.vertices.iter() {
-        //         vertices[vertex_index as usize].write().edges.push(edge_ptr.downgrade());
-        //     }
+            for &vertex_index in hyperedge.vertices.iter() {
+                vertices[vertex_index as usize].write().edges.push(edge_ptr.downgrade());
+            }
 
-        //     edges.push(edge_ptr);
-        // }
-        // Self {
-        //     vertices,
-        //     edges,
-        //     obstacle_queue: Queue::default(),
-        //     global_time: ArcManualSafeLock::new_value(Rational::zero()),
-        //     mode: DualModuleMode::default(),
-        //     tuning_start_time: None,
-        //     total_tuning_time: None,
-        //     negative_weight_sum: Default::default(),
-        //     negative_edges: Default::default(),
-        //     flip_vertices: Default::default(),
-        //     original_weights,
-        //     vertex_num: initializer.vertex_num,
-        //     edge_num: initializer.weighted_edges.len(),
-        //     all_mirrored_vertices: vec![],
-        //     unit_active: ArcManualSafeLock::new_value(false),
-        // }
+            edges.push(edge_ptr);
+        }
+        Self {
+            vertices,
+            edges,
+            obstacle_queue: Queue::default(),
+            global_time: ArcManualSafeLock::new_value(Rational::zero(), (0, 0)),
+            mode: DualModuleMode::default(),
+            tuning_start_time: None,
+            total_tuning_time: None,
+            negative_weight_sum: Default::default(),
+            negative_edges: Default::default(),
+            flip_vertices: Default::default(),
+            original_weights,
+            vertex_num: initializer.vertex_num,
+            edge_num: initializer.weighted_edges.len(),
+            all_mirrored_vertices: vec![],
+            unit_active: ArcManualSafeLock::new_value(false, (0, 0)),
+        }
     }
 
     /// clear all growth and existing dual nodes

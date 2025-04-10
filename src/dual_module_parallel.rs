@@ -1288,261 +1288,261 @@ where
     // this helps me to reduce the time complexity of copying all the nodes from one interface to the other during fusion
     pub fn bfs_grow(&self, length: Rational) {
         let mut dual_module_unit = self.write();
-        if dual_module_unit.enable_parallel_execution {
-            // println!("enable parallel execution");
-            // implementation using rayon without locks
-            // early terminate if no active dual nodes in this partition unit
-            // if !self.has_active_node {
-            //     return;
-            // }
-            // println!("bfs grow");
+        // if dual_module_unit.enable_parallel_execution {
+        //     // println!("enable parallel execution");
+        //     // implementation using rayon without locks
+        //     // early terminate if no active dual nodes in this partition unit
+        //     // if !self.has_active_node {
+        //     //     return;
+        //     // }
+        //     // println!("bfs grow");
 
-            // dual_module_unit.serial_module.grow(length.clone());
-            // drop(dual_module_unit);
-            // let dual_module_unit = self.read_recursive();
+        //     // dual_module_unit.serial_module.grow(length.clone());
+        //     // drop(dual_module_unit);
+        //     // let dual_module_unit = self.read_recursive();
 
-            // // could potentially use rayon to optimize it
-            // // implement a breadth first search to grow all connected (fused) neighbors
-            // let mut queue = VecDeque::new();
-            // let mut visited = BTreeSet::new();
-            // visited.insert(self.clone());
-            // queue.push_back(self.clone());
-            // drop(dual_module_unit);
+        //     // // could potentially use rayon to optimize it
+        //     // // implement a breadth first search to grow all connected (fused) neighbors
+        //     // let mut queue = VecDeque::new();
+        //     // let mut visited = BTreeSet::new();
+        //     // visited.insert(self.clone());
+        //     // queue.push_back(self.clone());
+        //     // drop(dual_module_unit);
 
-            // while let Some(node) = {
-            //     queue.pop_front()
-            // } {
-            //     let neighbors = &node.read_recursive().adjacent_parallel_units;
+        //     // while let Some(node) = {
+        //     //     queue.pop_front()
+        //     // } {
+        //     //     let neighbors = &node.read_recursive().adjacent_parallel_units;
 
-            //     neighbors.par_iter().for_each(|neighbor| {
-            //         if !visited.contains(&neighbor) {
-            //             neighbor.write().serial_module.grow(length.clone());
-            //             visited.insert(neighbor.clone());
-            //             queue.push_back(neighbor.clone());
-            //         }
-            //     });
-            // }
+        //     //     neighbors.par_iter().for_each(|neighbor| {
+        //     //         if !visited.contains(&neighbor) {
+        //     //             neighbor.write().serial_module.grow(length.clone());
+        //     //             visited.insert(neighbor.clone());
+        //     //             queue.push_back(neighbor.clone());
+        //     //         }
+        //     //     });
+        //     // }
 
-            // implementation using rayon with locks
-            // early terminate if no active dual nodes in this partition unit
-            // if !self.has_active_node {
-            //     return;
-            // }
-            // println!("bfs grow");
+        //     // implementation using rayon with locks
+        //     // early terminate if no active dual nodes in this partition unit
+        //     // if !self.has_active_node {
+        //     //     return;
+        //     // }
+        //     // println!("bfs grow");
 
-            dual_module_unit.serial_module.grow(length.clone());
-            drop(dual_module_unit);
-            let dual_module_unit = self.read_recursive();
+        //     dual_module_unit.serial_module.grow(length.clone());
+        //     drop(dual_module_unit);
+        //     let dual_module_unit = self.read_recursive();
 
-            // could potentially use rayon to optimize it
-            // implement a breadth first search to grow all connected (fused) neighbors
-            let queue = Arc::new(Mutex::new(VecDeque::new()));
-            let visited = Arc::new(Mutex::new(BTreeSet::new()));
+        //     // could potentially use rayon to optimize it
+        //     // implement a breadth first search to grow all connected (fused) neighbors
+        //     let queue = Arc::new(Mutex::new(VecDeque::new()));
+        //     let visited = Arc::new(Mutex::new(BTreeSet::new()));
 
-            let mut visited_lock = visited.lock().unwrap();
-            visited_lock.insert(self.downgrade());
-            drop(visited_lock);
+        //     let mut visited_lock = visited.lock().unwrap();
+        //     visited_lock.insert(self.downgrade());
+        //     drop(visited_lock);
 
-            let mut queue_lock = queue.lock().unwrap();
-            queue_lock.push_back(self.downgrade());
-            drop(queue_lock);
-            drop(dual_module_unit);
+        //     let mut queue_lock = queue.lock().unwrap();
+        //     queue_lock.push_back(self.downgrade());
+        //     drop(queue_lock);
+        //     drop(dual_module_unit);
 
-            while let Some(node) = {
-                let mut queue_lock = queue.lock().unwrap();
-                queue_lock.pop_front()
-            } {
-                let neighbors_ptr = &node.upgrade_force();
-                let neighbors = &neighbors_ptr.read_recursive().adjacent_parallel_units;
+        //     while let Some(node) = {
+        //         let mut queue_lock = queue.lock().unwrap();
+        //         queue_lock.pop_front()
+        //     } {
+        //         let neighbors_ptr = &node.upgrade_force();
+        //         let neighbors = &neighbors_ptr.read_recursive().adjacent_parallel_units;
 
-                neighbors.par_iter().for_each(|neighbor| {
-                    let mut visited_lock = visited.lock().unwrap();
-                    let mut queue_lock = queue.lock().unwrap();
+        //         neighbors.par_iter().for_each(|neighbor| {
+        //             let mut visited_lock = visited.lock().unwrap();
+        //             let mut queue_lock = queue.lock().unwrap();
 
-                    if !visited_lock.contains(&neighbor) {
-                        if *neighbor
-                            .upgrade_force()
-                            .read_recursive()
-                            .serial_module
-                            .unit_active
-                            .read_recursive()
-                        {
-                            neighbor.upgrade_force().write().serial_module.grow(length.clone());
-                            queue_lock.push_back(neighbor.clone());
-                        }
-                        visited_lock.insert(neighbor.clone());
-                    }
-                });
+        //             if !visited_lock.contains(&neighbor) {
+        //                 if *neighbor
+        //                     .upgrade_force()
+        //                     .read_recursive()
+        //                     .serial_module
+        //                     .unit_active
+        //                     .read_recursive()
+        //                 {
+        //                     neighbor.upgrade_force().write().serial_module.grow(length.clone());
+        //                     queue_lock.push_back(neighbor.clone());
+        //                 }
+        //                 visited_lock.insert(neighbor.clone());
+        //             }
+        //         });
+        //     }
+        // } else {
+        //  implementation using sequential for loop, we need to compare the resolve time of this and the version using rayon
+        dual_module_unit.serial_module.grow(length.clone());
+        drop(dual_module_unit);
+        let dual_module_unit = self.read_recursive();
+        // could potentially use rayon to optimize it
+        // implement a breadth first search to grow all connected (fused) neighbors
+        let mut frontier: VecDeque<_> = VecDeque::new();
+        let mut visited = BTreeSet::new();
+        // println!("index: {:?}", self.unit_index);
+        // visited.insert(Arc::as_ptr(self.ptr()));
+        visited.insert(self.downgrade());
+        // println!("self pointer: {:?}", Arc::as_ptr(self.ptr()));
+
+        for neighbor in dual_module_unit.adjacent_parallel_units.iter() {
+            // println!("first neighbor pointer: {:?}", Arc::as_ptr(neighbor.ptr()));
+            frontier.push_front(neighbor.clone());
+        }
+
+        drop(dual_module_unit);
+        while !frontier.is_empty() {
+            // println!("frontier len: {:?}", frontier.len());
+            let temp = frontier.pop_front().unwrap();
+            // println!("frontier len: {:?}", frontier.len());
+
+            if *temp
+                .upgrade_force()
+                .read_recursive()
+                .serial_module
+                .unit_active
+                .read_recursive()
+            {
+                temp.upgrade_force().write().serial_module.grow(length.clone());
             }
-        } else {
-            //  implementation using sequential for loop, we need to compare the resolve time of this and the version using rayon
-            dual_module_unit.serial_module.grow(length.clone());
-            drop(dual_module_unit);
-            let dual_module_unit = self.read_recursive();
-            // could potentially use rayon to optimize it
-            // implement a breadth first search to grow all connected (fused) neighbors
-            let mut frontier: VecDeque<_> = VecDeque::new();
-            let mut visited = BTreeSet::new();
-            // println!("index: {:?}", self.unit_index);
-            // visited.insert(Arc::as_ptr(self.ptr()));
-            visited.insert(self.downgrade());
-            // println!("self pointer: {:?}", Arc::as_ptr(self.ptr()));
 
-            for neighbor in dual_module_unit.adjacent_parallel_units.iter() {
-                // println!("first neighbor pointer: {:?}", Arc::as_ptr(neighbor.ptr()));
-                frontier.push_front(neighbor.clone());
-            }
+            // visited.insert(Arc::as_ptr(temp.ptr()));
+            visited.insert(temp.clone());
+            // println!("temp pointer: {:?}",  Arc::as_ptr(temp.ptr()));
+            // println!("temp index: {:?}", temp.unit_index);
+            // println!("len: {:?}", temp.adjacent_parallel_units.len());
 
-            drop(dual_module_unit);
-            while !frontier.is_empty() {
-                // println!("frontier len: {:?}", frontier.len());
-                let temp = frontier.pop_front().unwrap();
-                // println!("frontier len: {:?}", frontier.len());
-
-                if *temp
-                    .upgrade_force()
-                    .read_recursive()
-                    .serial_module
-                    .unit_active
-                    .read_recursive()
-                {
-                    temp.upgrade_force().write().serial_module.grow(length.clone());
+            for neighbor in temp.upgrade_force().read_recursive().adjacent_parallel_units.iter() {
+                // println!("hihi");
+                // println!("neighbor pointer: {:?}", Arc::as_ptr(neighbor.ptr()));
+                // if !visited.contains(&Arc::as_ptr(neighbor.ptr())) {
+                //     frontier.push_back(neighbor.clone());
+                // }
+                if !visited.contains(neighbor) {
+                    frontier.push_back(neighbor.clone());
                 }
-
-                // visited.insert(Arc::as_ptr(temp.ptr()));
-                visited.insert(temp.clone());
-                // println!("temp pointer: {:?}",  Arc::as_ptr(temp.ptr()));
-                // println!("temp index: {:?}", temp.unit_index);
-                // println!("len: {:?}", temp.adjacent_parallel_units.len());
-
-                for neighbor in temp.upgrade_force().read_recursive().adjacent_parallel_units.iter() {
-                    // println!("hihi");
-                    // println!("neighbor pointer: {:?}", Arc::as_ptr(neighbor.ptr()));
-                    // if !visited.contains(&Arc::as_ptr(neighbor.ptr())) {
-                    //     frontier.push_back(neighbor.clone());
-                    // }
-                    if !visited.contains(neighbor) {
-                        frontier.push_back(neighbor.clone());
-                    }
-                    // println!("frontier len: {:?}", frontier.len());
-                }
-                drop(temp);
-                // println!("after for loop");
+                // println!("frontier len: {:?}", frontier.len());
             }
+            drop(temp);
+            // println!("after for loop");
+            // }
         }
     }
 
     fn bfs_report(&self, dual_report: &mut DualReport) {
         let mut dual_module_unit = self.write();
-        if dual_module_unit.enable_parallel_execution {
-            let serial_module_dual_report = dual_module_unit.serial_module.report();
-            // println!("serial_module group max_update length: {:?}", serial_module_group_max_update_length);
-            drop(dual_module_unit);
-            let dual_module_unit = self.read_recursive();
-            dual_report.extend(serial_module_dual_report);
+        // if dual_module_unit.enable_parallel_execution {
+        //     let serial_module_dual_report = dual_module_unit.serial_module.report();
+        //     // println!("serial_module group max_update length: {:?}", serial_module_group_max_update_length);
+        //     drop(dual_module_unit);
+        //     let dual_module_unit = self.read_recursive();
+        //     dual_report.extend(serial_module_dual_report);
 
-            // implement a breadth first search to grow all connected (fused) neighbors
-            let queue = Arc::new(Mutex::new(VecDeque::new()));
-            let visited = Arc::new(Mutex::new(BTreeSet::new()));
+        //     // implement a breadth first search to grow all connected (fused) neighbors
+        //     let queue = Arc::new(Mutex::new(VecDeque::new()));
+        //     let visited = Arc::new(Mutex::new(BTreeSet::new()));
 
-            let mut visited_lock = visited.lock().unwrap();
-            visited_lock.insert(self.downgrade());
-            drop(visited_lock);
+        //     let mut visited_lock = visited.lock().unwrap();
+        //     visited_lock.insert(self.downgrade());
+        //     drop(visited_lock);
 
-            let mut queue_lock = queue.lock().unwrap();
-            queue_lock.push_back(self.downgrade());
-            drop(queue_lock);
-            drop(dual_module_unit);
+        //     let mut queue_lock = queue.lock().unwrap();
+        //     queue_lock.push_back(self.downgrade());
+        //     drop(queue_lock);
+        //     drop(dual_module_unit);
 
-            let local_dual_report = Arc::new(Mutex::new(DualReport::new()));
-            while let Some(node) = {
-                let mut queue_lock = queue.lock().unwrap();
-                queue_lock.pop_front()
-            } {
-                let neighbors_ptr = node.upgrade_force();
-                let neighbors = &neighbors_ptr.read_recursive().adjacent_parallel_units;
+        //     let local_dual_report = Arc::new(Mutex::new(DualReport::new()));
+        //     while let Some(node) = {
+        //         let mut queue_lock = queue.lock().unwrap();
+        //         queue_lock.pop_front()
+        //     } {
+        //         let neighbors_ptr = node.upgrade_force();
+        //         let neighbors = &neighbors_ptr.read_recursive().adjacent_parallel_units;
 
-                neighbors.par_iter().for_each(|neighbor| {
-                    let mut visited_lock = visited.lock().unwrap();
-                    let mut queue_lock = queue.lock().unwrap();
+        //         neighbors.par_iter().for_each(|neighbor| {
+        //             let mut visited_lock = visited.lock().unwrap();
+        //             let mut queue_lock = queue.lock().unwrap();
 
-                    if !visited_lock.contains(&neighbor) {
-                        if *neighbor
-                            .upgrade_force()
-                            .read_recursive()
-                            .serial_module
-                            .unit_active
-                            .read_recursive()
-                        {
-                            let serial_module_dual_report = neighbor.upgrade_force().write().serial_module.report();
-                            local_dual_report.lock().unwrap().extend(serial_module_dual_report);
-                            queue_lock.push_back(neighbor.clone());
-                        }
+        //             if !visited_lock.contains(&neighbor) {
+        //                 if *neighbor
+        //                     .upgrade_force()
+        //                     .read_recursive()
+        //                     .serial_module
+        //                     .unit_active
+        //                     .read_recursive()
+        //                 {
+        //                     let serial_module_dual_report = neighbor.upgrade_force().write().serial_module.report();
+        //                     local_dual_report.lock().unwrap().extend(serial_module_dual_report);
+        //                     queue_lock.push_back(neighbor.clone());
+        //                 }
 
-                        visited_lock.insert(neighbor.clone());
+        //                 visited_lock.insert(neighbor.clone());
+        //             }
+        //         });
+        //     }
+
+        //     let final_local_dual_report = local_dual_report.lock().unwrap();
+        //     dual_report.extend(final_local_dual_report.clone());
+        // } else {
+        // implementation with sequential iteration of neighbors
+        // early terminate if no active dual nodes anywhere in the descendant
+
+        // println!("bfs_compute_max_update_length");
+
+        let serial_module_dual_report = dual_module_unit.serial_module.report();
+        // println!("serial_module group max_update length: {:?}", serial_module_group_max_update_length);
+        drop(dual_module_unit);
+        let dual_module_unit = self.read_recursive();
+
+        dual_report.extend(serial_module_dual_report);
+
+        // we need to find the maximum update length of all connected (fused) units
+        // so we run a bfs, we could potentially use rayon to optimize it
+        let mut frontier: VecDeque<_> = VecDeque::new();
+        let mut visited = BTreeSet::new();
+        visited.insert(self.downgrade());
+        // println!("self pointer: {:?}", Arc::as_ptr(self.ptr()));
+
+        for neighbor in dual_module_unit.adjacent_parallel_units.iter() {
+            // println!("first neighbor pointer: {:?}", Weak::as_ptr(neighbor.ptr()));
+            frontier.push_front(neighbor.clone());
+        }
+
+        while !frontier.is_empty() {
+            // println!("frontier len: {:?}", frontier.len());
+            let temp = frontier.pop_front().unwrap();
+            // println!("frontier len: {:?}", frontier.len());
+            if *temp
+                .upgrade_force()
+                .read_recursive()
+                .serial_module
+                .unit_active
+                .read_recursive()
+            {
+                let serial_module_dual_report = temp.upgrade_force().write().serial_module.report();
+                // println!("temp serial_module_group_max_update_length: {:?}", serial_module_group_max_update_length);
+                dual_report.extend(serial_module_dual_report);
+                visited.insert(temp.clone());
+                for neighbor in temp.upgrade_force().read_recursive().adjacent_parallel_units.iter() {
+                    // println!("hihi");
+                    // println!("neighbor pointer: {:?}", Arc::as_ptr(neighbor.ptr()));
+                    if !visited.contains(neighbor) {
+                        frontier.push_back(neighbor.clone());
                     }
-                });
-            }
-
-            let final_local_dual_report = local_dual_report.lock().unwrap();
-            dual_report.extend(final_local_dual_report.clone());
-        } else {
-            // implementation with sequential iteration of neighbors
-            // early terminate if no active dual nodes anywhere in the descendant
-
-            // println!("bfs_compute_max_update_length");
-
-            let serial_module_dual_report = dual_module_unit.serial_module.report();
-            // println!("serial_module group max_update length: {:?}", serial_module_group_max_update_length);
-            drop(dual_module_unit);
-            let dual_module_unit = self.read_recursive();
-
-            dual_report.extend(serial_module_dual_report);
-
-            // we need to find the maximum update length of all connected (fused) units
-            // so we run a bfs, we could potentially use rayon to optimize it
-            let mut frontier: VecDeque<_> = VecDeque::new();
-            let mut visited = BTreeSet::new();
-            visited.insert(self.downgrade());
-            // println!("self pointer: {:?}", Arc::as_ptr(self.ptr()));
-
-            for neighbor in dual_module_unit.adjacent_parallel_units.iter() {
-                // println!("first neighbor pointer: {:?}", Weak::as_ptr(neighbor.ptr()));
-                frontier.push_front(neighbor.clone());
-            }
-
-            while !frontier.is_empty() {
-                // println!("frontier len: {:?}", frontier.len());
-                let temp = frontier.pop_front().unwrap();
-                // println!("frontier len: {:?}", frontier.len());
-                if *temp
-                    .upgrade_force()
-                    .read_recursive()
-                    .serial_module
-                    .unit_active
-                    .read_recursive()
-                {
-                    let serial_module_dual_report = temp.upgrade_force().write().serial_module.report();
-                    // println!("temp serial_module_group_max_update_length: {:?}", serial_module_group_max_update_length);
-                    dual_report.extend(serial_module_dual_report);
-                    visited.insert(temp.clone());
-                    for neighbor in temp.upgrade_force().read_recursive().adjacent_parallel_units.iter() {
-                        // println!("hihi");
-                        // println!("neighbor pointer: {:?}", Arc::as_ptr(neighbor.ptr()));
-                        if !visited.contains(neighbor) {
-                            frontier.push_back(neighbor.clone());
-                        }
-                        // println!("frontier len: {:?}", frontier.len());
-                    }
-                } else {
-                    visited.insert(temp.clone());
+                    // println!("frontier len: {:?}", frontier.len());
                 }
-
-                // println!("temp pointer: {:?}",  Arc::as_ptr(temp.ptr()));
-
-                drop(temp);
-                // println!("after for loop");
+            } else {
+                visited.insert(temp.clone());
             }
+
+            // println!("temp pointer: {:?}",  Arc::as_ptr(temp.ptr()));
+
+            drop(temp);
+            // println!("after for loop");
+            // }
         }
     }
 }
