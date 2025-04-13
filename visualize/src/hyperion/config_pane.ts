@@ -111,7 +111,7 @@ export class Config {
         if (this.config_prop.config_setters != undefined) {
             const config_setters = JSON.parse(JSON.stringify(this.config_prop.config_setters))
             for (const [key, value] of Object.entries(config_setters)) {
-                console.log(set_deep_value(this, key, value))
+                set_deep_value(this, key, value)
             }
         }
         // by default showing the most recent snapshot; user can move back if they want
