@@ -1,6 +1,5 @@
 import { Vector3, type Intersection, Quaternion } from 'three'
 import { assert, parse_rust_bigint } from '@/util'
-import { assign } from '@recursive/assign'
 
 export const zero_vector = new Vector3(0, 0, 0)
 export const unit_up_vector = new Vector3(0, 1, 0)
@@ -183,37 +182,16 @@ export class ConfigProps {
     visualizer_config: any = undefined
     initial_aspect_ratio?: number = undefined
     snapshot_index?: number = undefined
-    __children_setters__?: object[] = undefined
+    config_setters?: object = undefined
 }
 
-export function recursive_config_set_children (config: any, __children_setters__: any[]) {
-    for (const setter of __children_setters__) {
-        let found = false
-        for (const child of config.children) {
-            let matched = false
-            if (setter.title != undefined && child.title == setter.title) {
-                matched = true
-            }
-            if (setter.label != undefined && child.label == setter.label) {
-                matched = true
-            }
-            if (matched) {
-                const setter_assigner = { ...setter }
-                if (setter.__children_setters__ != undefined) {
-                    delete setter_assigner.__children_setters__
-                }
-                assign(child, setter_assigner)
-                if (setter.__children_setters__ != undefined) {
-                    recursive_config_set_children(child, setter.__children_setters__)
-                }
-                found = true
-                break
-            }
-        }
-        if (!found) {
-            console.error(`Child ${setter.title}/${setter.label} not found in config`)
-        }
+// https://stackoverflow.com/questions/8817394/javascript-get-deep-value-from-object-by-passing-path-to-it-as-string/8817473
+export function set_deep_value (obj: any, path: string, value: any) {
+    const paths = path.split('.')
+    for (let i = 0; i < paths.length - 1; i++) {
+        obj = obj[paths[i]]
     }
+    obj[paths[paths.length - 1]] = value
 }
 
 /*

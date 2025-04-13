@@ -54,21 +54,11 @@
             {
                 // show_config: false,
                 full_screen: true,
-                __children_setters__: [
-                    {
-                        title: "Camera",
-                        __children_setters__: [
-                            {
-                                label: "zoom",
-                                binding: { "value": 0.3 }
-                            },
-                            {
-                                label: "position",
-                                binding: { "value": { "x": 261.767288897019, "y": 393.3471779458625, "z": 881.337553985719 } }
-                            }
-                        ]
-                    }
-                ]
+                config_setters: {
+                    "edge.radius": 0.05,
+                    "camera.zoom": 0.3,
+                    "camera.position": { "x": 261.767288897019, "y": 393.3471779458625, "z": 881.337553985719 },
+                },
             }
             a = {
                 "disabled": false, "hidden": false, "children":

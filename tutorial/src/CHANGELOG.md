@@ -78,4 +78,4 @@ exposed `hyperion_exposed` variable in visualization tool so that user can progr
 
 ## 0.2.10 - 2025-04-02
 
-- add `__children_setters__` in frontend configuration for more flexible config
+- add `config_setters` in frontend configuration for more flexible config
