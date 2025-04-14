@@ -1,4 +1,4 @@
-import os, math, pytest
+import os, math, pytest, sys
 
 """ force import either mwpf or mwpf_rational """
 # import mwpf
@@ -8,9 +8,30 @@ import os, math, pytest
 if "mwpf" not in globals():
     try:
         import mwpf
-    except ImportError:
-        print("mwpf package not available, use mwpf_rational instead")
+    except ImportError as e:
+        print(e)
+        print("mwpf package not available, trying others...")
+
+if "mwpf" not in globals():
+    try:
         import mwpf_rational as mwpf
+    except ImportError as e:
+        print(e)
+        print("mwpf_rational package not available, trying others...")
+
+if "mwpf" not in globals():
+    try:
+        import mwpf_incr as mwpf
+    except ImportError as e:
+        print(e)
+        print("mwpf_incr package not available, trying others...")
+
+if "mwpf" not in globals():
+    try:
+        import mwpf_fast as mwpf
+    except ImportError as e:
+        print(e)
+        print("mwpf_fast package not available, trying others...")
 
 
 def circle_positions(n: int):

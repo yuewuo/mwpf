@@ -2,7 +2,6 @@ use super::interface::*;
 use super::visualize::*;
 use crate::util::*;
 use derivative::Derivative;
-use std::collections::BTreeSet;
 
 use crate::dual_module_pq::{EdgeWeak, VertexPtr, VertexWeak};
 
@@ -26,7 +25,7 @@ impl<M: MatrixView> Tight<M> {
     pub fn from_base(base: M) -> Self {
         let mut value = Self {
             base,
-            tight_edges: BTreeSet::new(),
+            tight_edges: FastIterSet::new(),
             is_var_indices_outdated: true,
             var_indices: vec![],
         };

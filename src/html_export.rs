@@ -21,6 +21,7 @@ lazy_static! {
 }
 
 const WINDOW_HYPERION_VISUAL: &str = concat!("window.hyperion_visual_", env!("MWPF_BUILD_RS_TIMESTAMP"));
+const HYPERION_VISUAL_ID: &str = concat!("hyperion_visual_compressed_js_caller_", env!("MWPF_BUILD_RS_TIMESTAMP"));
 
 #[cfg(feature = "embed_visualizer")]
 lazy_static! {
@@ -36,8 +37,10 @@ lazy_static! {
         let decoded_index = library_body
             .find(decoded_flag)
             .unwrap_or_else(|| panic!("begin flag {} not found in content", decoded_flag));
-        let inserted_code =
-            format!(";module_code = module_code.replaceAll('window.hyperion_visual', '{WINDOW_HYPERION_VISUAL}');");
+        let inserted_code = format!(
+            ";module_code = module_code.replaceAll('window.hyperion_visual', '{WINDOW_HYPERION_VISUAL}')
+                .replaceAll('hyperion_visual_compressed_js_caller', '{HYPERION_VISUAL_ID}');"
+        );
         format!(
             "{}{}{}",
             &library_body[0..decoded_index],
@@ -47,7 +50,7 @@ lazy_static! {
     };
 }
 
-#[cfg_attr(feature = "python_binding", pyclass)]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf"))]
 pub struct HTMLExport {}
 
 impl HTMLExport {
@@ -138,7 +141,7 @@ impl HTMLExport {
         *HYPERION_VISUAL_JUPYTER_LOADED.lock().unwrap() = true;
         let script_body = Self::get_library_body().unwrap();
         let script_block = format!(
-            r#"<div><span style="color: white; font-size: 8px; padding: 4px; background-color: rgba(36, 110, 36); border-radius: 4px;">MWPF visualization library embedded ({}kB)</span></div><script type="module" id='hyperion_visual_compressed_js_caller'>
+            r#"<div><span style="color: white; font-size: 8px; padding: 4px; background-color: rgba(36, 110, 36); border-radius: 4px;">MWPF visualization library embedded ({}kB)</span></div><script type="module" id='{HYPERION_VISUAL_ID}'>
 /* HYPERION_VISUAL_MODULE_CODE_BEGIN */
 {script_body}
 /* HYPERION_VISUAL_MODULE_CODE_END */
@@ -146,7 +149,7 @@ impl HTMLExport {
             script_body.len() / 1024
         );
         Python::with_gil(|py| -> PyResult<()> {
-            let display = PyModule::import_bound(py, "IPython.display")?;
+            let display = PyModule::import(py, "IPython.display")?;
             display.call_method1("display", (display.call_method1("HTML", (script_block,))?,))?;
             Ok(())
         })
@@ -170,7 +173,7 @@ impl HTMLExport {
         };
         let div_block = format!(r#"<div id="{div_id}" style="width: auto; height: min(max(60vh, 400px), 100vw);"></div>"#);
         Python::with_gil(|py| -> PyResult<()> {
-            let display = PyModule::import_bound(py, "IPython.display")?;
+            let display = PyModule::import(py, "IPython.display")?;
             display.call_method1("display", (display.call_method1("HTML", (div_block,))?,))?;
             Ok(())
         })
@@ -238,7 +241,7 @@ impl HTMLExport {
         "###
         );
         Python::with_gil(|py| -> PyResult<()> {
-            let display = PyModule::import_bound(py, "IPython.display")?;
+            let display = PyModule::import(py, "IPython.display")?;
             display.call_method1("display", (display.call_method1("HTML", (js_code,))?,))?;
             Ok(())
         })
@@ -263,7 +266,7 @@ impl HTMLExport {
         let div_block =
             format!(r#"<div id="{div_id}" style="font-family: monospace; white-space: pre;">{alternate_text}</div>"#);
         Python::with_gil(|py| -> PyResult<()> {
-            let display = PyModule::import_bound(py, "IPython.display")?;
+            let display = PyModule::import(py, "IPython.display")?;
             display.call_method1("display", (display.call_method1("HTML", (div_block,))?,))?;
             Ok(())
         })
@@ -309,7 +312,7 @@ impl HTMLExport {
         "###
         );
         Python::with_gil(|py| -> PyResult<()> {
-            let display = PyModule::import_bound(py, "IPython.display")?;
+            let display = PyModule::import(py, "IPython.display")?;
             display.call_method1("display", (display.call_method1("HTML", (js_code,))?,))?;
             Ok(())
         })

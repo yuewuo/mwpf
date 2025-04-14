@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Info } from '../info_pane'
-import { type EdgeRingState, type EdgeTubeState, type VertexState, compute_edge_to_dual_indices, compute_vertex_to_dual_indices, compute_vertex_incident_edges } from '../hyperion'
+import { compute_edge_to_dual_indices, compute_vertex_to_dual_indices, compute_vertex_incident_edges } from '../hyperion'
 import Indices from './Indices.vue'
 import EdgeDualSum from '../equations/EdgeDualSum.vue'
 import { display_nominator } from '@/util'
@@ -15,11 +15,11 @@ const props = defineProps<Props>()
 const config = props.info.config
 
 const vi = computed(() => {
-    const instanceId = config.data.selected?.instanceId
-    if (instanceId == undefined) return
-    const vertex_state = config.data.selected?.object?.userData?.vecData?.[instanceId]
-    if (vertex_state?.type != 'vertex') return
-    return (vertex_state as VertexState).vi
+    const selected = config.data.selected
+    if (selected?.type == 'vertex') {
+        return selected.vi as number
+    }
+    return undefined
 })
 
 const vertex = computed(() => {
@@ -52,11 +52,11 @@ const vertex_involving_nodes = computed(() => {
 })
 
 const ei = computed(() => {
-    const instanceId = config.data.selected?.instanceId
-    if (instanceId == undefined) return
-    const edge_state = config.data.selected?.object?.userData?.vecData?.[instanceId]
-    if (edge_state?.type != 'edge') return
-    return (edge_state as EdgeTubeState | EdgeRingState).ei
+    const selected = config.data.selected
+    if (selected?.type == 'edge') {
+        return selected.ei as number
+    }
+    return undefined
 })
 
 const edge = computed(() => {
@@ -98,7 +98,7 @@ const edge_contributing_nodes = computed(() => {
                     </mrow>
                     <mo>=</mo>
                 </math>
-                <Indices :titleWidth="0" :width="345" :indices="vertex_incident_edges[vi]"></Indices>
+                <Indices :titleWidth="0" :width="345" :indices="vertex_incident_edges[vi]" :info="props.info" index-type="edge"></Indices>
             </div>
             <div class="title" style="margin-top: 10px">Dual Variables involving Vertex {{ vi }}</div>
             <div style="margin-top: 10px"></div>
@@ -114,7 +114,7 @@ const edge_contributing_nodes = computed(() => {
                     <mn>)</mn>
                     <mo>=</mo>
                 </math>
-                <Indices :titleWidth="0" :width="335" :indices="edge!.v"></Indices>
+                <Indices :titleWidth="0" :width="335" :indices="edge!.v" :info="props.info" index-type="vertex"></Indices>
             </div>
             <div style="margin-top: 10px">
                 <math display="inline-block" style="font-size: 150%; math-style: normal">

@@ -4,7 +4,6 @@ use super::visualize::*;
 use crate::dual_module_pq::EdgeWeak;
 use crate::util::*;
 use derivative::Derivative;
-use std::collections::{BTreeMap, BTreeSet};
 
 use crate::dual_module_pq::{VertexPtr, VertexWeak};
 

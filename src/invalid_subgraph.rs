@@ -4,8 +4,7 @@ use crate::plugin::EchelonMatrix;
 use crate::util::*;
 use crate::{decoding_hypergraph::*, invalid_subgraph};
 use std::cmp::Ordering;
-use std::collections::hash_map::DefaultHasher;
-use std::collections::BTreeSet;
+// use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
@@ -15,7 +14,7 @@ use crate::dual_module_pq::{EdgePtr, VertexPtr};
 use crate::pointers::UnsafePtr;
 
 /// an invalid subgraph $S = (V_S, E_S)$, also store the hair $\delta(S)$
-#[derive(Clone, PartialEq, Eq, Derivative)]
+#[derive(Clone, PartialEq, Eq, Derivative, Default)]
 #[derivative(Debug)]
 pub struct InvalidSubgraph {
     /// the hash value calculated by other fields
@@ -97,7 +96,7 @@ impl InvalidSubgraph {
     }
 
     pub fn update_hash(&mut self) {
-        let mut hasher = DefaultHasher::new();
+        let mut hasher = DefaultHasher::default();
         self.vertices.hash(&mut hasher);
         self.edges.hash(&mut hasher);
         self.hair.hash(&mut hasher);
@@ -294,7 +293,7 @@ pub mod tests {
     }
 
     pub fn get_default_hash_value(object: &impl Hash) -> u64 {
-        let mut hasher = DefaultHasher::new();
+        let mut hasher = DefaultHasher::default();
         object.hash(&mut hasher);
         hasher.finish()
     }

@@ -72,4 +72,49 @@ Since I'm using Mac for development already, I can run the following command to 
 rustup target add x86_64-apple-darwin  # only once
 
 CIBW_BUILD=cp38-* MACOSX_DEPLOYMENT_TARGET=10.12 CIBW_ARCHS_MACOS=universal2 python -m cibuildwheel --output-dir target
+
+# build source distribution
+maturin sdist --output-dir target
 ```
+
+# working with HPC cluster
+
+We use unison to synchronize development folder with HPC filesystem
+
+A template of the unison configuration file is `hpc-mwpf.prf`
+
+```ini
+# Unison preferences
+label = mwpf folder on HPC Grace Yale
+root = /Users/wuyue/Documents/GitHub/mwpf
+root = ssh://yw729@grace//home/yw729/project/mwpf
+
+ignore = Regex (.*/)?node_modules(/.*)?
+ignore = Regex (.*/)?target(/.*)?
+ignore = Regex (.*/)?dist(/.*)?
+#ignore = Regex (.*/)?slurm_jobs(/.*)?
+ignore = Regex (.*/)?__pycache__(/.*)?
+ignore = Name .DS_Store
+ignore = Regex .*\.so
+
+ignore = Regex .*/slurm_jobs/.*\.jobout
+ignore = Regex .*/slurm_jobs/.*\.joberror
+
+# log actions to the terminal
+log = true
+```
+
+Then one could use `unison hpc-mwpf -auto -batch` to synchronize with the HPC environment.
+In cases where one wants to prefer one direction over another, use `unison hpc-mwpf -auto -batch -prefer /Users/wuyue/Documents/GitHub/mwpf`.
+When the number of conflicting files are small, use `unison hpc-mwpf` to manually resolve each conflict.
+
+Once in the HPC environment, one can install the mwpf Python packages by compiling from source.
+
+```sh
+make install-py
+
+# to uninstall:
+make uninstall-py
+```
+
+This is preferred over installing from pypi because it can fully utilize the optimization with `target-cpu=native`.

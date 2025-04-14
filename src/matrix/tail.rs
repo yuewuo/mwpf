@@ -2,7 +2,6 @@ use super::interface::*;
 use super::visualize::*;
 use crate::util::*;
 use derivative::Derivative;
-use std::collections::BTreeSet;
 
 use crate::dual_module_pq::{EdgeWeak, VertexPtr, VertexWeak};
 #[cfg(feature = "unsafe_pointer")]
@@ -30,7 +29,7 @@ impl<M: MatrixView> Tail<M> {
     pub fn from_base(base: M) -> Self {
         let mut value = Self {
             base,
-            tail_edges: BTreeSet::new(),
+            tail_edges: FastIterSet::new(),
             is_var_indices_outdated: true,
             var_indices: vec![],
             tail_var_indices: vec![],

@@ -1,8 +1,8 @@
 use crate::dual_module::*;
 use crate::matrix::*;
 use crate::util::*;
+
 use derivative::Derivative;
-use std::collections::BTreeSet;
 
 use crate::dual_module_pq::{EdgePtr, EdgeWeak, VertexPtr, VertexWeak};
 
@@ -16,20 +16,26 @@ pub struct Cluster {
     /// edges incident to the vertices but are not tight
     pub hair: BTreeSet<EdgePtr>,
     /// dual variables of the cluster
-    pub nodes: BTreeSet<OrderedDualNodePtr>,
+    pub nodes: FastIterSet<OrderedDualNodePtr>,
     /// parity matrix of the cluster
     #[derivative(Debug = "ignore")]
     pub parity_matrix: Tight<BasicMatrix>,
+}
+
+impl Default for Cluster {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Cluster {
     /// Create a new cluster
     pub fn new() -> Self {
         Cluster {
-            vertices: BTreeSet::new(),
-            edges: BTreeSet::new(),
-            hair: BTreeSet::new(),
-            nodes: BTreeSet::new(),
+            vertices: FastIterSet::new(),
+            edges: FastIterSet::new(),
+            hair: FastIterSet::new(),
+            nodes: FastIterSet::new(),
             parity_matrix: Tight::<BasicMatrix>::new(),
         }
     }

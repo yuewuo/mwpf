@@ -17,7 +17,7 @@ use crate::relaxer_optimizer::*;
 use crate::util::*;
 use crate::visualize::*;
 
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Instant;
@@ -55,16 +55,23 @@ pub struct PrimalModuleSerial {
     /// the time spent on resolving the obstacles
     pub time_resolve: f64,
     /// sorted clusters by affinity, only exist when needed
-    pub sorted_clusters_aff: Option<BTreeSet<ClusterAffinity>>,
+    pub sorted_clusters_aff: Option<FastIterSet<ClusterAffinity>>,
     #[cfg(feature = "incr_lp")]
     /// parameter indicating if the primal module has initialized states necessary for `incr_lp` slack calculation
     pub cluster_weights_initialized: bool,
 }
 
-#[derive(Eq, Debug)]
+#[derive(Eq, Debug, Clone, Default)]
 pub struct ClusterAffinity {
     pub cluster_ptr: PrimalClusterPtr,
     pub affinity: Affinity,
+}
+
+impl std::hash::Hash for ClusterAffinity {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.cluster_index.hash(state);
+        self.affinity.hash(state);
+    }
 }
 
 impl PartialEq for ClusterAffinity {
@@ -85,7 +92,7 @@ impl Ord for ClusterAffinity {
                     .cluster_index
                     .cmp(&other.cluster_ptr.read_recursive().cluster_index)
             }
-            other => other,
+            other => other.reverse(),
         }
     }
 }
@@ -102,6 +109,7 @@ pub enum Unionable {
     Cannot,
 }
 
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf", get_all, set_all))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PrimalModuleSerialConfig {
@@ -112,6 +120,10 @@ pub struct PrimalModuleSerialConfig {
     ///     note: this is not monitored in the searching phase because we need to ensure at least one valid solution is generated
     #[serde(default = "primal_serial_default_configs::cluster_node_limit")]
     pub cluster_node_limit: usize,
+    /// by default, we will constantly trying to solve primal problem given the tight matrix from a plugin; however, one
+    ///     might want to speed it up by disabling the feature and instead only solve primal problem once at the end
+    #[serde(default = "primal_serial_default_configs::only_solve_primal_once")]
+    pub only_solve_primal_once: bool,
 }
 
 pub mod primal_serial_default_configs {
@@ -184,7 +196,7 @@ impl std::fmt::Debug for PrimalClusterPtr {
 }
 
 impl PrimalModuleImpl for PrimalModuleSerial {
-    fn new_empty(_initializer: &SolverInitializer) -> Self {
+    fn new_empty(_initializer: &Arc<SolverInitializer>) -> Self {
         Self {
             nodes: vec![],
             clusters: vec![],
@@ -225,17 +237,21 @@ impl PrimalModuleImpl for PrimalModuleSerial {
             let node = dual_node_ptr.read_recursive();
             debug_assert!(
                 node.invalid_subgraph.edges.is_empty(),
-                "must load a fresh dual module interface, found a complex node"
+                "must load a fresh dual module interface, found a complex node; did you forget to call solver.clear()?"
             );
             debug_assert!(
                 node.invalid_subgraph.vertices.len() == 1,
-                "must load a fresh dual module interface, found invalid defect node"
+                "must load a fresh dual module interface, found invalid defect node; did you forget to call solver.clear()?"
             );
             debug_assert_eq!(
                 node.index, index,
-                "must load a fresh dual module interface, found index out of order"
+                "must load a fresh dual module interface, found index out of order; did you forget to call solver.clear()?"
             );
-            assert_eq!(node.index as usize, self.nodes.len(), "must load defect nodes in order");
+            assert_eq!(
+                node.index as usize,
+                self.nodes.len(),
+                "must load defect nodes in order, did you forget to call solver.clear()?"
+            );
             // construct cluster and its parity matrix (will be reused over all iterations)
             let primal_cluster_ptr = PrimalClusterPtr::new_value(
                 PrimalCluster {
@@ -297,10 +313,10 @@ impl PrimalModuleImpl for PrimalModuleSerial {
 
     fn resolve_tune(
         &mut self,
-        dual_report: BTreeSet<Obstacle>,
+        dual_report: FastIterSet<Obstacle>,
         interface_ptr: &DualModuleInterfacePtr,
         dual_module: &mut impl DualModuleImpl,
-    ) -> (BTreeSet<Obstacle>, bool) {
+    ) -> (FastIterSet<Obstacle>, bool) {
         let begin = Instant::now();
         let res = self.resolve_core_tune(dual_report, interface_ptr, dual_module);
         self.time_resolve += begin.elapsed().as_secs_f64();
@@ -493,6 +509,25 @@ impl PrimalModuleImpl for PrimalModuleSerial {
             plugin_manager.find_relaxer(decoding_graph, matrix, &positive_dual_variables)
         };
 
+        // Yue added 2025.1.31: also check for local minimum during the algorithm; otherwise when we increase
+        // the value of cluster_node_limit, the logical error rate may not decrease monotonically because
+        // more complicated dual solution does not necessarily mean better logical error rate. Rather, if we
+        // keep looking for smaller weighted solutions in the middle, the result is hopefully better.
+        if !self.config.only_solve_primal_once {
+            let weight_of = |edge_index: EdgeIndex| dual_module.get_edge_weight(edge_index);
+            if let Some(subgraph) = cluster.matrix.get_solution_local_minimum(weight_of) {
+                if let Some(original_subgraph) = &cluster.subgraph {
+                    let original_weight = dual_module.get_subgraph_weight(original_subgraph);
+                    let weight = dual_module.get_subgraph_weight(&subgraph);
+                    if weight < original_weight {
+                        cluster.subgraph = Some(subgraph);
+                    }
+                } else {
+                    cluster.subgraph = Some(subgraph);
+                }
+            }
+        }
+
         // if a relaxer is found, execute it and return
         if let Some(mut relaxer) = relaxer {
             #[cfg(feature = "float_lp")]
@@ -500,7 +535,7 @@ impl PrimalModuleImpl for PrimalModuleSerial {
             if cluster.relaxer_optimizer.should_optimize(&relaxer) {
                 #[cfg(not(feature = "incr_lp"))]
                 {
-                    let dual_variables: BTreeMap<Arc<InvalidSubgraph>, Rational> = cluster
+                    let dual_variables: FastIterMap<Arc<InvalidSubgraph>, Rational> = cluster
                         .nodes
                         .iter()
                         .map(|primal_node_ptr| {
@@ -544,7 +579,7 @@ impl PrimalModuleImpl for PrimalModuleSerial {
                         cluster_temp = cluster_ptr.write();
                         cluster = &mut *cluster_temp;
                     }
-                    let mut dual_variables: BTreeMap<NodeIndex, (Arc<InvalidSubgraph>, Rational)> = BTreeMap::new();
+                    let mut dual_variables: FastIterMap<NodeIndex, (Arc<InvalidSubgraph>, Rational)> = FastIterMap::new();
                     let mut participating_dual_variable_indices = hashbrown::HashSet::new();
                     for primal_node_ptr in cluster.nodes.iter() {
                         let primal_node = primal_node_ptr.read_recursive();
@@ -589,7 +624,7 @@ impl PrimalModuleImpl for PrimalModuleSerial {
                             };
                         }
                     }
-                    let edge_free_weights: BTreeMap<EdgeIndex, Rational> = dual_variables
+                    let edge_free_weights: FastIterMap<EdgeIndex, Rational> = dual_variables
                         .values()
                         .flat_map(|(invalid_subgraph, _)| invalid_subgraph.hair.iter().cloned())
                         .chain(
@@ -628,7 +663,7 @@ impl PrimalModuleImpl for PrimalModuleSerial {
             #[cfg(not(feature = "float_lp"))]
             // with rationals, it is actually usually better when always optimized
             {
-                let dual_variables: BTreeMap<Arc<InvalidSubgraph>, Rational> = cluster
+                let dual_variables: FastIterMap<Arc<InvalidSubgraph>, Rational> = cluster
                     .nodes
                     .iter()
                     .map(|primal_node_ptr| {
@@ -640,7 +675,7 @@ impl PrimalModuleImpl for PrimalModuleSerial {
                         )
                     })
                     .collect();
-                let edge_slacks: BTreeMap<EdgeIndex, Rational> = dual_variables
+                let edge_slacks: FastIterMap<EdgeIndex, Rational> = dual_variables
                     .keys()
                     .flat_map(|invalid_subgraph: &Arc<InvalidSubgraph>| invalid_subgraph.hair.iter().cloned())
                     .chain(
@@ -662,7 +697,7 @@ impl PrimalModuleImpl for PrimalModuleSerial {
                 }
             }
 
-            for (invalid_subgraph, grow_rate) in relaxer.get_direction() {
+            for (invalid_subgraph, grow_rate) in relaxer.get_direction().iter() {
                 if let Some((existing, dual_node_ptr)) =
                     interface_ptr.find_or_create_node_tune(invalid_subgraph, dual_module, cluster.partition_id)
                 {
@@ -703,7 +738,7 @@ impl PrimalModuleImpl for PrimalModuleSerial {
     /// update the sorted clusters_aff, should be None to start with
     fn update_sorted_clusters_aff<D: DualModuleImpl>(&mut self, dual_module: &mut D) {
         let pending_clusters = self.pending_clusters();
-        let mut sorted_clusters_aff = BTreeSet::default();
+        let mut sorted_clusters_aff = FastIterSet::default();
 
         for cluster_weak in pending_clusters.iter() {
             let cluster_ptr = cluster_weak.upgrade_force();
@@ -719,7 +754,7 @@ impl PrimalModuleImpl for PrimalModuleSerial {
     }
 
     /// consume the sorted_clusters_aff
-    fn get_sorted_clusters_aff(&mut self) -> BTreeSet<ClusterAffinity> {
+    fn get_sorted_clusters_aff(&mut self) -> FastIterSet<ClusterAffinity> {
         self.sorted_clusters_aff.take().unwrap()
     }
 
@@ -1085,7 +1120,7 @@ impl PrimalModuleSerial {
     // returns (obstacles_needing_to_be_resolved, should_grow)
     fn resolve_core_tune(
         &mut self,
-        dual_report: BTreeSet<Obstacle>,
+        dual_report: FastIterSet<Obstacle>,
         interface_ptr: &DualModuleInterfacePtr,
         dual_module: &mut impl DualModuleImpl,
     ) -> (BTreeSet<Obstacle>, bool) {
@@ -1142,7 +1177,7 @@ impl PrimalModuleSerial {
             *self.plugin_count.write() = 0; // force only the first plugin
         }
         let mut all_solved = true;
-        let mut dual_node_deltas = BTreeMap::new();
+        let mut dual_node_deltas = FastIterMap::new();
         let mut optimizer_result = OptimizerResult::default();
         for cluster_ptr in active_clusters.iter() {
             let (solved, other) = self.resolve_cluster_tune(cluster_ptr, interface_ptr, dual_module, &mut dual_node_deltas);
@@ -1160,9 +1195,9 @@ impl PrimalModuleSerial {
     }
 
     pub fn print_clusters(&self) {
-        let mut vertices = BTreeSet::new();
-        let mut edges = BTreeSet::new();
-        let mut invalid_subgraphs: BTreeSet<Arc<InvalidSubgraph>> = BTreeSet::new();
+        let mut vertices = FastIterSet::new();
+        let mut edges = FastIterSet::new();
+        let mut invalid_subgraphs: FastIterSet<Arc<InvalidSubgraph>> = FastIterSet::new();
         for cluster in self.clusters.iter() {
             let cluster = cluster.read_recursive();
             if cluster.nodes.is_empty() {
@@ -1464,7 +1499,7 @@ pub mod tests {
             code,
             visualize_filename,
             defect_vertices,
-            Rational::from(4.59511985013459),
+            Rational::from_float(4.59511985013459).unwrap(),
             vec![],
         );
     }
@@ -1479,7 +1514,7 @@ pub mod tests {
             code,
             visualize_filename,
             defect_vertices,
-            Rational::from(9.19023970026918),
+            Rational::from_float(9.19023970026918).unwrap(),
             vec![],
         );
     }
@@ -1494,7 +1529,7 @@ pub mod tests {
             code,
             visualize_filename,
             defect_vertices,
-            Rational::from(22.97559925067295),
+            Rational::from_float(22.97559925067295).unwrap(),
             vec![],
         );
     }
@@ -1509,7 +1544,7 @@ pub mod tests {
             code,
             visualize_filename,
             defect_vertices,
-            Rational::from(22.97559925067295),
+            Rational::from_float(22.97559925067295).unwrap(),
             vec![
                 PluginUnionFind::entry(),
                 PluginSingleHair::entry_with_strategy(RepeatStrategy::Once),
@@ -1530,7 +1565,7 @@ pub mod tests {
             code,
             visualize_filename,
             defect_vertices,
-            Rational::from(4.), // fixme: ???
+            Rational::from_float(4.).unwrap(), // fixme: ???
             vec![],
         );
     }
@@ -1545,7 +1580,7 @@ pub mod tests {
             code,
             visualize_filename,
             defect_vertices,
-            Rational::from(18.38047940053836),
+            Rational::from_float(18.38047940053836).unwrap(),
             vec![
                 PluginUnionFind::entry(),
                 PluginSingleHair::entry_with_strategy(RepeatStrategy::Once),
@@ -1563,7 +1598,7 @@ pub mod tests {
             code,
             visualize_filename,
             defect_vertices,
-            Rational::from(18.38047940053836),
+            Rational::from_float(18.38047940053836).unwrap(),
             vec![],
         );
     }
@@ -1578,7 +1613,7 @@ pub mod tests {
             code,
             visualize_filename,
             defect_vertices,
-            Rational::from(55.14143820161507),
+            Rational::from_float(55.14143820161507).unwrap(),
             vec![
                 PluginUnionFind::entry(),
                 PluginSingleHair::entry_with_strategy(RepeatStrategy::Once),
@@ -1596,7 +1631,7 @@ pub mod tests {
             code,
             visualize_filename,
             defect_vertices,
-            Rational::from(6.591673732008658),
+            Rational::from_float(6.591673732008658).unwrap(),
             vec![
                 PluginUnionFind::entry(),
                 PluginSingleHair::entry_with_strategy(RepeatStrategy::Once),

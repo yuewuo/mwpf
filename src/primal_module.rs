@@ -5,7 +5,6 @@
 #![cfg_attr(feature = "unsafe_pointer", allow(dropping_references))]
 
 use std::collections::VecDeque;
-use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use crate::dual_module::*;
@@ -16,6 +15,7 @@ use crate::primal_module_serial::{ClusterAffinity, PrimalClusterPtr, PrimalClust
 use crate::relaxer_optimizer::OptimizerResult;
 use crate::util::*;
 use crate::visualize::*;
+use hashbrown::HashSet;
 
 pub type Affinity = OrderedFloat;
 
@@ -24,7 +24,7 @@ const MAX_HISTORY: usize = 10;
 /// common trait that must be implemented for each implementation of primal module
 pub trait PrimalModuleImpl {
     /// create a primal module given the dual module
-    fn new_empty(solver_initializer: &SolverInitializer) -> Self;
+    fn new_empty(solver_initializer: &Arc<SolverInitializer>) -> Self;
 
     /// clear all states; however this method is not necessarily called when load a new decoding problem, so you need to call it yourself
     fn clear(&mut self);
@@ -64,10 +64,10 @@ pub trait PrimalModuleImpl {
     /// resolve the conflicts in the "tune" mode
     fn resolve_tune(
         &mut self,
-        _obstacles: BTreeSet<Obstacle>,
+        _obstacles: FastIterSet<Obstacle>,
         _interface: &DualModuleInterfacePtr,
         _dual_module: &mut impl DualModuleImpl,
-    ) -> (BTreeSet<Obstacle>, bool) {
+    ) -> (FastIterSet<Obstacle>, bool) {
         panic!("`resolve_tune` not implemented, this primal module does not work with tuning mode");
     }
 
@@ -113,6 +113,68 @@ pub trait PrimalModuleImpl {
         }
     }
 
+    /// update the weights given the syndrome pattern; return a new syndrome pattern
+    /// that has some of the vertices flipped due to negative weights
+    fn weight_preprocessing<D: DualModuleImpl + MWPSVisualizer>(
+        &mut self,
+        syndrome_pattern: Arc<SyndromePattern>,
+        dual_module: &mut D,
+        initializer: &Arc<SolverInitializer>,
+    ) -> Arc<SyndromePattern> {
+        // update weights given the syndrome pattern
+        if let Some((weights, mix_ratio, floor_weight)) = syndrome_pattern.override_weights.as_ref() {
+            let mut weights = weights.clone();
+            if let Some(floor_weight) = floor_weight {
+                weights.iter_mut().for_each(|w| {
+                    if *w < *floor_weight {
+                        *w = floor_weight.clone();
+                    }
+                });
+            }
+            dual_module.update_weights(weights, mix_ratio.clone());
+        } else {
+            let mut weight_updates: FastIterMap<EdgeIndex, Weight> = FastIterMap::new();
+            for &herald_index in syndrome_pattern.heralds.iter() {
+                for (edge_index, weight) in initializer.heralds[herald_index].iter() {
+                    let value = weight_updates.remove(edge_index);
+                    let original_weight = value
+                        .as_ref()
+                        .unwrap_or_else(|| &initializer.weighted_edges[*edge_index].weight);
+                    let mixed_weight = exclusive_weight_sum(original_weight, weight);
+                    weight_updates.insert(*edge_index, mixed_weight);
+                }
+            }
+            for &edge_index in syndrome_pattern.erasures.iter() {
+                use crate::num_traits::Zero;
+                weight_updates.insert(edge_index, Weight::zero());
+            }
+            dual_module.set_weights(weight_updates);
+        }
+
+        // after all the edge weights are set, adjust the negative weights and find the flipped vertices
+        dual_module.adjust_weights_for_negative_edges();
+        let flip_vertices = dual_module.get_flip_vertices();
+        if flip_vertices.is_empty() {
+            // we don't need to modify the syndrome pattern
+            return syndrome_pattern;
+        }
+
+        // otherwise modify the syndrome
+        let mut moved_out_set = syndrome_pattern
+            .defect_vertices
+            .iter()
+            .cloned()
+            .collect::<HashSet<VertexIndex>>();
+        for to_flip in flip_vertices.iter() {
+            if moved_out_set.contains(to_flip) {
+                moved_out_set.remove(to_flip);
+            } else {
+                moved_out_set.insert(*to_flip);
+            }
+        }
+        Arc::new(SyndromePattern::new_vertices(moved_out_set.into_iter().collect()))
+    }
+
     fn solve_visualizer<D: DualModuleImpl + MWPSVisualizer>(
         &mut self,
         interface: &DualModuleInterfacePtr,
@@ -122,6 +184,7 @@ pub trait PrimalModuleImpl {
     ) where
         Self: MWPSVisualizer + Sized,
     {
+        // then call the solver to
         if let Some(visualizer) = visualizer {
             let callback = Self::visualizer_callback(visualizer);
             interface.load(syndrome_pattern, dual_module, 0);
@@ -149,6 +212,7 @@ pub trait PrimalModuleImpl {
         let mut dual_report = dual_module.report();
 
         while !dual_report.is_unbounded() {
+            PYTHON_SIGNAL_CHECKER.check().unwrap();
             callback(interface, dual_module, self, &dual_report);
             match dual_report.get_valid_growth() {
                 Some(length) => dual_module.grow(length),
@@ -165,6 +229,7 @@ pub trait PrimalModuleImpl {
         // starting with unbounded state here: All edges and nodes are not growing as of now
         // Tune
         while self.has_more_plugins() {
+            PYTHON_SIGNAL_CHECKER.check().unwrap();
             if start {
                 start = false;
                 dual_module.advance_mode();
@@ -181,36 +246,64 @@ pub trait PrimalModuleImpl {
                 let mut obstacles = dual_module.get_obstacles_tune(optimizer_result, dual_node_deltas);
 
                 // for cycle resolution
-                let mut order: VecDeque<BTreeSet<Obstacle>> = VecDeque::with_capacity(MAX_HISTORY); // fifo order of the obstacles sets seen
-                let mut current_sequences: Vec<(usize, BTreeSet<Obstacle>)> = Vec::new(); // the indexes that are currently being processed
+                let mut order: VecDeque<FastIterSet<Obstacle>> = VecDeque::with_capacity(MAX_HISTORY); // fifo order of the obstacles sets seen
+                let mut current_sequences: Vec<(usize, FastIterSet<Obstacle>)> = Vec::new(); // the indexes that are currently being processed
 
                 '_resolving: while !resolved {
+                    PYTHON_SIGNAL_CHECKER.check().unwrap();
                     let (_obstacles, _resolved) = self.resolve_tune(obstacles.clone(), interface, dual_module);
 
                     // cycle resolution
-                    let drained: Vec<(usize, BTreeSet<Obstacle>)> = std::mem::take(&mut current_sequences);
+                    // process current sequences and try to extend them
+                    let drained: Vec<(usize, FastIterSet<Obstacle>)> = std::mem::take(&mut current_sequences);
                     for (idx, start) in drained.into_iter() {
+                        // if the current obstacles match a starting state, we have a cycle
                         if _obstacles.eq(&start) {
                             dual_module.end_tuning();
                             break '_resolving;
                         }
-                        if _obstacles.eq(order
-                            .get(MAX_HISTORY - idx - 1)
-                            .unwrap_or(order.get(order.len() - idx - 1).unwrap()))
-                        {
-                            current_sequences.push((idx + 1, start));
+
+                        // determine which candidate in the history to compare with
+                        let candidate_index = order.len() - idx - 1;
+
+                        if let Some(candidate) = order.get(candidate_index) {
+                            if _obstacles.eq(candidate) {
+                                // extend this sequence by increasing its offset
+                                current_sequences.push((idx + 1, start));
+                            }
+                        } else {
+                            eprintln!(
+                                "Warning: candidate index {} out of bounds, order length {}, idx {}, start {:?}, candidate {:?}",
+                                candidate_index,
+                                order.len(),
+                                idx,
+                                start,
+                                order.get(candidate_index)
+                            );
                         }
                     }
 
+                    // add the current obstacles state to the history
                     order.push_back(_obstacles.clone());
                     if order.len() > MAX_HISTORY {
+                        // remove the oldest state
                         order.pop_front();
+                        // because the deque shifted left, update each sequence by subtracting 1 from its index
                         current_sequences = current_sequences
                             .into_iter()
-                            .filter_map(|(x, start)| if x >= MAX_HISTORY { None } else { Some((x + 1, start)) })
+                            .filter_map(|(x, start)| {
+                                if x == 0 {
+                                    // this element is popped
+                                    None
+                                } else {
+                                    // the previous bug, everything should be shifted left/forward instead right/to the right
+                                    Some((x - 1, start))
+                                }
+                            })
                             .collect();
                     }
 
+                    // add new sequences from matching obstacles in the history
                     for (idx, c) in order.iter().enumerate() {
                         if c.eq(&_obstacles) {
                             current_sequences.push((idx, c.clone()));
@@ -297,7 +390,7 @@ pub trait PrimalModuleImpl {
     }
 
     /// get the sorted clusters by affinity
-    fn get_sorted_clusters_aff(&mut self) -> BTreeSet<ClusterAffinity> {
+    fn get_sorted_clusters_aff(&mut self) -> FastIterSet<ClusterAffinity> {
         panic!("not implemented `get_sorted_clusters_aff`");
     }
 

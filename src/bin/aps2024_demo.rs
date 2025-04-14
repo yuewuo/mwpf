@@ -14,16 +14,16 @@ use mwpf::primal_module_serial::*;
 use mwpf::util::*;
 use mwpf::visualize::*;
 use num_traits::{FromPrimitive, Zero};
+#[cfg(feature = "progress_bar")]
 use pbr::ProgressBar;
 use std::sync::Arc;
-use sugar::*;
 
 fn debug_demo() {
     for is_example in [true, false] {
         let visualize_filename = format!("aps2024_debug_demo{}.json", if is_example { "_ex" } else { "" });
         let mut code = CodeCapacityTailoredCode::new(3, 0., 0.01);
-        let initializer = code.get_initializer();
-        let model_graph = Arc::new(ModelHyperGraph::new(Arc::new(initializer.clone())));
+        let initializer = Arc::new(code.get_initializer());
+        let model_graph = Arc::new(ModelHyperGraph::new(initializer.clone()));
         let mut dual_module = DualModulePQ::new_empty(&initializer);
         let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone());
         code.set_physical_errors(&[4]);
@@ -100,8 +100,8 @@ fn simple_demo() {
     for is_example in [true, false] {
         let visualize_filename = format!("aps2024_simple_demo{}.json", if is_example { "_ex" } else { "" });
         let mut code = CodeCapacityTailoredCode::new(3, 0., 0.01);
-        let initializer = code.get_initializer();
-        let model_graph = Arc::new(ModelHyperGraph::new(Arc::new(initializer.clone())));
+        let initializer = Arc::new(code.get_initializer());
+        let model_graph = Arc::new(ModelHyperGraph::new(initializer.clone()));
         let mut dual_module = DualModulePQ::new_empty(&initializer);
         let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone());
         code.set_physical_errors(&[4]);
@@ -166,8 +166,8 @@ fn challenge_demo() {
     for is_example in [true, false] {
         let visualize_filename = format!("aps2024_challenge_demo{}.json", if is_example { "_ex" } else { "" });
         let mut code = CodeCapacityTailoredCode::new(5, 0., 0.01);
-        let initializer = code.get_initializer();
-        let model_graph = Arc::new(ModelHyperGraph::new(Arc::new(initializer.clone())));
+        let initializer = Arc::new(code.get_initializer());
+        let model_graph = Arc::new(ModelHyperGraph::new(initializer.clone()));
         let mut dual_module = DualModulePQ::new_empty(&initializer);
         let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone());
         let syndrome_pattern = Arc::new(SyndromePattern::new_vertices(vec![10, 15, 16]));
@@ -207,13 +207,25 @@ fn challenge_demo() {
                 .unwrap();
             let decoding_graph = interface_ptr.read_recursive().decoding_graph.clone();
             let invalid_subgraphs = vec![
-                (btreeset! {10}, btreeset! {}),                                                  // s0, y0
-                (btreeset! {5, 6, 7, 9, 10, 11, 15, 16, 17}, btreeset! {6, 7, 11, 12}),          // s1, y3
-                (btreeset! {15}, btreeset! {}),                                                  // s2, y1
-                (btreeset! {}, btreeset! {0, 1, 2, 3, 6, 7, 8, 10, 11, 12, 13, 15, 16, 17, 18}), // s3, y4
-                (btreeset! {}, btreeset! {1, 2, 3, 5, 6, 7, 8, 10, 11, 12, 13, 15, 16, 17, 18}), // s4, y5
-                (btreeset! {}, btreeset! {0, 4, 9, 10, 11, 14, 15, 16, 19, 20, 21, 22, 23, 24}), // s5, y6
-                (btreeset! {}, btreeset! {4, 5, 9, 10, 11, 14, 15, 16, 19, 20, 21, 22, 23, 24}), // s6, y7
+                (fast_iter_set! {10}, fast_iter_set! {}), // s0, y0
+                (fast_iter_set! {5, 6, 7, 9, 10, 11, 15, 16, 17}, fast_iter_set! {6, 7, 11, 12}), // s1, y3
+                (fast_iter_set! {15}, fast_iter_set! {}), // s2, y1
+                (
+                    fast_iter_set! {},
+                    fast_iter_set! {0, 1, 2, 3, 6, 7, 8, 10, 11, 12, 13, 15, 16, 17, 18},
+                ), // s3, y4
+                (
+                    fast_iter_set! {},
+                    fast_iter_set! {1, 2, 3, 5, 6, 7, 8, 10, 11, 12, 13, 15, 16, 17, 18},
+                ), // s4, y5
+                (
+                    fast_iter_set! {},
+                    fast_iter_set! {0, 4, 9, 10, 11, 14, 15, 16, 19, 20, 21, 22, 23, 24},
+                ), // s5, y6
+                (
+                    fast_iter_set! {},
+                    fast_iter_set! {4, 5, 9, 10, 11, 14, 15, 16, 19, 20, 21, 22, 23, 24},
+                ), // s6, y7
             ];
             let mut s_ptr = vec![];
             let set_grow_rate =
@@ -306,11 +318,12 @@ fn challenge_demo() {
 fn surface_code_example() {
     let count = 200;
     for p in [0.04, 0.02, 0.01] {
+        #[cfg(feature = "progress_bar")]
         let mut pb = ProgressBar::on(std::io::stderr(), count);
         let visualize_filename = format!("aps2024_surface_code_example_p{p}.json");
         let mut code = CodeCapacityTailoredCode::new(9, p / 3., p / 3.);
-        let initializer = code.get_initializer();
-        let model_graph = Arc::new(ModelHyperGraph::new(Arc::new(initializer.clone())));
+        let initializer = Arc::new(code.get_initializer());
+        let model_graph = Arc::new(ModelHyperGraph::new(initializer.clone()));
         let mut dual_module = DualModulePQ::new_empty(&initializer);
         let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone());
         let mut visualizer = Visualizer::new(
@@ -320,6 +333,7 @@ fn surface_code_example() {
         )
         .unwrap();
         for seed in 0..count {
+            #[cfg(feature = "progress_bar")]
             pb.set(seed);
             code.generate_random_errors(seed);
             let syndrome_pattern = Arc::new(code.get_syndrome());
@@ -345,6 +359,7 @@ fn surface_code_example() {
         }
         visualizer.save_html_along_json();
         println!("open visualizer at {}", visualizer.html_along_json_path());
+        #[cfg(feature = "progress_bar")]
         pb.finish()
     }
 }
@@ -352,11 +367,12 @@ fn surface_code_example() {
 fn triangle_color_code_example() {
     let count = 200;
     for p in [0.04, 0.02, 0.01] {
+        #[cfg(feature = "progress_bar")]
         let mut pb = ProgressBar::on(std::io::stderr(), count);
         let visualize_filename = format!("aps2024_triangle_color_code_example_p{p}.json");
         let mut code = CodeCapacityColorCode::new(9, p);
-        let initializer = code.get_initializer();
-        let model_graph = Arc::new(ModelHyperGraph::new(Arc::new(initializer.clone())));
+        let initializer = Arc::new(code.get_initializer());
+        let model_graph = Arc::new(ModelHyperGraph::new(initializer.clone()));
         let mut dual_module = DualModulePQ::new_empty(&initializer);
         let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone());
         let mut visualizer = Visualizer::new(
@@ -366,6 +382,7 @@ fn triangle_color_code_example() {
         )
         .unwrap();
         for seed in 0..count {
+            #[cfg(feature = "progress_bar")]
             pb.set(seed);
             code.generate_random_errors(seed);
             let syndrome_pattern = Arc::new(code.get_syndrome());
@@ -392,6 +409,7 @@ fn triangle_color_code_example() {
         }
         visualizer.save_html_along_json();
         println!("open visualizer at {}", visualizer.html_along_json_path());
+        #[cfg(feature = "progress_bar")]
         pb.finish()
     }
 }
@@ -399,11 +417,12 @@ fn triangle_color_code_example() {
 fn small_color_code_example() {
     let count = 100;
     let p = 0.06;
+    #[cfg(feature = "progress_bar")]
     let mut pb = ProgressBar::on(std::io::stderr(), count);
     let visualize_filename = "aps2024_small_color_code_example.json".to_string();
     let mut code = CodeCapacityColorCode::new(7, p);
-    let initializer = code.get_initializer();
-    let model_graph = Arc::new(ModelHyperGraph::new(Arc::new(initializer.clone())));
+    let initializer = Arc::new(code.get_initializer());
+    let model_graph = Arc::new(ModelHyperGraph::new(initializer.clone()));
     let mut dual_module = DualModulePQ::new_empty(&initializer);
     let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone());
     let mut visualizer = Visualizer::new(
@@ -413,6 +432,7 @@ fn small_color_code_example() {
     )
     .unwrap();
     for seed in 0..count {
+        #[cfg(feature = "progress_bar")]
         pb.set(seed);
         code.generate_random_errors(seed);
         let syndrome_pattern = Arc::new(code.get_syndrome());
@@ -442,6 +462,7 @@ fn small_color_code_example() {
     }
     visualizer.save_html_along_json();
     println!("open visualizer at {}", visualizer.html_along_json_path());
+    #[cfg(feature = "progress_bar")]
     pb.finish()
 }
 
@@ -449,6 +470,7 @@ fn small_color_code_example() {
 fn circuit_level_example() {
     let timeout = 1.0;
     for (count, p) in [(50, 0.003), (100, 0.001), (200, 0.0003)] {
+        #[cfg(feature = "progress_bar")]
         let mut pb = ProgressBar::on(std::io::stderr(), count);
         let visualize_filename = format!("aps2024_circuit_level_example_p{p}.json");
         let mut code = QECPlaygroundCode::new(
@@ -459,8 +481,8 @@ fn circuit_level_example() {
                 // "max_weight": 100,
             }),
         );
-        let initializer = code.get_initializer();
-        let model_graph = Arc::new(ModelHyperGraph::new(Arc::new(initializer.clone())));
+        let initializer = Arc::new(code.get_initializer());
+        let model_graph = Arc::new(ModelHyperGraph::new(initializer.clone()));
         let mut dual_module = DualModulePQ::new_empty(&initializer);
         let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone());
         let mut visualizer = Visualizer::new(
@@ -470,6 +492,7 @@ fn circuit_level_example() {
         )
         .unwrap();
         for seed in 0..count {
+            #[cfg(feature = "progress_bar")]
             pb.set(seed);
             code.generate_random_errors(seed);
             let syndrome_pattern = Arc::new(code.get_syndrome());
@@ -497,6 +520,7 @@ fn circuit_level_example() {
         }
         visualizer.save_html_along_json();
         println!("open visualizer at {}", visualizer.html_along_json_path());
+        #[cfg(feature = "progress_bar")]
         pb.finish()
     }
 }

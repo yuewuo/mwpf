@@ -3,8 +3,7 @@ use crate::invalid_subgraph::*;
 use crate::util::*;
 use num_traits::{Signed, Zero};
 use std::cmp::Ordering;
-use std::collections::hash_map::DefaultHasher;
-use std::collections::BTreeMap;
+// use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
@@ -17,7 +16,7 @@ pub struct Relaxer {
     #[derivative(Debug = "ignore")]
     hash_value: u64,
     /// the direction of invalid subgraphs
-    direction: BTreeMap<Arc<InvalidSubgraph>, Rational>,
+    direction: FastIterMap<Arc<InvalidSubgraph>, Rational>,
     /// the edges that will be untightened after growing along `direction`;
     /// basically all the edges that have negative `overall_growing_rate`
     untighten_edges: BTreeMap<EdgePtr, Rational>,
@@ -31,6 +30,12 @@ impl Hash for Relaxer {
     }
 }
 
+impl PartialEq for Relaxer {
+    fn eq(&self, other: &Self) -> bool {
+        self.hash_value == other.hash_value && self.direction == other.direction
+    }
+}
+
 impl Ord for Relaxer {
     fn cmp(&self, other: &Self) -> Ordering {
         if self.hash_value != other.hash_value {
@@ -38,7 +43,7 @@ impl Ord for Relaxer {
         } else if self == other {
             Ordering::Equal
         } else {
-            // rare cases: same hash value but different state
+            // rare cases: same hash value but different state; `direction` uniquely determines the relaxer
             self.direction.cmp(&other.direction)
         }
     }
@@ -54,7 +59,7 @@ pub const RELAXER_ERR_MSG_NEGATIVE_SUMMATION: &str = "the summation of ΔyS is n
 pub const RELAXER_ERR_MSG_USEFUL: &str = "a valid relaxer must either increase overall ΔyS or untighten some edges";
 
 impl Relaxer {
-    pub fn new(direction: BTreeMap<Arc<InvalidSubgraph>, Rational>) -> Self {
+    pub fn new(direction: FastIterMap<Arc<InvalidSubgraph>, Rational>) -> Self {
         let relaxer = Self::new_raw(direction);
         debug_assert_eq!(relaxer.sanity_check(), Ok(()));
         relaxer
@@ -64,8 +69,8 @@ impl Relaxer {
         self.direction.clear();
     }
 
-    pub fn new_raw(direction: BTreeMap<Arc<InvalidSubgraph>, Rational>) -> Self {
-        let mut edges = BTreeMap::new();
+    pub fn new_raw(direction: FastIterMap<Arc<InvalidSubgraph>, Rational>) -> Self {
+        let mut edges = FastIterMap::new();
         for (invalid_subgraph, speed) in direction.iter() {
             for edge_ptr in invalid_subgraph.hair.iter() {
                 if let Some(edge) = edges.get_mut(edge_ptr) {
@@ -73,6 +78,7 @@ impl Relaxer {
                 } else {
                     edges.insert(edge_ptr.clone(), speed.clone());
                 }
+                edges.insert(edge_index, speed.clone());
             }
         }
         let mut untighten_edges = BTreeMap::new();
@@ -107,7 +113,7 @@ impl Relaxer {
     }
 
     pub fn update_hash(&mut self) {
-        let mut hasher = DefaultHasher::new();
+        let mut hasher = DefaultHasher::default();
         // only hash the direction since other field are derived from the direction
         self.direction.hash(&mut hasher);
         self.hash_value = hasher.finish();
@@ -121,7 +127,7 @@ impl Relaxer {
         sum_speed
     }
 
-    pub fn get_direction(&self) -> &BTreeMap<Arc<InvalidSubgraph>, Rational> {
+    pub fn get_direction(&self) -> &FastIterMap<Arc<InvalidSubgraph>, Rational> {
         &self.direction
     }
 
@@ -143,7 +149,6 @@ mod tests {
     use crate::dual_module_pq::DualModulePQ;
     use crate::invalid_subgraph::tests::*;
     use num_traits::One;
-    use std::collections::BTreeSet;
 
     #[test]
     fn relaxer_good() {

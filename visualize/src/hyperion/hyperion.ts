@@ -142,13 +142,36 @@ export function fix_visualizer_data (visualizer: VisualizerData) {
 /* runtime data */
 export class RuntimeData {
     visualizer: VisualizerData
-    hovered: Intersection | undefined = undefined
-    selected: Intersection | undefined = undefined
+    hovered: any = undefined
+    selected: any = undefined
 
     constructor (visualizer: VisualizerData) {
         // first fix the visualizer data (primarily the BigInts)
         fix_visualizer_data(visualizer)
         this.visualizer = visualizer
+    }
+}
+
+export function clickable_of (intersect: Intersection | undefined): any {
+    if (intersect == undefined) {
+        return
+    }
+    if (intersect.instanceId != undefined) {
+        const instance_state = intersect?.object?.userData?.vecData?.[intersect.instanceId]
+        if (instance_state != undefined) {
+            if (instance_state.type == 'vertex') {
+                return {
+                    type: 'vertex',
+                    vi: instance_state.vi,
+                }
+            }
+            if (instance_state.type == 'edge') {
+                return {
+                    type: 'edge',
+                    ei: instance_state.ei,
+                }
+            }
+        }
     }
 }
 

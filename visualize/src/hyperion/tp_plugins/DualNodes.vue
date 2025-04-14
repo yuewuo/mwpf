@@ -53,11 +53,11 @@ const dual_nodes: ComputedRef<IndexedDualNode[]> = computed(() => {
                 </div>
             </div>
             <div class="right">
-                <Indices title="<i>V<i/>&nbsp;=" :width="148" :indices="dual_node.v"></Indices>
+                <Indices title="<i>V<i/>&nbsp;=" :width="148" :indices="dual_node.v" :info="props.info" index-type="vertex"></Indices>
                 <div style="width: 4px; display: inline-block"></div>
-                <Indices title="<i>E<i/>&nbsp;=" :width="148" :indices="dual_node.e"></Indices>
+                <Indices title="<i>E<i/>&nbsp;=" :width="148" :indices="dual_node.e" :info="props.info" index-type="edge"></Indices>
                 <div style="height: 2px"></div>
-                <Indices title="𝛅(<i>S</i>)&nbsp;=" :title-width="40" :indices="dual_node.h"></Indices>
+                <Indices title="𝛅(<i>S</i>)&nbsp;=" :title-width="40" :indices="dual_node.h" :info="props.info" index-type="edge"></Indices>
             </div>
         </div>
     </div>

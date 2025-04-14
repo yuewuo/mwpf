@@ -47,9 +47,9 @@ function updateVerticesMatrix(vertex_states: Array<VertexState>, mesh: any) {
 function updateVerticesColor(vertex_states: Array<VertexState>, mesh: any) {
     for (let i = 0; i < vertex_states.length; i++) {
         const state = vertex_states[i]
-        if (state.vi == selected_vertex?.vi) {
+        if (selected_vis?.has(state.vi)) {
             mesh.setColorAt(i, new Color(config.value.basic.selected_color))
-        } else if (state.vi == hovered_vertex?.vi) {
+        } else if (hovered_vis?.has(state.vi)) {
             mesh.setColorAt(i, new Color(config.value.basic.hovered_color))
         } else {
             mesh.setColorAt(i, new Color(state.color))
@@ -60,17 +60,15 @@ function updateVerticesColor(vertex_states: Array<VertexState>, mesh: any) {
     }
 }
 
-let hovered_vertex: VertexState | undefined = undefined
-let selected_vertex: VertexState | undefined = undefined
-function intersecting_vertex(intersect: any): VertexState | undefined {
-    if (intersect?.instanceId == undefined) {
-        return undefined
+let hovered_vis: Set<number> | undefined = undefined
+let selected_vis: Set<number> | undefined = undefined
+function get_vis(info: any): Set<number> | undefined {
+    if (info?.type == 'vertex') {
+        return new Set([info.vi])
     }
-    const vertex_state: VertexState | undefined = intersect?.object?.userData?.vecData?.[intersect.instanceId]
-    if (vertex_state == undefined || vertex_state.type != 'vertex') {
-        return undefined
+    if (info?.type == 'vertices') {
+        return new Set(info.vis)
     }
-    return vertex_state
 }
 
 const normal_vertices_ref = useTemplateRef('normal_vertices')
@@ -97,8 +95,8 @@ onMounted(() => {
     // update color
     watchEffect(() => {
         // update the color when the hovered or selected state changes
-        hovered_vertex = intersecting_vertex(config.value.data.hovered)
-        selected_vertex = intersecting_vertex(config.value.data.selected)
+        hovered_vis = get_vis(config.value.data.hovered)
+        selected_vis = get_vis(config.value.data.selected)
         update_intersect_color()
     })
 })

@@ -3,8 +3,6 @@
 //! Generics for dual modules
 //!
 
-use hashbrown::HashSet;
-
 use crate::decoding_hypergraph::*;
 use crate::derivative::Derivative;
 use crate::invalid_subgraph::*;
@@ -16,6 +14,7 @@ use crate::primal_module_serial::{PrimalClusterPtr, PrimalModuleSerialNodeWeak};
 use crate::relaxer_optimizer::OptimizerResult;
 use crate::util::*;
 use crate::visualize::*;
+use hashbrown::{HashMap, HashSet};
 #[cfg(feature = "python_binding")]
 use pyo3::prelude::*;
 
@@ -178,7 +177,7 @@ impl DualNodePtr {
 /// dual nodes, once created, will never be deconstructed until the next run
 #[derive(Derivative)]
 #[derivative(Debug)]
-#[cfg_attr(feature = "python_binding", pyclass)]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf"))]
 pub struct DualModuleInterface {
     /// all the dual node that can be used to control a concrete dual module implementation
     // #[cfg_attr(feature = "python_binding", pyo3(get))]
@@ -211,6 +210,12 @@ impl std::fmt::Debug for DualModuleInterfaceWeak {
 pub struct OrderedDualNodePtr {
     pub index: NodeIndex,
     pub ptr: DualNodePtr,
+}
+
+impl std::hash::Hash for OrderedDualNodePtr {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.index.hash(state);
+    }
 }
 
 impl OrderedDualNodePtr {
@@ -276,7 +281,7 @@ pub enum DualReport {
 /// common trait that must be implemented for each implementation of dual module
 pub trait DualModuleImpl {
     /// create a new dual module with empty syndrome
-    fn new_empty(initializer: &SolverInitializer) -> Self;
+    fn new_empty(initializer: &Arc<SolverInitializer>) -> Self;
 
     /// clear all growth and existing dual nodes, prepared for the next decoding
     fn clear(&mut self);
@@ -469,7 +474,7 @@ pub trait DualModuleImpl {
                 // in other cases, optimizer should have optimized, so we should apply the deltas and return the nwe obstacles
 
                 // edge deltas needs to be applied at once for accurate obstacles calculation
-                let mut edge_deltas = BTreeMap::new();
+                let mut edge_deltas = FastIterMap::new();
                 for (dual_node_ptr, (grow_rate, _cluster_index)) in dual_node_deltas.into_iter() {
                     // update the dual node and check for obstacles
                     let mut node_ptr_write = dual_node_ptr.ptr.write();
@@ -486,11 +491,11 @@ pub trait DualModuleImpl {
                             std::collections::btree_map::Entry::Vacant(v) => {
                                 v.insert(grow_rate.clone());
                             }
-                            std::collections::btree_map::Entry::Occupied(mut o) => {
-                                let current = o.get_mut();
-                                *current += grow_rate.clone();
+                            FastIterEntry::Occupied(mut o) => {
+                                o.insert(o.get() + grow_rate.clone());
                             }
                         }
+
                         #[cfg(feature = "incr_lp")]
                         self.update_edge_cluster_weights(edge_ptr.clone(), _cluster_index, grow_rate.clone());
                         // note: comment out if not using cluster-based
@@ -539,7 +544,12 @@ pub trait DualModuleImpl {
 
     /// update weights of dual_module;
     /// the weight of the dual module is set to be `old_weight + mix_ratio * (new_weight - old_weight)`
-    fn update_weights(&mut self, _new_weights: Vec<Rational>, _mix_ratio: f64) {
+    fn update_weights(&mut self, _new_weights: Vec<Weight>, _mix_ratio: Weight) {
+        unimplemented!()
+    }
+
+    /// force set the weights given the indices and new weights
+    fn set_weights(&mut self, _new_weights: FastIterMap<EdgeIndex, Weight>) {
         unimplemented!()
     }
 

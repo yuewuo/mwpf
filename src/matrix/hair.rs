@@ -7,7 +7,6 @@ use super::interface::*;
 use super::visualize::*;
 use crate::util::*;
 use prettytable::*;
-use std::collections::*;
 
 use crate::dual_module_pq::{EdgeWeak, VertexPtr, VertexWeak};
 #[cfg(feature = "unsafe_pointer")]

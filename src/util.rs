@@ -10,15 +10,18 @@ use crate::rand_xoshiro::rand_core::RngCore;
 #[cfg(feature = "python_binding")]
 use crate::util_py::*;
 use crate::visualize::*;
+use itertools::izip;
+use lnexp::LnExp;
 use num_traits::Zero;
 #[cfg(feature = "python_binding")]
 use pyo3::prelude::*;
 #[cfg(feature = "python_binding")]
-use pyo3::types::{PyDict, PyFloat, PyList};
+use pyo3::types::{PyDict, PyFloat, PyList, PyTuple};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::fs::{create_dir_all, File};
 use std::io::prelude::*;
+use std::io::{BufReader, BufWriter};
 use std::time::Instant;
 
 use hashbrown::{HashMap, HashSet};
@@ -46,6 +49,29 @@ cfg_if::cfg_if! {
     }
 }
 
+cfg_if::cfg_if! {
+    if #[cfg(feature="fast_ds")] {
+        pub type DefaultHasher = gxhash::GxHasher;
+    } else {
+        pub type DefaultHasher = std::collections::hash_map::DefaultHasher;
+    }
+}
+
+cfg_if::cfg_if! {
+    if #[cfg(feature="python_binding")] {
+        pub use crate::python_signal_checker::PYTHON_SIGNAL_CHECKER;
+    } else  {
+        pub struct NoPythonSignalChecker();
+        pub static PYTHON_SIGNAL_CHECKER: NoPythonSignalChecker = NoPythonSignalChecker();
+        impl NoPythonSignalChecker {
+            #[inline]
+            pub fn check(&self) -> Result<(), ()> { Ok(()) }
+            #[inline]
+            pub fn skip_next(&self) {}
+        }
+    }
+}
+
 pub type Weight = Rational;
 pub type EdgeIndex = usize;
 pub type VertexIndex = usize;
@@ -63,8 +89,38 @@ pub type VertexNodeIndex = VertexIndex; // must be same as VertexIndex, NodeInde
 pub type VertexNum = VertexIndex;
 pub type NodeNum = VertexIndex;
 
+cfg_if::cfg_if! {
+    if #[cfg(feature="fast_ds")] {
+        pub type FastIterSet<T> = fast_ds::Set<T>;
+        pub type FastIterMap<K, V> = fast_ds::Map<K, V>;
+        pub type FastIterEntry<'a, K, V> = fast_ds::Entry<'a, K, V>;
+    } else {
+        // by default using std BTreeSet and BTreeMap
+        pub type FastIterSet<T> = std::collections::BTreeSet<T>;
+        pub type FastIterMap<K, V> = std::collections::BTreeMap<K, V>;
+        pub type FastIterEntry<'a, K, V> = std::collections::btree_map::Entry<'a, K, V>;
+    }
+}
+
+#[macro_export]
+macro_rules! fast_iter_set {
+    ($($key:expr,)+) => (btreeset!($($key),+));
+
+    ( $($key:expr),* ) => {
+        {
+            let mut _set = FastIterSet::new();
+            $(
+                _set.insert($key);
+            )*
+            _set
+        }
+    };
+}
+
+pub use crate::fast_iter_set;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "python_binding", pyclass)]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf"))]
 pub struct HyperEdge {
     /// the vertices incident to the hyperedge
     pub vertices: Vec<VertexIndex>,
@@ -89,8 +145,8 @@ impl HyperEdge {
 impl HyperEdge {
     #[new]
     fn py_new(vertices: &Bound<PyAny>, weight: &Bound<PyAny>) -> PyResult<Self> {
-        use crate::util_py::py_into_btree_set;
-        let vertices: Vec<VertexIndex> = py_into_btree_set::<VertexIndex>(vertices)?.into_iter().collect();
+        use crate::util_py::py_into_vec;
+        let vertices: Vec<VertexIndex> = py_into_vec::<VertexIndex>(vertices)?;
         Ok(Self::new(vertices, PyRational::from(weight).0))
     }
     fn __repr__(&self) -> String {
@@ -112,22 +168,55 @@ impl HyperEdge {
     fn set_weight(&mut self, weight: &Bound<PyAny>) {
         self.weight = PyRational::from(weight).0;
     }
+    fn __getnewargs_ex__(&self, py: Python<'_>) -> PyResult<Py<PyTuple>> {
+        let kwargs = PyDict::new(py);
+        kwargs.set_item("vertices", self.vertices.clone())?;
+        kwargs.set_item("weight", self.get_weight())?;
+        let args = PyTuple::empty(py);
+        Ok((args, kwargs).into_pyobject(py)?.unbind())
+    }
 }
 
-#[cfg_attr(feature = "python_binding", pyclass(get_all, set_all))]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf"))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SolverInitializer {
     /// the number of vertices
     pub vertex_num: VertexNum,
     /// weighted edges, where vertex indices are within the range [0, vertex_num)
     pub weighted_edges: Vec<HyperEdge>,
+    /// conditional edge sets; when the heralded detector is one, this specified edges will update
+    /// their weight as if these additional errors could be happening (see `compose_weight` function).
+    /// note that in case rational number is used, this method only guarantees f64 accuracy
+    pub heralds: Vec<Vec<(EdgeIndex, Weight)>>,
+}
+
+pub fn exclusive_weight_sum(w1: &Weight, w2: &Weight) -> Weight {
+    // w1 = log( (1-p1) / p1 ), weight_2 = log( (1-p2) / p2 )
+    // p1 = 1 / (1 + exp(w1)), p2 = 1 / (1 + exp(w2))
+    // p' = p1 (1 - p2) + p2 (1 - p1) = (exp(w1) + exp(w2)) / [ (1 + exp(w1)) (1 + exp(w2)) ]
+    // 1 - p' = (1 + exp(w1) exp(w2)) / [ (1 + exp(w1)) (1 + exp(w2)) ]
+    // w' = log ( (1-p') / p' ) = log((1 + exp(w1) exp(w2)) / (exp(w1) + exp(w2)))
+    //    = log(1 + exp(w1) exp(w2)) - log(exp(w1) + exp(w2))
+    //    = log(1 + exp(w1+w2)) - w2 - log(1 + exp(w1-w2))
+    let (w1, w2) = (w1.to_f64().unwrap(), w2.to_f64().unwrap());
+    let (w1, w2) = (w1.max(w2), w1.min(w2)); // make sure w1 >= w2
+    let w = (w1 + w2).ln_1p_exp() - w2 - (w1 - w2).ln_1p_exp();
+    Weight::from_f64(w).unwrap()
 }
 
 impl SolverInitializer {
     pub fn new(vertex_num: VertexNum, weighted_edges: Vec<HyperEdge>) -> Self {
+        Self::new_with_heralds(vertex_num, weighted_edges, vec![])
+    }
+    pub fn new_with_heralds(
+        vertex_num: VertexNum,
+        weighted_edges: Vec<HyperEdge>,
+        heralds: Vec<Vec<(EdgeIndex, Weight)>>,
+    ) -> Self {
         Self {
             vertex_num,
             weighted_edges,
+            heralds,
         }
     }
 }
@@ -136,18 +225,71 @@ impl SolverInitializer {
 #[pymethods]
 impl SolverInitializer {
     #[new]
-    fn py_new(vertex_num: VertexNum, weighted_edges: Vec<HyperEdge>) -> Self {
-        Self::new(vertex_num, weighted_edges)
+    #[pyo3(signature = (vertex_num, weighted_edges, heralds=None))]
+    fn py_new(
+        py: Python<'_>,
+        vertex_num: VertexNum,
+        weighted_edges: Vec<HyperEdge>,
+        heralds: Option<&Bound<PyList>>,
+    ) -> PyResult<Self> {
+        let mut heralds_vec: Vec<Vec<(EdgeIndex, Weight)>> = vec![];
+        if let Some(heralds) = heralds {
+            for herald in heralds.iter() {
+                heralds_vec.push(
+                    py_into_map::<EdgeIndex, Py<PyAny>>(&herald)?
+                        .into_iter()
+                        .map(|(k, v)| -> (EdgeIndex, Weight) { (k, PyRational::from(v.bind(py)).into()) })
+                        .collect(),
+                );
+            }
+        }
+        Ok(Self::new_with_heralds(vertex_num, weighted_edges, heralds_vec))
     }
     fn __repr__(&self) -> String {
         format!("{:?}", self)
+    }
+    #[getter]
+    fn get_vertex_num(&self) -> VertexNum {
+        self.vertex_num
+    }
+    #[setter]
+    fn set_vertex_num(&mut self, vertex_num: VertexNum) {
+        self.vertex_num = vertex_num;
+    }
+    #[getter]
+    fn get_weighted_edges(&self) -> Vec<HyperEdge> {
+        self.weighted_edges.clone()
+    }
+    #[setter]
+    fn set_weighted_edges(&mut self, weighted_edges: Vec<HyperEdge>) {
+        self.weighted_edges = weighted_edges;
+    }
+    #[getter]
+    fn get_heralds(&self) -> Vec<std::collections::HashMap<EdgeIndex, PyRational>> {
+        self.heralds
+            .iter()
+            .map(|x| x.iter().map(|(k, v)| (*k, v.clone().into())).collect())
+            .collect()
+    }
+    #[setter]
+    fn set_heralds(&mut self, py: Python<'_>, heralds: &Bound<PyList>) -> PyResult<()> {
+        self.heralds = vec![];
+        for herald in heralds.iter() {
+            self.heralds.push(
+                py_into_map::<EdgeIndex, Py<PyAny>>(&herald)?
+                    .into_iter()
+                    .map(|(k, v)| -> (EdgeIndex, Weight) { (k, PyRational::from(v.bind(py)).into()) })
+                    .collect(),
+            );
+        }
+        Ok(())
     }
     #[pyo3(name = "snapshot", signature = (abbrev=true))]
     fn py_snapshot(&mut self, abbrev: bool) -> PyObject {
         json_to_pyobject(self.snapshot(abbrev))
     }
     #[pyo3(name = "get_subgraph_syndrome")]
-    fn py_get_subgraph_syndrome(&self, subgraph: PySubgraph) -> BTreeSet<VertexIndex> {
+    fn py_get_subgraph_syndrome(&self, subgraph: PySubgraph) -> FastIterSet<VertexIndex> {
         self.get_subgraph_syndrome(&subgraph.into())
     }
     #[pyo3(name = "matches_subgraph_syndrome")]
@@ -168,6 +310,22 @@ impl SolverInitializer {
         value.uniform_weights(weight.map(|x| PyRational::from(x).0).unwrap_or_else(|| Rational::one()));
         slf
     }
+    #[pyo3(name = "to_json")]
+    fn py_to_json(&self) -> String {
+        serde_json::to_string(&self).unwrap()
+    }
+    #[staticmethod]
+    #[pyo3(name = "from_json")]
+    fn py_from_json(value: &Bound<PyAny>) -> Self {
+        serde_json::from_value(pyobject_to_json_locked(value)).unwrap()
+    }
+    fn __getnewargs_ex__(&self, py: Python<'_>) -> PyResult<Py<PyTuple>> {
+        let kwargs = PyDict::new(py);
+        kwargs.set_item("vertex_num", self.vertex_num)?;
+        kwargs.set_item("weighted_edges", self.weighted_edges.clone())?;
+        let args = PyTuple::empty(py);
+        Ok((args, kwargs).into_pyobject(py)?.unbind())
+    }
 }
 
 impl SolverInitializer {
@@ -179,9 +337,11 @@ impl SolverInitializer {
     }
 
     pub fn matches_subgraph_syndrome(&self, subgraph: &OutputSubgraph, defect_vertices: &[VertexIndex]) -> bool {
-        let subgraph_defect_vertices: Vec<_> = self.get_subgraph_syndrome(subgraph).into_iter().collect();
+        let mut subgraph_defect_vertices: Vec<_> = self.get_subgraph_syndrome(subgraph).into_iter().collect();
         let mut defect_vertices = defect_vertices.to_owned();
+        subgraph_defect_vertices.sort();
         defect_vertices.sort();
+        subgraph_defect_vertices.sort();
         if defect_vertices.len() != subgraph_defect_vertices.len() {
             println!(
                 "defect vertices: {:?}\nsubgraph_defect_vertices: {:?}",
@@ -287,29 +447,56 @@ impl MWPSVisualizer for SolverInitializer {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "python_binding", pyclass(get_all, set_all))]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf"))]
 pub struct SyndromePattern {
     /// the vertices corresponding to defect measurements
     pub defect_vertices: Vec<VertexIndex>,
     /// the edges that experience erasures, i.e. known errors
     pub erasures: Vec<EdgeIndex>,
+    /// the heralded weighted edges index
+    pub heralds: Vec<HeraldIndex>,
+    /// a set of new weights that are mixed with existing weights; this will override
+    /// the weight changes of erasures and heralds
+    pub override_weights: Option<(Vec<Weight>, Weight, Option<Weight>)>,
 }
 
 impl SyndromePattern {
-    pub fn new(defect_vertices: Vec<VertexIndex>, erasures: Vec<EdgeIndex>) -> Self {
+    pub fn new_with_erasure_heralds(
+        defect_vertices: Vec<VertexIndex>,
+        erasures: Vec<EdgeIndex>,
+        heralds: Vec<HeraldIndex>,
+    ) -> Self {
         Self {
             defect_vertices,
             erasures,
+            heralds,
+            override_weights: None,
         }
     }
-}
-
-impl SyndromePattern {
+    pub fn new_with_override_weights(
+        defect_vertices: Vec<VertexIndex>,
+        weights: Vec<Weight>,
+        ratio: Weight,
+        floor_weight: Option<Weight>,
+    ) -> Self {
+        Self {
+            defect_vertices,
+            erasures: vec![],
+            heralds: vec![],
+            override_weights: Some((weights, ratio, floor_weight)),
+        }
+    }
     pub fn new_vertices(defect_vertices: Vec<VertexIndex>) -> Self {
-        Self::new(defect_vertices, vec![])
+        Self::new_erasure(defect_vertices, vec![])
+    }
+    pub fn new_erasure(defect_vertices: Vec<VertexIndex>, erasures: Vec<EdgeIndex>) -> Self {
+        Self::new_with_erasure_heralds(defect_vertices, erasures, vec![])
+    }
+    pub fn new_heralds(defect_vertices: Vec<VertexIndex>, heralds: Vec<HeraldIndex>) -> Self {
+        Self::new_with_erasure_heralds(defect_vertices, vec![], heralds)
     }
     pub fn new_empty() -> Self {
-        Self::new(vec![], vec![])
+        Self::new_vertices(vec![])
     }
 }
 
@@ -334,27 +521,119 @@ impl MWPSVisualizer for SyndromePattern {
 #[pymethods]
 impl SyndromePattern {
     #[new]
-    #[pyo3(signature = (defect_vertices=None, erasures=None))]
-    fn py_new(defect_vertices: Option<&Bound<PyAny>>, erasures: Option<&Bound<PyAny>>) -> PyResult<Self> {
-        use crate::util_py::py_into_btree_set;
+    #[pyo3(signature = (defect_vertices=None, erasures=None, heralds=None, override_weights=None, override_ratio=None, floor_weight=None))]
+    fn py_new(
+        defect_vertices: Option<&Bound<PyAny>>,
+        erasures: Option<&Bound<PyAny>>,
+        heralds: Option<&Bound<PyAny>>,
+        override_weights: Option<&Bound<PyList>>,
+        override_ratio: Option<&Bound<PyAny>>,
+        floor_weight: Option<&Bound<PyAny>>,
+    ) -> PyResult<Self> {
+        use crate::util_py::py_into_vec;
         let defect_vertices: Vec<VertexIndex> = if let Some(defect_vertices) = defect_vertices {
-            py_into_btree_set(defect_vertices)?.into_iter().collect()
+            py_into_vec(defect_vertices)?
         } else {
             vec![]
         };
-        let erasures: Vec<EdgeIndex> = if let Some(erasures) = erasures {
-            py_into_btree_set(erasures)?.into_iter().collect()
+        if let Some(override_weights) = override_weights {
+            assert!(
+                erasures.is_none() && heralds.is_none(),
+                "do not set erasures or heralds when override weights are provided"
+            );
+            let ratio = override_ratio
+                .map(|x| PyRational::from(x).into())
+                .unwrap_or_else(|| Rational::from_f64(1.0).unwrap());
+            let floor_weight = floor_weight.map(|x| PyRational::from(x).into());
+            Ok(Self::new_with_override_weights(
+                defect_vertices,
+                override_weights.iter().map(|x| PyRational::from(&x).into()).collect(),
+                ratio,
+                floor_weight,
+            ))
         } else {
-            vec![]
-        };
-        Ok(Self::new(defect_vertices, erasures))
+            let erasures: Vec<EdgeIndex> = if let Some(erasures) = erasures {
+                py_into_vec(erasures)?
+            } else {
+                vec![]
+            };
+            let heralds: Vec<HeraldIndex> = if let Some(heralds) = heralds {
+                py_into_vec(heralds)?
+            } else {
+                vec![]
+            };
+            Ok(Self::new_with_erasure_heralds(defect_vertices, erasures, heralds))
+        }
     }
     fn __repr__(&self) -> String {
         format!("{:?}", self)
     }
+    #[getter]
+    fn get_defect_vertices(&self) -> Vec<VertexIndex> {
+        self.defect_vertices.clone()
+    }
+    #[setter]
+    fn set_defect_vertices(&mut self, defect_vertices: Vec<VertexIndex>) {
+        self.defect_vertices = defect_vertices;
+    }
+    #[getter]
+    fn get_erasures(&self) -> Vec<EdgeIndex> {
+        self.erasures.clone()
+    }
+    #[setter]
+    fn set_erasures(&mut self, erasures: Vec<EdgeIndex>) {
+        self.erasures = erasures;
+    }
+    #[getter]
+    fn get_heralds(&self) -> Vec<HeraldIndex> {
+        self.heralds.clone()
+    }
+    #[setter]
+    fn set_heralds(&mut self, heralds: Vec<HeraldIndex>) {
+        self.heralds = heralds;
+    }
+    #[getter]
+    fn get_override_weights(&self) -> Option<(Vec<PyRational>, PyRational, Option<PyRational>)> {
+        if let Some((weights, ratio, floor_weight)) = self.override_weights.as_ref() {
+            return Some((
+                weights.iter().map(|x| x.clone().into()).collect(),
+                ratio.clone().into(),
+                floor_weight.clone().map(|x| x.into()),
+            ));
+        }
+        None
+    }
+    #[setter]
+    fn set_override_weights(&mut self, override_weights: Option<(Vec<PyRational>, PyRational, Option<PyRational>)>) {
+        if let Some((weights, ratio, floor_weight)) = override_weights {
+            self.override_weights = Some((
+                weights.iter().map(|x| x.0.clone()).collect(),
+                ratio.0.clone(),
+                floor_weight.map(|x| x.0.clone()),
+            ));
+        } else {
+            self.override_weights = None;
+        }
+    }
     #[pyo3(name="snapshot", signature = (abbrev=true))]
     fn py_snapshot(&mut self, abbrev: bool) -> PyObject {
         json_to_pyobject(self.snapshot(abbrev))
+    }
+    #[pyo3(name = "to_json")]
+    fn py_to_json(&self) -> String {
+        serde_json::to_string(&self).unwrap()
+    }
+    #[staticmethod]
+    #[pyo3(name = "from_json")]
+    fn py_from_json(value: &Bound<PyAny>) -> Self {
+        serde_json::from_value(pyobject_to_json_locked(value)).unwrap()
+    }
+    fn __getnewargs_ex__(&self, py: Python<'_>) -> PyResult<Py<PyTuple>> {
+        let kwargs = PyDict::new(py);
+        kwargs.set_item("defect_vertices", self.defect_vertices.clone())?;
+        kwargs.set_item("erasures", self.erasures.clone())?;
+        let args = PyTuple::empty(py);
+        Ok((args, kwargs).into_pyobject(py)?.unbind())
     }
 }
 
@@ -879,21 +1158,21 @@ impl BenchmarkProfilerEntry {
 pub fn json_to_pyobject_locked(value: serde_json::Value, py: Python) -> PyObject {
     match value {
         serde_json::Value::Null => py.None(),
-        serde_json::Value::Bool(value) => value.to_object(py),
+        serde_json::Value::Bool(value) => value.into_pyobject(py).unwrap().to_owned().into(),
         serde_json::Value::Number(value) => {
             if value.is_i64() {
-                value.as_i64().to_object(py)
+                value.as_i64().into_pyobject(py).unwrap().to_owned().into()
             } else {
-                value.as_f64().to_object(py)
+                value.as_f64().into_pyobject(py).unwrap().to_owned().into()
             }
         }
-        serde_json::Value::String(value) => value.to_object(py),
+        serde_json::Value::String(value) => value.into_pyobject(py).unwrap().to_owned().into(),
         serde_json::Value::Array(array) => {
             let elements: Vec<PyObject> = array.into_iter().map(|value| json_to_pyobject_locked(value, py)).collect();
-            PyList::new_bound(py, elements).into()
+            PyList::new(py, elements).unwrap().into()
         }
         serde_json::Value::Object(map) => {
-            let pydict = PyDict::new_bound(py);
+            let pydict = PyDict::new(py);
             for (key, value) in map.into_iter() {
                 let pyobject = json_to_pyobject_locked(value, py);
                 pydict.set_item(key, pyobject).unwrap();
@@ -951,6 +1230,7 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<SolverInitializer>()?;
     m.add_class::<SyndromePattern>()?;
     m.add_class::<HyperEdge>()?;
+    m.add_class::<BenchmarkSuite>()?;
     Ok(())
 }
 
@@ -1528,6 +1808,7 @@ pub mod tests {
     use crate::example_codes::ExampleCode;
 
     use super::*;
+    use bytebuffer::ByteBuffer;
     use hashbrown::HashSet;
     use num_bigint::BigInt;
     use std::str::FromStr;
@@ -1698,5 +1979,74 @@ pub mod tests {
         for HyperEdge { weight, .. } in initializer.weighted_edges.iter() {
             assert_eq!(weight, &Rational::one());
         }
+    }
+
+    #[test]
+    fn test_exclusive_weight_sum() {
+        // cargo test test_exclusive_weight_sum -- --nocapture
+        // cargo test test_exclusive_weight_sum --no-default-features --features rational_weight -- --nocapture
+        use crate::num_traits::One;
+        let one = Weight::one();
+        let zero = Weight::zero();
+        assert!(rational_approx_eq(&exclusive_weight_sum(&one, &zero), &zero));
+        assert!(rational_approx_eq(&exclusive_weight_sum(&zero, &one), &zero));
+        assert!(rational_approx_eq(&exclusive_weight_sum(&zero, &zero), &zero));
+        assert!(rational_approx_eq(
+            &exclusive_weight_sum(&one, &one),
+            &Weight::from_f64(0.4337808304830274).unwrap()
+        ));
+        let million = Weight::from_f64(1e6).unwrap();
+        assert!(rational_approx_eq(&exclusive_weight_sum(&million, &zero), &zero));
+        assert!(rational_approx_eq(&exclusive_weight_sum(&zero, &million), &zero));
+        assert!(rational_approx_eq(
+            &exclusive_weight_sum(&million, &million),
+            &Weight::from_f64(1e6 - (2f64).ln()).unwrap()
+        ));
+    }
+
+    fn cbor_length_of(data: impl Serialize) -> usize {
+        let mut buffer = ByteBuffer::new();
+        ciborium::ser::into_writer(&data, &mut buffer).unwrap();
+        let length = buffer.len();
+        // println!("buffer: {:?}", buffer.into_vec());
+        length
+    }
+
+    #[test]
+    fn test_cbor_serialization() {
+        // cargo test test_cbor_serialization -- --nocapture
+        assert_eq!(cbor_length_of(vec![1usize; 100]), 102); // 1 bytes each
+        assert_eq!(cbor_length_of(vec![23usize; 100]), 102); // 1 bytes each
+        assert_eq!(cbor_length_of(vec![24usize; 100]), 202); // 2 bytes each, not sure why 24 is the boundary
+        assert_eq!(cbor_length_of(vec![255usize; 100]), 202); // 2 bytes each
+        assert_eq!(cbor_length_of(vec![256usize; 100]), 302); // 3 bytes each
+        assert_eq!(cbor_length_of(vec![65535usize; 100]), 302); // 3 bytes each
+        assert_eq!(cbor_length_of(vec![65536usize; 100]), 502); // 5 bytes each
+
+        // also test Vec<Vec<usize>>
+        assert_eq!(cbor_length_of(vec![vec![1usize; 100]; 100]), 10202); // 1 bytes each
+        assert_eq!(cbor_length_of(vec![vec![23usize; 100]; 100]), 10202); // 1 bytes each
+        assert_eq!(cbor_length_of(vec![vec![24usize; 100]; 100]), 20202); // 2 bytes each, not sure why 24 is the boundary
+        assert_eq!(cbor_length_of(vec![vec![255usize; 100]; 100]), 20202); // 2 bytes each
+        assert_eq!(cbor_length_of(vec![vec![256usize; 100]; 100]), 30202); // 3 bytes each
+        assert_eq!(cbor_length_of(vec![vec![65535usize; 100]; 100]), 30202); // 3 bytes each
+        assert_eq!(cbor_length_of(vec![vec![65536usize; 100]; 100]), 50202); // 5 bytes each
+
+        // test Vec<float>
+        assert_eq!(cbor_length_of(vec![1f64; 100]), 302); // 3 bytes each
+        assert_eq!(cbor_length_of(vec![3.14159001001f64; 100]), 902); // 9 bytes each
+
+        // also test Vec<Vec<float>>
+        assert_eq!(cbor_length_of(vec![vec![1f64; 100]; 100]), 30202); // 3 bytes each
+        assert_eq!(cbor_length_of(vec![vec![3.14159001001f64; 100]; 100]), 90202);
+
+        // test Vec<(usize, usize)>
+        assert_eq!(cbor_length_of(vec![(1usize, 2usize); 100]), 302); // 3 bytes each
+        assert_eq!(cbor_length_of(vec![(1usize, 2usize, 3usize, 4usize); 100]), 502);
+        assert_eq!(cbor_length_of(vec![(1usize, 65535usize, 3usize, 65536usize); 100]), 1102);
+
+        // test Vec<vec![]>
+        assert_eq!(cbor_length_of(vec![Vec::<usize>::new(); 100]), 102); // 1 bytes each for empty vec
+        assert_eq!(cbor_length_of(vec![None::<usize>; 100]), 102); // 1 bytes each for null vec
     }
 }

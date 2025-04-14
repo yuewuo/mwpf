@@ -3,7 +3,7 @@ import { onMounted, ref, computed, provide, watchEffect, onBeforeUnmount, useTem
 import { OrthographicCamera, Scene, AmbientLight } from 'troisjs'
 // import { Renderer } from 'troisjs' // use individual renderer for each instance
 import Renderer from '@/misc/SharedRenderer.vue' // optimization: share a single WebGL renderer across all the instances
-import { type VisualizerData, RuntimeData, ConfigProps, renderer_params } from './hyperion'
+import { type VisualizerData, RuntimeData, ConfigProps, renderer_params, clickable_of } from './hyperion'
 import { Config } from './config_pane'
 import { Info } from './info_pane'
 import Vertices from './Vertices.vue'
@@ -27,12 +27,18 @@ const config = ref(new Config(new RuntimeData(props.visualizer), props.config))
 const info = ref(new Info(config as any))
 provide('config', config) // prop drilling to all children components
 
-// update the icon of the web page if full screen is enabled
+// update the icon of the web page if full screen is enabled, and also customize save
 if (config.value.config_prop.full_screen) {
     const link = document.createElement('link')
     link.rel = 'icon'
     link.href = 'data:image/svg+xml;base64,' + btoa(iconString)
     document.head.appendChild(link)
+    document.addEventListener('keydown', function (event) {
+        if (isSaving(event)) {
+            config.value.download_html()
+            event.preventDefault()
+        }
+    })
 }
 
 const container = useTemplateRef('container_ref')
@@ -155,7 +161,16 @@ onBeforeUnmount(() => {
     config.value.pane?.dispose()
 })
 
+function isSaving(event: KeyboardEvent): boolean {
+    return (event.ctrlKey && event.key === 's') || (event.metaKey && event.key === 's')
+}
+
 function onKeyDown(event: KeyboardEvent) {
+    if (!config.value.config_prop.full_screen && isSaving(event)) {
+        config.value.download_html()
+        event.preventDefault()
+        return
+    }
     if (!event.metaKey && !config.value.user_is_typing) {
         if (event.key == 't' || event.key == 'T') {
             config.value.camera.set_position('Top')
@@ -223,9 +238,9 @@ function onMouseChange(event: MouseEvent, is_click: boolean = true) {
         if (!intersect.object.visible) continue // don't select invisible object
         // swap back to the original material
         if (is_click) {
-            config.value.data.selected = intersect
+            config.value.data.selected = clickable_of(intersect)
         } else {
-            config.value.data.hovered = intersect
+            config.value.data.hovered = clickable_of(intersect)
         }
         return
     }

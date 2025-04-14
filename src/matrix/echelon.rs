@@ -4,7 +4,6 @@ use crate::util::*;
 use core::panic;
 use derivative::Derivative;
 use prettytable::*;
-use std::collections::BTreeSet;
 
 use crate::dual_module_pq::{EdgeWeak, VertexPtr, VertexWeak};
 #[cfg(feature = "unsafe_pointer")]

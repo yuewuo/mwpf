@@ -22,7 +22,6 @@
 use crate::util::*;
 use derivative::Derivative;
 use num_traits::{One, Zero};
-use std::collections::BTreeSet;
 
 use crate::dual_module_pq::{EdgeWeak, VertexPtr, VertexWeak};
 #[cfg(feature = "unsafe_pointer")]
@@ -172,7 +171,7 @@ pub trait MatrixEchelon: MatrixView {
         if !info.satisfiable {
             return None; // no solution
         }
-        let mut solution = BTreeSet::new();
+        let mut solution = FastIterSet::new();
         for (row, row_info) in info.rows.iter().enumerate() {
             debug_assert!(row_info.has_leading());
             if self.get_rhs(row) {
@@ -243,7 +242,7 @@ pub trait MatrixEchelon: MatrixView {
 
 #[derive(Clone, Debug, Derivative)]
 #[derivative(Default(new = "true"))]
-#[cfg_attr(feature = "python_binding", pyclass(get_all, set_all))]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf", get_all, set_all))]
 pub struct EchelonInfo {
     /// whether it's a satisfiable matrix, only valid when `is_echelon_form` is true
     pub satisfiable: bool,
@@ -268,7 +267,7 @@ impl EchelonInfo {
 
 #[derive(Clone, Copy, Derivative, PartialEq, Eq)]
 #[derivative(Default(new = "true"))]
-#[cfg_attr(feature = "python_binding", pyclass(get_all, set_all))]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf", get_all, set_all))]
 pub struct ColumnInfo {
     pub row: RowIndex,
 }
@@ -281,6 +280,10 @@ impl ColumnInfo {
     }
     fn __str__(&self) -> String {
         self.__repr__()
+    }
+    #[pyo3(name = "is_dependent")]
+    fn py_is_dependent(&self) -> bool {
+        self.row != RowIndex::MAX
     }
 }
 
@@ -312,7 +315,7 @@ impl std::fmt::Debug for ColumnInfo {
 
 #[derive(Clone, Copy, Derivative, PartialEq, Eq)]
 #[derivative(Default(new = "true"))]
-#[cfg_attr(feature = "python_binding", pyclass(get_all, set_all))]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf", get_all, set_all))]
 pub struct RowInfo {
     pub column: ColumnIndex,
 }
@@ -436,7 +439,7 @@ pub mod tests {
                 if let Some(weight) = self.weights.get(&edge_weak) {
                     weight.clone()
                 } else {
-                    Rational::from(1.)
+                    Rational::from_float(1.).unwrap()
                 }
             })
         }
