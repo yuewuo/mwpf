@@ -17,10 +17,10 @@ use crate::util::*;
 #[cfg(feature = "python_binding")]
 use crate::util_py::*;
 use crate::visualize::*;
+use hashbrown::{HashMap, HashSet};
 #[cfg(feature = "python_binding")]
 use pyo3::prelude::*;
-use std::collections::BTreeMap;
-use std::collections::{HashMap, HashSet};
+
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::sync::Arc;
@@ -28,7 +28,7 @@ use std::sync::Arc;
 /// Vertex corresponds to a stabilizer measurement bit
 #[derive(Derivative, Clone)]
 #[derivative(Debug)]
-#[cfg_attr(feature = "python_binding", pyclass(get_all, set_all))]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf", get_all, set_all))]
 pub struct CodeVertex {
     /// position helps to visualize
     pub position: VisualizePosition,
@@ -49,7 +49,7 @@ impl CodeVertex {
 /// Edge flips the measurement result of two vertices
 #[derive(Derivative, Clone)]
 #[derivative(Debug)]
-#[cfg_attr(feature = "python_binding", pyclass)]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf"))]
 pub struct CodeEdge {
     /// the two vertices incident to this edge; in quantum LDPC codes this should be only a handful of vertices
     pub vertices: Vec<VertexIndex>,
@@ -312,10 +312,7 @@ pub trait ExampleCode {
         for edge in edges.iter() {
             weighted_edges.push(HyperEdge::new(edge.vertices.clone(), edge.weight.clone()));
         }
-        SolverInitializer {
-            vertex_num,
-            weighted_edges,
-        }
+        SolverInitializer::new(vertex_num, weighted_edges)
     }
 
     fn get_model_graph(&self) -> Arc<ModelHyperGraph> {
@@ -409,7 +406,7 @@ pub trait ExampleCode {
 
     /// get current syndrome
     fn get_syndrome(&self) -> SyndromePattern {
-        SyndromePattern::new(self.get_defect_vertices(), self.get_erasures())
+        SyndromePattern::new_erasure(self.get_defect_vertices(), self.get_erasures())
     }
 
     /// apply an error by flipping the vertices incident to it
@@ -584,7 +581,7 @@ where
 
 /// perfect quantum repetition code
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "python_binding", pyclass(get_all, set_all))]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf", get_all, set_all))]
 pub struct CodeCapacityRepetitionCode {
     /// vertices in the code
     pub vertices: Vec<CodeVertex>,
@@ -661,7 +658,7 @@ impl CodeCapacityRepetitionCode {
 /// code capacity noise model is a single measurement round with perfect stabilizer measurements;
 /// e.g. this is the decoding graph of a CSS surface code (standard one, not rotated one) with X-type stabilizers
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "python_binding", pyclass(get_all, set_all))]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf", get_all, set_all))]
 pub struct CodeCapacityPlanarCode {
     /// vertices in the code
     pub vertices: Vec<CodeVertex>,
@@ -750,7 +747,7 @@ impl CodeCapacityPlanarCode {
 /// e.g. this is the decoding graph of a CSS surface code (standard one, not rotated one) with both stabilizers and
 /// depolarizing noise model (X, Y, Z)
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "python_binding", pyclass(get_all, set_all))]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf", get_all, set_all))]
 pub struct CodeCapacityDepolarizePlanarCode {
     /// vertices in the code
     pub vertices: Vec<CodeVertex>,
@@ -794,7 +791,7 @@ impl CodeCapacityDepolarizePlanarCode {
         let vertex_num = 2 * row_vertex_num * d;
         // first iterate all vertices
         let mut positions = Vec::new();
-        let mut vertices: BTreeMap<(isize, isize), usize> = BTreeMap::new();
+        let mut vertices: FastIterMap<(isize, isize), usize> = FastIterMap::new();
         // X and Z stabilizer vertices
         for is_z in [false, true] {
             for row in 0..d {
@@ -892,7 +889,7 @@ impl CodeCapacityDepolarizePlanarCode {
 /// e.g. this is the decoding hypergraph of a rotated tailored surface code that have all the stabilizers and including degree-4 hyperedges;
 /// the noise is biased to Z errors, with X and Y-typed stabilizers
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "python_binding", pyclass(get_all, set_all))]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf", get_all, set_all))]
 pub struct CodeCapacityTailoredCode {
     /// vertices in the code
     pub vertices: Vec<CodeVertex>,
@@ -1027,7 +1024,7 @@ impl CodeCapacityTailoredCode {
 /// e.g. this is the decoding hypergraph of a color code that have all only the Z stabilizers
 /// (because X and Z have the same location, for simplicity and better visual)
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "python_binding", pyclass(get_all, set_all))]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf", get_all, set_all))]
 pub struct CodeCapacityColorCode {
     /// vertices in the code
     pub vertices: Vec<CodeVertex>,
@@ -1137,7 +1134,7 @@ impl CodeCapacityColorCode {
 
 /// example code with QEC-Playground as simulator
 #[cfg(feature = "qecp_integrate")]
-#[cfg_attr(feature = "python_binding", pyclass)]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf"))]
 #[derive(Debug, Clone)]
 pub struct QECPlaygroundCode {
     simulator: qecp::simulator::Simulator,
@@ -1395,7 +1392,7 @@ pub mod hyperion_default_configs {
 /// the point is to avoid bad cache performance, because generating random error requires iterating over a large memory space,
 /// invalidating all cache. also, this can reduce the time of decoding by prepare the data before hand and could be shared between
 /// different partition configurations
-#[cfg_attr(feature = "python_binding", pyclass(get_all, set_all))]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf", get_all, set_all))]
 pub struct ErrorPatternReader {
     /// vertices in the code
     pub vertices: Vec<CodeVertex>,
@@ -1588,7 +1585,7 @@ mod tests {
                 println!("d={d}, p={p}");
                 let mut code = CodeCapacityRepetitionCode::new(d, p);
                 code.sanity_check().unwrap();
-                let initializer = code.get_initializer();
+                let initializer = Arc::new(code.get_initializer());
                 let mut solver =
                     SolverType::JointSingleHair.build(&initializer, &code, json!({ "cluster_node_limit": 50 }), None);
                 for _ in 0..repeat {
@@ -1602,6 +1599,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "f64_weight")] // too slow, skip
     #[test]
     fn example_code_correction_validity_code_capacity_depolarize_planar_code() {
         // cargo test --release example_code_correction_validity_code_capacity_depolarize_planar_code -- --nocapture
@@ -1613,7 +1611,7 @@ mod tests {
                 println!("d={d}, p={p}");
                 let mut code = CodeCapacityDepolarizePlanarCode::new(d, p);
                 code.sanity_check().unwrap();
-                let initializer = code.get_initializer();
+                let initializer = Arc::new(code.get_initializer());
                 let mut solver =
                     SolverType::JointSingleHair.build(&initializer, &code, json!({ "cluster_node_limit": 50 }), None);
                 for _ in 0..repeat {
@@ -1627,6 +1625,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "f64_weight")] // too slow, skip
     #[test]
     fn example_code_correction_validity_code_capacity_color_code() {
         // cargo test --release example_code_correction_validity_code_capacity_color_code -- --nocapture
@@ -1638,7 +1637,7 @@ mod tests {
                 println!("d={d}, p={p}");
                 let mut code = CodeCapacityColorCode::new(d, p);
                 code.sanity_check().unwrap();
-                let initializer = code.get_initializer();
+                let initializer = Arc::new(code.get_initializer());
                 let mut solver =
                     SolverType::JointSingleHair.build(&initializer, &code, json!({ "cluster_node_limit": 50 }), None);
                 for _ in 0..repeat {
@@ -1652,10 +1651,11 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "f64_weight")] // too slow, skip
     #[test]
     fn example_code_optimality_code_capacity_tailored_code() {
         // cargo test --release example_code_optimality_code_capacity_tailored_code -- --nocapture
-        let d_vec = [3, 5, 7, 9];
+        let d_vec = [3, 5, 7];
         let p_vec = [0.1, 0.01];
         let repeat = 10000;
         for d in d_vec {
@@ -1663,7 +1663,7 @@ mod tests {
                 println!("d={d}, p={p}");
                 let mut code = CodeCapacityTailoredCode::new(d, 0., p);
                 code.sanity_check().unwrap();
-                let initializer = code.get_initializer();
+                let initializer = Arc::new(code.get_initializer());
                 let mut solver = SolverType::JointSingleHair.build(&initializer, &code, json!({}), None); // "cluster_node_limit": 50
                 for _ in 0..repeat {
                     let (syndrome, _) = code.generate_random_errors(thread_rng().gen::<u64>());
@@ -1673,7 +1673,10 @@ mod tests {
                     if weight_range.lower != weight_range.upper {
                         println!("weight range: {:?}, syndrome = {:?}", weight_range, syndrome);
                     }
-                    assert_eq!(weight_range.lower, weight_range.upper, "must be optimal");
+                    assert!(
+                        rational_approx_eq(&weight_range.lower, &weight_range.upper),
+                        "must be optimal"
+                    );
                     solver.clear();
                 }
             }

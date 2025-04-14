@@ -1,0 +1,12 @@
+setuptools~=75.8.0
+wheel~=0.45.1
+twine~=6.1.0
+cibuildwheel~=2.22.0
+pytest~=8.3.4
+maturin~=1.8.2
+fusion_blossom~=0.2.13
+# numpy is installed by sinter
+stim~=1.14.0
+sinter~=1.14.0
+frozendict~=2.4.6
+frozenlist~=1.5.0

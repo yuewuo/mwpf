@@ -1,5 +1,10 @@
 <script setup lang="ts">
+import { Info } from '../info_pane'
+import { computed } from 'vue'
+
 interface Props {
+    info?: Info
+    indexType?: string
     title?: string
     indices: Array<number>
     titleWidth?: number
@@ -9,16 +14,72 @@ const props = withDefaults(defineProps<Props>(), {
     titleWidth: 30,
     width: 300,
 })
+
+const clickable_types = new Set(['vertex', 'edge'])
+const is_clickable = computed(() => {
+    return props.info != undefined && props.indexType != undefined && clickable_types.has(props.indexType)
+})
+
+function enter_title() {
+    if (!is_clickable.value) return
+    if (props.indexType == 'vertex') {
+        props.info!.config.data.hovered = { type: 'vertices', vis: props.indices }
+    } else if (props.indexType == 'edge') {
+        props.info!.config.data.hovered = { type: 'edges', eis: props.indices }
+    }
+}
+function leave_title() {
+    if (!is_clickable.value) return
+    props.info!.config.data.hovered = undefined
+}
+
+function enter_index(idx: number) {
+    if (!is_clickable.value) return
+    if (props.indexType == 'vertex') {
+        props.info!.config.data.hovered = { type: 'vertex', vi: idx }
+    } else if (props.indexType == 'edge') {
+        props.info!.config.data.hovered = { type: 'edge', ei: idx }
+    }
+}
+function leave_index() {
+    if (!is_clickable.value) return
+    props.info!.config.data.hovered = undefined
+}
+function click_index(idx: number) {
+    if (!is_clickable.value) return
+    if (props.indexType == 'vertex') {
+        props.info!.config.data.selected = { type: 'vertex', vi: idx }
+    } else if (props.indexType == 'edge') {
+        props.info!.config.data.selected = { type: 'edge', ei: idx }
+    }
+}
 </script>
 
 <template>
     <div class="div" :style="{ width: props.width + 'px' }">
         <div class="flex-div">
-            <span class="title" v-html="props.title" :style="{ width: props.titleWidth + 'px' }"></span>
+            <span
+                class="title"
+                :class="{ 'title-clickable': is_clickable }"
+                v-html="props.title"
+                :style="{ width: props.titleWidth + 'px' }"
+                @mouseenter="enter_title"
+                @mouseleave="leave_title"
+            ></span>
             <div class="indices-div" :style="{ width: props.width - props.titleWidth + 'px' }">
                 <div class="flex-div">
                     <span class="bracket">{</span>
-                    <button v-for="(idx, i) of props.indices" :key="i" class="idx-button">{{ idx }}</button>
+                    <button
+                        v-for="(idx, i) of props.indices"
+                        :key="i"
+                        class="idx-button"
+                        :class="{ 'idx-button-clickable': is_clickable }"
+                        @mouseenter="enter_index(idx)"
+                        @mouseleave="leave_index"
+                        @mousedown="click_index(idx)"
+                    >
+                        {{ idx }}
+                    </button>
                     <span class="bracket">}</span>
                 </div>
             </div>
@@ -35,11 +96,8 @@ const props = withDefaults(defineProps<Props>(), {
     display: inline-block;
     user-select: none;
 }
-.title:hover {
+.title-clickable:hover {
     color: #6fdfdf;
-}
-.title:active {
-    color: #4b7be5;
 }
 .indices-div {
     display: inline-block;
@@ -71,10 +129,10 @@ const props = withDefaults(defineProps<Props>(), {
     padding: 0 1px 1px 2px;
     margin: 0 1px 0 1px;
 }
-.idx-button:hover {
+.idx-button-clickable:hover {
     color: #6fdfdf;
 }
-.idx-button:active {
+.idx-button-clickable:active {
     color: #4b7be5;
 }
 </style>

@@ -142,13 +142,36 @@ export function fix_visualizer_data (visualizer: VisualizerData) {
 /* runtime data */
 export class RuntimeData {
     visualizer: VisualizerData
-    hovered: Intersection | undefined = undefined
-    selected: Intersection | undefined = undefined
+    hovered: any = undefined
+    selected: any = undefined
 
     constructor (visualizer: VisualizerData) {
         // first fix the visualizer data (primarily the BigInts)
         fix_visualizer_data(visualizer)
         this.visualizer = visualizer
+    }
+}
+
+export function clickable_of (intersect: Intersection | undefined): any {
+    if (intersect == undefined) {
+        return
+    }
+    if (intersect.instanceId != undefined) {
+        const instance_state = intersect?.object?.userData?.vecData?.[intersect.instanceId]
+        if (instance_state != undefined) {
+            if (instance_state.type == 'vertex') {
+                return {
+                    type: 'vertex',
+                    vi: instance_state.vi,
+                }
+            }
+            if (instance_state.type == 'edge') {
+                return {
+                    type: 'edge',
+                    ei: instance_state.ei,
+                }
+            }
+        }
     }
 }
 
@@ -160,6 +183,16 @@ export class ConfigProps {
     visualizer_config: any = undefined
     initial_aspect_ratio?: number = undefined
     snapshot_index?: number = undefined
+    config_setters?: object = undefined
+}
+
+// https://stackoverflow.com/questions/8817394/javascript-get-deep-value-from-object-by-passing-path-to-it-as-string/8817473
+export function set_deep_value (obj: any, path: string, value: any) {
+    const paths = path.split('.')
+    for (let i = 0; i < paths.length - 1; i++) {
+        obj = obj[paths[i]]
+    }
+    obj[paths[paths.length - 1]] = value
 }
 
 /*

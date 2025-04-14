@@ -4,8 +4,7 @@ use crate::plugin::EchelonMatrix;
 use crate::util::*;
 use crate::{decoding_hypergraph::*, invalid_subgraph};
 use std::cmp::Ordering;
-use std::collections::hash_map::DefaultHasher;
-use std::collections::BTreeSet;
+// use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
@@ -15,18 +14,18 @@ use crate::dual_module_pq::{EdgePtr, VertexPtr};
 use crate::pointers::UnsafePtr;
 
 /// an invalid subgraph $S = (V_S, E_S)$, also store the hair $\delta(S)$
-#[derive(Clone, PartialEq, Eq, Derivative)]
+#[derive(Clone, PartialEq, Eq, Derivative, Default)]
 #[derivative(Debug)]
 pub struct InvalidSubgraph {
     /// the hash value calculated by other fields
     #[derivative(Debug = "ignore")]
     pub hash_value: u64,
     /// subset of vertices
-    pub vertices: BTreeSet<VertexPtr>,
+    pub vertices: FastIterSet<VertexPtr>,
     /// subset of edges
-    pub edges: BTreeSet<EdgePtr>,
+    pub edges: FastIterSet<EdgePtr>,
     /// the hair of the invalid subgraph, to avoid repeated computation
-    pub hair: BTreeSet<EdgePtr>,
+    pub hair: FastIterSet<EdgePtr>,
 }
 
 impl Hash for InvalidSubgraph {
@@ -57,8 +56,8 @@ impl PartialOrd for InvalidSubgraph {
 impl InvalidSubgraph {
     /// construct an invalid subgraph using only $E_S$, and constructing the $V_S$ by $\cup E_S$
     #[allow(clippy::unnecessary_cast)]
-    pub fn new(edges: &BTreeSet<EdgePtr>) -> Self {
-        let mut vertices: BTreeSet<VertexPtr> = BTreeSet::new();
+    pub fn new(edges: &FastIterSet<EdgePtr>) -> Self {
+        let mut vertices: BTreeSet<VertexPtr> = FastIterSet::new();
         for edge_ptr in edges.iter() {
             for vertex_ptr in edge_ptr.read_recursive().vertices.iter() {
                 vertices.insert(vertex_ptr.upgrade_force().clone());
@@ -69,8 +68,8 @@ impl InvalidSubgraph {
 
     /// complete definition of invalid subgraph $S = (V_S, E_S)$
     #[allow(clippy::unnecessary_cast)]
-    pub fn new_complete(vertices: &BTreeSet<VertexPtr>, edges: &BTreeSet<EdgePtr>) -> Self {
-        let mut hair = BTreeSet::new();
+    pub fn new_complete(vertices: &FastIterSet<VertexPtr>, edges: &FastIterSet<EdgePtr>) -> Self {
+        let mut hair = FastIterSet::new();
         for vertex_ptr in vertices.iter() {
             for edge_weak in vertex_ptr.read_recursive().edges.iter() {
                 let edge_ptr = edge_weak.upgrade_force();
@@ -85,7 +84,7 @@ impl InvalidSubgraph {
     }
 
     /// create $S = (V_S, E_S)$ and $\delta(S)$ directly, without any checks
-    pub fn new_raw(vertices: &BTreeSet<VertexPtr>, edges: &BTreeSet<EdgePtr>, hair: &BTreeSet<EdgePtr>) -> Self {
+    pub fn new_raw(vertices: &FastIterSet<VertexPtr>, edges: &FastIterSet<EdgePtr>, hair: &FastIterSet<EdgePtr>) -> Self {
         let mut invalid_subgraph = Self {
             hash_value: 0,
             vertices: vertices.clone(),
@@ -97,7 +96,7 @@ impl InvalidSubgraph {
     }
 
     pub fn update_hash(&mut self) {
-        let mut hasher = DefaultHasher::new();
+        let mut hasher = DefaultHasher::default();
         self.vertices.hash(&mut hasher);
         self.edges.hash(&mut hasher);
         self.hair.hash(&mut hasher);
@@ -217,18 +216,18 @@ impl InvalidSubgraph {
 
 // shortcuts for easier code writing at debugging
 impl InvalidSubgraph {
-    pub fn new_ptr(edges: &BTreeSet<EdgePtr>) -> Arc<Self> {
+    pub fn new_ptr(edges: &FastIterSet<EdgePtr>) -> Arc<Self> {
         Arc::new(Self::new(edges))
     }
     pub fn new_vec_ptr(edges: &[EdgePtr]) -> Arc<Self> {
         let strong_edges: BTreeSet<EdgePtr> = edges.iter().cloned().collect::<BTreeSet<_>>();
         Self::new_ptr(&strong_edges)
     }
-    pub fn new_complete_ptr(vertices: &BTreeSet<VertexPtr>, edges: &BTreeSet<EdgePtr>) -> Arc<Self> {
+    pub fn new_complete_ptr(vertices: &FastIterSet<VertexPtr>, edges: &FastIterSet<EdgePtr>) -> Arc<Self> {
         Arc::new(Self::new_complete(vertices, edges))
     }
-    pub fn new_complete_vec_ptr(vertices: &BTreeSet<VertexPtr>, edges: &[EdgePtr]) -> Arc<Self> {
-        let strong_edges: BTreeSet<EdgePtr> = edges.iter().cloned().collect::<BTreeSet<_>>();
+    pub fn new_complete_vec_ptr(vertices: &FastIterSet<VertexPtr>, edges: &[EdgePtr]) -> Arc<Self> {
+        let strong_edges: FastIterSet<EdgePtr> = edges.iter().cloned().collect::<FastIterSet<_>>();
         Self::new_complete_ptr(vertices, &strong_edges)
     }
 }
@@ -294,7 +293,7 @@ pub mod tests {
     }
 
     pub fn get_default_hash_value(object: &impl Hash) -> u64 {
-        let mut hasher = DefaultHasher::new();
+        let mut hasher = DefaultHasher::default();
         object.hash(&mut hasher);
         hasher.finish()
     }
@@ -308,9 +307,9 @@ pub mod tests {
         let initializer = decoding_graph.model_graph.initializer.clone();
         let mut dual_module = DualModulePQ::new_empty(&initializer);
 
-        let vertices: BTreeSet<VertexIndex> = [1, 2, 3].into();
-        let edges: BTreeSet<EdgeIndex> = [4, 5].into();
-        let hair: BTreeSet<EdgeIndex> = [6, 7, 8].into();
+        let vertices: FastIterSet<VertexIndex> = [1, 2, 3].into();
+        let edges: FastIterSet<EdgeIndex> = [4, 5].into();
+        let hair: FastIterSet<EdgeIndex> = [6, 7, 8].into();
 
         let invalid_subgraph_1 =
             InvalidSubgraph::new_raw_from_indices(vertices.clone(), edges.clone(), hair.clone(), &mut dual_module);

@@ -10,12 +10,10 @@ use crate::invalid_subgraph::*;
 use crate::relaxer::*;
 use crate::util::*;
 
-use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
-use derivative::Derivative;
-
 use crate::dual_module_pq::EdgePtr;
+use derivative::Derivative;
 use num_traits::{Signed, Zero};
 
 #[cfg(feature = "slp")]
@@ -27,9 +25,9 @@ use std::ops::Index;
 
 #[cfg(all(feature = "incr_lp", feature = "highs"))]
 pub struct IncrLPSolution {
-    pub edge_constraints: BTreeMap<EdgeIndex, (Rational, BTreeSet<NodeIndex>)>,
-    pub edge_row_map: BTreeMap<EdgeIndex, highs::Row>,
-    pub dv_col_map: BTreeMap<NodeIndex, highs::Col>,
+    pub edge_constraints: FastIterMap<EdgeIndex, (Rational, FastIterSet<NodeIndex>)>,
+    pub edge_row_map: FastIterMap<EdgeIndex, highs::Row>,
+    pub dv_col_map: FastIterMap<NodeIndex, highs::Col>,
     pub solution: Option<highs::SolvedModel>,
 }
 
@@ -74,7 +72,7 @@ impl OptimizerResult {
 #[derivative(Default(new = "true"))]
 pub struct RelaxerOptimizer {
     /// the set of existing relaxers
-    relaxers: BTreeSet<Relaxer>,
+    relaxers: FastIterSet<Relaxer>,
 }
 
 #[derive(Derivative)]
@@ -129,8 +127,8 @@ impl RelaxerOptimizer {
     pub fn optimize(
         &mut self,
         relaxer: Relaxer,
-        edge_slacks: BTreeMap<EdgeIndex, Rational>,
-        mut dual_variables: BTreeMap<Arc<InvalidSubgraph>, Rational>,
+        edge_slacks: FastIterMap<EdgeIndex, Rational>,
+        mut dual_variables: FastIterMap<Arc<InvalidSubgraph>, Rational>,
     ) -> (Relaxer, bool) {
         for invalid_subgraph in relaxer.get_direction().keys() {
             if !dual_variables.contains_key(invalid_subgraph) {
@@ -145,7 +143,7 @@ impl RelaxerOptimizer {
         let mut y_vars = vec![];
         let mut constraints = vec![];
         let mut invalid_subgraphs = Vec::with_capacity(dual_variables.len());
-        let mut edge_contributor: BTreeMap<EdgeIndex, Vec<usize>> =
+        let mut edge_contributor: FastIterMap<EdgeIndex, Vec<usize>> =
             edge_slacks.keys().map(|&edge_index| (edge_index, vec![])).collect();
         for (var_index, (invalid_subgraph, dual_variable)) in dual_variables.iter().enumerate() {
             // slp only allows >= 0 variables, make this adaption
@@ -197,7 +195,7 @@ impl RelaxerOptimizer {
 
         let mut solver = slp::Solver::<slp::Ratio<slp::BigInt>>::new(&input);
         let solution = solver.solve();
-        let mut direction: BTreeMap<Arc<InvalidSubgraph>, Rational> = BTreeMap::new();
+        let mut direction: FastIterMap<Arc<InvalidSubgraph>, Rational> = FastIterMap::new();
         match solution {
             slp::Solution::Optimal(optimal_objective, model) => {
                 if !optimal_objective.is_positive() {
@@ -222,8 +220,8 @@ impl RelaxerOptimizer {
     pub fn optimize(
         &mut self,
         relaxer: Relaxer,
-        edge_slacks: BTreeMap<EdgePtr, Rational>,
-        mut dual_variables: BTreeMap<Arc<InvalidSubgraph>, Rational>,
+        edge_slacks: FastIterMap<EdgePtr, Rational>,
+        mut dual_variables: FastIterMap<Arc<InvalidSubgraph>, Rational>,
     ) -> (Relaxer, bool) {
         use highs::{HighsModelStatus, RowProblem, Sense};
         use num_traits::ToPrimitive;
@@ -244,7 +242,7 @@ impl RelaxerOptimizer {
         let mut x_vars = vec![];
         let mut y_vars = vec![];
         let mut invalid_subgraphs = Vec::with_capacity(dual_variables.len());
-        let mut edge_contributor: BTreeMap<EdgePtr, Vec<usize>> =
+        let mut edge_contributor: FastIterMap<EdgePtr, Vec<usize>> =
             edge_slacks.keys().map(|edge_ptr| (edge_ptr.clone(), vec![])).collect();
 
         for (var_index, (invalid_subgraph, dual_variable)) in dual_variables.iter().enumerate() {
@@ -279,7 +277,7 @@ impl RelaxerOptimizer {
 
         let solved = model.solve();
 
-        let mut direction: BTreeMap<Arc<InvalidSubgraph>, OrderedFloat> = BTreeMap::new();
+        let mut direction: FastIterMap<Arc<InvalidSubgraph>, OrderedFloat> = FastIterMap::new();
         if solved.status() == HighsModelStatus::Optimal {
             let solution = solved.get_solution();
 
@@ -315,8 +313,8 @@ impl RelaxerOptimizer {
     pub fn optimize_incr(
         &mut self,
         relaxer: Relaxer,
-        edge_free_weights: BTreeMap<EdgeIndex, Rational>,
-        dual_nodes: BTreeMap<NodeIndex, (Arc<InvalidSubgraph>, Rational)>,
+        edge_free_weights: FastIterMap<EdgeIndex, Rational>,
+        dual_nodes: FastIterMap<NodeIndex, (Arc<InvalidSubgraph>, Rational)>,
         option_incr_lp_solution: &mut Option<Arc<Mutex<IncrLPSolution>>>,
     ) -> (Relaxer, bool) {
         use highs::{HighsModelStatus, RowProblem, Sense};
@@ -329,9 +327,9 @@ impl RelaxerOptimizer {
                 let mut incr_lp_solution_ptr = incr_lp_solution.lock();
                 let mut model: highs::Model = incr_lp_solution_ptr.solution.take().unwrap().into();
 
-                let mut edge_contributor: BTreeMap<EdgeIndex, (Rational, BTreeSet<NodeIndex>)> = edge_free_weights
+                let mut edge_contributor: FastIterMap<EdgeIndex, (Rational, FastIterSet<NodeIndex>)> = edge_free_weights
                     .iter()
-                    .map(|(&edge_index, edge_free_weight)| (edge_index, (edge_free_weight.clone(), BTreeSet::new())))
+                    .map(|(&edge_index, edge_free_weight)| (edge_index, (edge_free_weight.clone(), FastIterSet::new())))
                     .collect();
 
                 for (dual_node_index, (invalid_subgraph, _)) in dual_nodes.iter() {
@@ -350,9 +348,9 @@ impl RelaxerOptimizer {
                     incr_lp_solution_ptr.dv_col_map.insert(dual_node_index.clone(), col);
                 }
 
-                let mut new_edges = BTreeSet::new();
-                let mut update_deges_weight = BTreeSet::new();
-                let mut update_edges_contributors = BTreeSet::new();
+                let mut new_edges = FastIterSet::new();
+                let mut update_deges_weight = FastIterSet::new();
+                let mut update_edges_contributors = FastIterSet::new();
 
                 // get difference between edges
                 for (&edge_index, free_weight) in edge_free_weights.iter() {
@@ -399,7 +397,7 @@ impl RelaxerOptimizer {
 
                 let solved = model.solve();
 
-                let mut direction: BTreeMap<Arc<InvalidSubgraph>, OrderedFloat> = BTreeMap::new();
+                let mut direction: FastIterMap<Arc<InvalidSubgraph>, OrderedFloat> = FastIterMap::new();
                 if solved.status() == HighsModelStatus::Optimal {
                     let solution = solved.get_solution();
 
@@ -439,12 +437,12 @@ impl RelaxerOptimizer {
                 model.set_option("threads", 1);
                 model.set_option("seed", 1);
 
-                let mut edge_row_map: BTreeMap<EdgeIndex, highs::Row> = BTreeMap::new();
-                let mut dv_col_map: BTreeMap<NodeIndex, highs::Col> = BTreeMap::new();
+                let mut edge_row_map: FastIterMap<EdgeIndex, highs::Row> = FastIterMap::new();
+                let mut dv_col_map: FastIterMap<NodeIndex, highs::Col> = FastIterMap::new();
 
-                let mut edge_contributor: BTreeMap<EdgeIndex, (Rational, BTreeSet<NodeIndex>)> = edge_free_weights
+                let mut edge_contributor: FastIterMap<EdgeIndex, (Rational, FastIterSet<NodeIndex>)> = edge_free_weights
                     .iter()
-                    .map(|(&edge_index, edge_free_weight)| (edge_index, (edge_free_weight.clone(), BTreeSet::new())))
+                    .map(|(&edge_index, edge_free_weight)| (edge_index, (edge_free_weight.clone(), FastIterSet::new())))
                     .collect();
 
                 for (dual_node_index, (invalid_subgraph, _)) in dual_nodes.iter() {
@@ -471,7 +469,7 @@ impl RelaxerOptimizer {
 
                 let solved = model.solve();
 
-                let mut direction: BTreeMap<Arc<InvalidSubgraph>, OrderedFloat> = BTreeMap::new();
+                let mut direction: FastIterMap<Arc<InvalidSubgraph>, OrderedFloat> = FastIterMap::new();
                 if solved.status() == HighsModelStatus::Optimal {
                     let solution = solved.get_solution();
 

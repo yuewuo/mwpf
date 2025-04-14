@@ -3,7 +3,6 @@ use super::row::*;
 use super::visualize::*;
 use crate::util::*;
 use derivative::Derivative;
-use std::collections::{BTreeMap, BTreeSet};
 
 use crate::dual_module_pq::{EdgeWeak, VertexPtr, VertexWeak};
 #[cfg(feature = "unsafe_pointer")]
@@ -14,9 +13,9 @@ use crate::pointers::UnsafePtr;
 #[derivative(Default(new = "true"))]
 pub struct CompleteMatrix {
     /// the vertices already maintained by this parity check
-    vertices: BTreeSet<VertexWeak>,
+    vertices: FastIterSet<VertexWeak>,
     /// the edges maintained by this parity check, mapping to the local indices
-    edges: BTreeMap<EdgeWeak, VarIndex>,
+    edges: FastIterMap<EdgeWeak, VarIndex>,
     /// variable index map to edge index
     variables: Vec<EdgeWeak>,
     constraints: Vec<ParityRow>,
@@ -86,11 +85,11 @@ impl MatrixBasic for CompleteMatrix {
         self.edges.get(&edge_weak).cloned()
     }
 
-    fn get_vertices(&self) -> BTreeSet<VertexWeak> {
+    fn get_vertices(&self) -> FastIterSet<VertexWeak> {
         self.vertices.clone()
     }
 
-    fn get_edges(&self) -> BTreeSet<EdgeWeak> {
+    fn get_edges(&self) -> FastIterSet<EdgeWeak> {
         self.edges.keys().cloned().collect()
     }
 }

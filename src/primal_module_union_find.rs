@@ -12,11 +12,11 @@ use crate::invalid_subgraph::*;
 use crate::num_traits::Zero;
 use crate::pointers::*;
 use crate::primal_module::*;
-use crate::serde::{Deserialize, Serialize};
 use crate::union_find::*;
 use crate::util::*;
 use crate::visualize::*;
-use std::collections::BTreeSet;
+
+use std::sync::Arc;
 
 use crate::dual_module_pq::EdgePtr;
 
@@ -33,7 +33,7 @@ type UnionFind = UnionFindGeneric<PrimalModuleUnionFindNode>;
 #[derive(Debug, Clone)]
 pub struct PrimalModuleUnionFindNode {
     /// all the internal edges
-    pub internal_edges: BTreeSet<EdgePtr>,
+    pub internal_edges: FastIterSet<EdgePtr>,
     /// the corresponding node index with these internal edges
     pub node_index: NodeIndex,
 }
@@ -42,7 +42,7 @@ pub struct PrimalModuleUnionFindNode {
 impl UnionNodeTrait for PrimalModuleUnionFindNode {
     #[inline]
     fn union(left: &Self, right: &Self) -> (bool, Self) {
-        let mut internal_edges = BTreeSet::new();
+        let mut internal_edges = FastIterSet::new();
         internal_edges.extend(left.internal_edges.iter().cloned());
         internal_edges.extend(right.internal_edges.iter().cloned());
         let result = Self {
@@ -59,14 +59,14 @@ impl UnionNodeTrait for PrimalModuleUnionFindNode {
     #[inline]
     fn default() -> Self {
         Self {
-            internal_edges: BTreeSet::new(),
+            internal_edges: FastIterSet::new(),
             node_index: NodeIndex::MAX, // waiting for assignment
         }
     }
 }
 
 impl PrimalModuleImpl for PrimalModuleUnionFind {
-    fn new_empty(_initializer: &SolverInitializer) -> Self {
+    fn new_empty(_initializer: &Arc<SolverInitializer>) -> Self {
         Self {
             union_find: UnionFind::new(0),
         }
@@ -89,19 +89,23 @@ impl PrimalModuleImpl for PrimalModuleUnionFind {
             let node = node_ptr.read_recursive();
             debug_assert!(
                 node.invalid_subgraph.edges.is_empty(),
-                "must load a fresh dual module interface, found a complex node"
+                "must load a fresh dual module interface, found a complex node; did you forget to call solver.clear()?"
             );
             debug_assert!(
                 node.invalid_subgraph.vertices.len() == 1,
-                "must load a fresh dual module interface, found invalid defect node"
+                "must load a fresh dual module interface, found invalid defect node; did you forget to call solver.clear()?"
             );
             debug_assert_eq!(
                 node.index, index,
-                "must load a fresh dual module interface, found index out of order"
+                "must load a fresh dual module interface, found index out of order; did you forget to call solver.clear()?"
             );
-            assert_eq!(node.index as usize, self.union_find.size(), "must load defect nodes in order");
+            assert_eq!(
+                node.index as usize,
+                self.union_find.size(),
+                "must load defect nodes in order, did you forget to call solver.clear()?"
+            );
             self.union_find.insert(PrimalModuleUnionFindNode {
-                internal_edges: BTreeSet::new(),
+                internal_edges: FastIterSet::new(),
                 node_index: node.index,
             });
         }
@@ -115,7 +119,7 @@ impl PrimalModuleImpl for PrimalModuleUnionFind {
         dual_module: &mut impl DualModuleImpl,
     ) -> bool {
         debug_assert!(!dual_report.is_unbounded() && dual_report.get_valid_growth().is_none());
-        let mut active_clusters = BTreeSet::<NodeIndex>::new();
+        let mut active_clusters = FastIterSet::<NodeIndex>::new();
         while let Some(obstacle) = dual_report.pop() {
             match obstacle {
                 Obstacle::Conflict { edge_ptr } => {
@@ -149,7 +153,7 @@ impl PrimalModuleImpl for PrimalModuleUnionFind {
             } else {
                 let new_cluster_node_index = self.union_find.size() as NodeIndex;
                 self.union_find.insert(PrimalModuleUnionFindNode {
-                    internal_edges: BTreeSet::new(),
+                    internal_edges: FastIterSet::new(),
                     node_index: new_cluster_node_index,
                 });
                 self.union_find.union(cluster_index as usize, new_cluster_node_index as usize);
@@ -162,7 +166,7 @@ impl PrimalModuleImpl for PrimalModuleUnionFind {
     }
 
     fn subgraph(&mut self, interface_ptr: &DualModuleInterfacePtr, _dual_module: &impl DualModuleImpl) -> OutputSubgraph {
-        let mut valid_clusters = BTreeSet::new();
+        let mut valid_clusters = FastIterSet::new();
         let mut internal_subgraph = vec![];
         for i in 0..self.union_find.size() {
             let root_index = self.union_find.find(i);
@@ -210,7 +214,6 @@ pub mod tests {
     use super::*;
     use crate::dual_module_pq::*;
     use crate::example_codes::*;
-    use crate::more_asserts::*;
     use crate::num_traits::ToPrimitive;
     use std::sync::Arc;
 
@@ -255,8 +258,16 @@ pub mod tests {
             model_graph.initializer.matches_subgraph_syndrome(&subgraph, &defect_vertices),
             "the result subgraph is invalid"
         );
-        assert_le!(final_dual, weight_range.upper, "unmatched sum dual variables");
-        assert_ge!(final_dual, weight_range.lower, "unexpected final dual variable sum");
+        println!("final_dual: {final_dual:?}");
+        println!("upper: {:?}", weight_range.upper);
+        assert!(
+            rational_approx_le(&final_dual, &weight_range.upper),
+            "unmatched sum dual variables"
+        );
+        assert!(
+            rational_approx_ge(&final_dual, &weight_range.lower),
+            "unexpected final dual variable sum"
+        );
         println!(
             "weight range: [{}, {}]",
             weight_range.lower.to_i64().unwrap(),
@@ -307,7 +318,7 @@ pub mod tests {
             code,
             visualize_filename,
             defect_vertices,
-            Rational::from(4.59511985013459),
+            Rational::from_float(4.59511985013459).unwrap(),
         );
     }
 
@@ -321,7 +332,7 @@ pub mod tests {
             code,
             visualize_filename,
             defect_vertices,
-            Rational::from(9.19023970026918),
+            Rational::from_float(9.19023970026918).unwrap(),
         );
     }
 
@@ -335,7 +346,7 @@ pub mod tests {
             code,
             visualize_filename,
             defect_vertices,
-            Rational::from(22.975599250672953),
+            Rational::from_float(22.975599250672953).unwrap(),
         );
     }
 
@@ -349,7 +360,7 @@ pub mod tests {
             code,
             visualize_filename,
             defect_vertices,
-            Rational::from(9.19023970026918),
+            Rational::from_float(9.19023970026918).unwrap(),
         );
     }
 
@@ -363,7 +374,7 @@ pub mod tests {
             code,
             visualize_filename,
             defect_vertices,
-            Rational::from(12.25365293369224),
+            Rational::from_float(12.25365293369224).unwrap(),
         );
     }
 
@@ -377,7 +388,7 @@ pub mod tests {
             code,
             visualize_filename,
             defect_vertices,
-            Rational::from(11.777755916665761),
+            Rational::from_float(11.777755916665761).unwrap(),
         );
     }
 }

@@ -9,9 +9,8 @@ use mwpf::pointers::*;
 use mwpf::util::*;
 use mwpf::visualize::*;
 use num_traits::FromPrimitive;
-use std::collections::BTreeSet;
+
 use std::sync::Arc;
-use sugar::*;
 
 fn hyperedge_example() {
     let visualize_filename = "paper_hyperedge_example.json".to_string();
@@ -21,7 +20,7 @@ fn hyperedge_example() {
     code.vertices.clear();
     code.edges = vec![CodeEdge::new(vec![0, 1, 2, 3, 4, 5, 6])];
     for edge in code.edges.iter_mut() {
-        edge.weight = Rational::from(1.);
+        edge.weight = Rational::from_float(1.).unwrap();
     }
     code.fill_vertices(7);
     let radius = 2.;
@@ -30,8 +29,8 @@ fn hyperedge_example() {
         code.vertices[i].position = VisualizePosition::new(-radius * angle.cos(), radius * angle.sin(), 0.);
     }
     // create dual module
-    let initializer = code.get_initializer();
-    let model_graph = Arc::new(ModelHyperGraph::new(Arc::new(initializer.clone())));
+    let initializer = Arc::new(code.get_initializer());
+    let model_graph = Arc::new(ModelHyperGraph::new(initializer.clone()));
     let mut dual_module = DualModulePQ::new_empty(&initializer);
     let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone());
     // add syndrome
@@ -42,16 +41,16 @@ fn hyperedge_example() {
     }
     // manually grow the dual variables
     let decoding_graph = interface_ptr.read_recursive().decoding_graph.clone();
-    let dual_variables: Vec<(BTreeSet<VertexIndex>, f64)> = vec![
-        (btreeset! {5,6}, 0.1),
-        (btreeset! {4,5}, 0.1),
-        (btreeset! {2}, 0.1),
-        (btreeset! {1}, 0.5),
+    let dual_variables: Vec<(FastIterSet<VertexIndex>, f64)> = vec![
+        (fast_iter_set! {5,6}, 0.1),
+        (fast_iter_set! {4,5}, 0.1),
+        (fast_iter_set! {2}, 0.1),
+        (fast_iter_set! {1}, 0.5),
     ];
     for (vertices, dual_variable) in dual_variables.into_iter() {
         let s1 = Arc::new(InvalidSubgraph::new_complete_from_indices(
             vertices,
-            btreeset! {},
+            fast_iter_set! {},
             &mut dual_module,
         ));
         let (_, s1_ptr) = interface_ptr.find_or_create_node(&s1, &mut dual_module, 0);

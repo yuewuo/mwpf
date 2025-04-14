@@ -1,7 +1,7 @@
 use num_traits::Zero;
 use serde::{Deserialize, Serialize};
 
-const EPSILON: f64 = 1e-4; // note: it would be interesting to play around with this.
+const EPSILON: f64 = 1e-10; // note: it would be interesting to play around with this.
 const COMP_EPSILON: f64 = 1e-10; // note: it would be interesting to play around with this.
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,6 +30,12 @@ impl OrderedFloat {
 
     pub fn is_number(&self) -> bool {
         self.0.is_finite()
+    }
+    pub fn from_float(value: f64) -> Option<Self> {
+        Some(Self::new(value))
+    }
+    pub fn abs(&self) -> Self {
+        Self::new(self.0.abs())
     }
 }
 

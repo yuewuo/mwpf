@@ -188,9 +188,9 @@ function updateEdgeRingsColor(singular_edges: Array<Array<EdgeRingState>>, refs:
         const edges = singular_edges[i]
         for (let j = 0; j < edges.length; j++) {
             const state = edges[j]
-            if (state.ei == selected_edge?.ei) {
+            if (selected_eis?.has(state.ei)) {
                 mesh.setColorAt(j, new Color(config.value.basic.selected_color))
-            } else if (state.ei == hovered_edge?.ei) {
+            } else if (hovered_eis?.has(state.ei)) {
                 mesh.setColorAt(j, new Color(config.value.basic.hovered_color))
             } else {
                 mesh.setColorAt(j, new Color(state.color))
@@ -226,9 +226,9 @@ function updateEdgeTubesMatrix(edges: Array<EdgeTubeState>, mesh: any) {
 function updateEdgeTubesColor(edges: Array<EdgeTubeState>, mesh: any) {
     for (let i = 0; i < edges.length; i++) {
         const state = edges[i]
-        if (state.ei == selected_edge?.ei) {
+        if (selected_eis?.has(state.ei)) {
             mesh.setColorAt(i, new Color(config.value.basic.selected_color))
-        } else if (state.ei == hovered_edge?.ei) {
+        } else if (hovered_eis?.has(state.ei)) {
             mesh.setColorAt(i, new Color(config.value.basic.hovered_color))
         } else {
             mesh.setColorAt(i, new Color(state.color))
@@ -269,17 +269,15 @@ function update_intersect_color() {
     updateEdgeTubesColor(edge_states.value.tight_edge_tubes, (tight_edge_tubes_ref.value as any).mesh)
 }
 
-let hovered_edge: EdgeRingState | EdgeTubeState | undefined = undefined
-let selected_edge: EdgeRingState | EdgeTubeState | undefined = undefined
-function intersecting_edge(intersect: any): EdgeRingState | EdgeTubeState | undefined {
-    if (intersect?.instanceId == undefined) {
-        return undefined
+let hovered_eis: Set<number> | undefined = undefined
+let selected_eis: Set<number> | undefined = undefined
+function get_eis(info: any): Set<number> | undefined {
+    if (info?.type == 'edge') {
+        return new Set([info.ei])
     }
-    const edge_state: EdgeRingState | EdgeTubeState | undefined = intersect?.object?.userData?.vecData?.[intersect.instanceId]
-    if (edge_state == undefined || edge_state.type != 'edge') {
-        return undefined
+    if (info?.type == 'edges') {
+        return new Set(info.eis)
     }
-    return edge_state
 }
 
 onMounted(() => {
@@ -288,8 +286,8 @@ onMounted(() => {
     // update color
     watchEffect(() => {
         // update the color when the hovered or selected state changes
-        hovered_edge = intersecting_edge(config.value.data.hovered)
-        selected_edge = intersecting_edge(config.value.data.selected)
+        hovered_eis = get_eis(config.value.data.hovered)
+        selected_eis = get_eis(config.value.data.selected)
         update_intersect_color()
     })
 })

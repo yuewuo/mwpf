@@ -11,13 +11,12 @@ use crate::pointers::UnsafePtr;
 use crate::pointers::*;
 use crate::util::*;
 use crate::visualize::*;
-use bp::bp::{BpDecoder, BpSparse};
+use bp::bp::BpSparse;
 use clap::builder::{StringValueParser, TypedValueParser, ValueParser};
 use clap::error::{ContextKind, ContextValue, ErrorKind};
 use clap::{Parser, Subcommand, ValueEnum};
 use more_asserts::assert_le;
 use num_traits::FromPrimitive;
-use num_traits::ToPrimitive;
 #[cfg(feature = "progress_bar")]
 use pbr::ProgressBar;
 use rand::rngs::SmallRng;
@@ -27,6 +26,7 @@ use serde::Serialize;
 use serde_variant::to_variant_name;
 use std::collections::BTreeSet;
 use std::env;
+use std::sync::Arc;
 use std::usize::MAX;
 
 const TEST_EACH_ROUNDS: usize = 100;
@@ -51,11 +51,36 @@ enum Commands {
     Benchmark(BenchmarkParameters),
     /// benchmark the matrix speed
     MatrixSpeed(MatrixSpeedParameters),
+    /// decoder speed
+    DecoderSpeed(DecoderSpeedParameters),
+    /// custom test command, for porting failed python test
+    CustomTest,
+    /// custom test command, for comparing with ported failed python test
+    CustomTest2,
     /// built-in tests
     Test {
         #[clap(subcommand)]
         command: TestCommands,
     },
+}
+
+#[derive(Parser, Clone)]
+pub struct DecoderSpeedParameters {
+    #[clap(short = 'f', long)]
+    file_path: String,
+    /// select the combination of primal and dual module
+    #[clap(short = 'p', long, value_enum, default_value_t = SolverType::JointSingleHair)]
+    solver_type: SolverType,
+    /// the configuration of primal and dual module
+    #[clap(long, default_value_t = json!({}), value_parser = ValueParser::new(SerdeJsonParser))]
+    solver_config: serde_json::Value,
+    /// to use bp or not
+    #[clap(long, action)]
+    use_bp: bool,
+    #[clap(long, action)]
+    bp_application_ratio: Option<f64>,
+    #[clap(long, action)]
+    bp_max_iter: Option<usize>,
 }
 
 #[derive(Parser, Clone)]
@@ -516,26 +541,27 @@ impl Cli {
                     }
                 }
 
-                let mut bp_decoder_option = None;
-                let mut initial_log_ratios_option = None;
-
-                if use_bp {
-                    let channel_probabilities = vec![p; code.edge_num()];
-                    let bp_decoder = BpDecoder::new_3(pcm, channel_probabilities, 1).unwrap();
-                    bp_decoder_option = Some(bp_decoder);
-                    initial_log_ratios_option = Some(code.get_weights().clone());
-                }
-
                 if pe != 0. {
                     code.set_erasure_probability(pe);
                 }
                 // create initializer and solver
-                let initializer = code.get_initializer();
+                let initializer = Arc::new(code.get_initializer());
                 let mut partition_config = PartitionConfig::new(initializer.vertex_num);
                 let mut partition_info = partition_config.info();
                 if split_num > 0 {
                     partition_config = graph_time_partition(&initializer, &code.get_positions(), split_num);
                     partition_info = partition_config.info();
+                }
+                if use_bp {
+                    solver = match SolverBPWrapper::new(solver.solver_base(), 1, bp_application_ratio.unwrap_or(0.1))
+                        .solver
+                        .inner
+                    {
+                        SolverEnum::SolverSerialUnionFind(x) => Box::new(x) as Box<dyn SolverTrait>,
+                        SolverEnum::SolverSerialSingleHair(x) => Box::new(x) as Box<dyn SolverTrait>,
+                        SolverEnum::SolverSerialJointSingleHair(x) => Box::new(x) as Box<dyn SolverTrait>,
+                        SolverEnum::SolverErrorPatternLogger(_) => panic!("not supported"),
+                    };
                 }
                 let mut result_verifier = verifier.build(&initializer);
 
@@ -566,25 +592,15 @@ impl Cli {
                     // let mut result_verifier = verifier.build(&initializer);
 
                     if use_bp {
-                        let mut syndrome_array = vec![0; code.vertex_num()];
-                        for &dv in syndrome_pattern.defect_vertices.iter() {
-                            syndrome_array[dv] = 1;
-                        }
-                        let bp_decoder = bp_decoder_option.as_mut().unwrap();
-                        let initial_log_ratios = initial_log_ratios_option.as_ref().unwrap();
-                        let initial_log_ratios_ordered_float =
-                            initial_log_ratios.iter().map(|x| x.clone().to_f64().unwrap()).collect();
-
-                        bp_decoder.set_log_domain_bp(&initial_log_ratios_ordered_float);
-                        bp_decoder.decode(&syndrome_array);
-                        let llrs = bp_decoder
-                            .log_prob_ratios
-                            .clone()
-                            .into_iter()
-                            .map(|v| Weight::from_f64(v).unwrap())
-                            .collect();
-
-                        solver.update_weights(llrs, bp_application_ratio.unwrap_or(0.5));
+                        solver = match SolverBPWrapper::new(solver.solver_base(), 1, bp_application_ratio.unwrap_or(0.1))
+                            .solver
+                            .inner
+                        {
+                            SolverEnum::SolverSerialUnionFind(x) => Box::new(x) as Box<dyn SolverTrait>,
+                            SolverEnum::SolverSerialSingleHair(x) => Box::new(x) as Box<dyn SolverTrait>,
+                            SolverEnum::SolverSerialJointSingleHair(x) => Box::new(x) as Box<dyn SolverTrait>,
+                            SolverEnum::SolverErrorPatternLogger(_) => panic!("not supported"),
+                        };
                     }
 
                     if print_syndrome_pattern {
@@ -635,25 +651,15 @@ impl Cli {
                     let mut solver = solver_type.build(&initializer, &*code, solver_config.clone(), Some(&partition_info));
 
                     if use_bp {
-                        let mut syndrome_array = vec![0; code.vertex_num()];
-                        for &dv in syndrome_pattern.defect_vertices.iter() {
-                            syndrome_array[dv] = 1;
-                        }
-                        let bp_decoder = bp_decoder_option.as_mut().unwrap();
-                        let initial_log_ratios = initial_log_ratios_option.as_ref().unwrap();
-                        let initial_log_ratios_ordered_float =
-                            initial_log_ratios.iter().map(|x| x.clone().to_f64().unwrap()).collect();
-
-                        bp_decoder.set_log_domain_bp(&initial_log_ratios_ordered_float);
-                        bp_decoder.decode(&syndrome_array);
-                        let llrs = bp_decoder
-                            .log_prob_ratios
-                            .clone()
-                            .into_iter()
-                            .map(|v| Weight::from_f64(v).unwrap())
-                            .collect();
-
-                        solver.update_weights(llrs, bp_application_ratio.unwrap_or(0.5));
+                        solver = match SolverBPWrapper::new(solver.solver_base(), 1, bp_application_ratio.unwrap_or(0.1))
+                            .solver
+                            .inner
+                        {
+                            SolverEnum::SolverSerialUnionFind(x) => Box::new(x) as Box<dyn SolverTrait>,
+                            SolverEnum::SolverSerialSingleHair(x) => Box::new(x) as Box<dyn SolverTrait>,
+                            SolverEnum::SolverSerialJointSingleHair(x) => Box::new(x) as Box<dyn SolverTrait>,
+                            SolverEnum::SolverErrorPatternLogger(_) => panic!("not supported"),
+                        };
                     }
 
                     if print_syndrome_pattern {
@@ -796,6 +802,199 @@ impl Cli {
                     }
                 }
             },
+            Commands::DecoderSpeed(DecoderSpeedParameters {
+                file_path,
+                solver_type,
+                solver_config,
+                use_bp,
+                bp_application_ratio,
+                bp_max_iter,
+            }) => {
+                if !file_path.ends_with("cbor") {
+                    eprintln!(
+                        "only support cbor file, the file path \"{file_path}\" does not end with cbor, operations may fail"
+                    );
+                }
+                let BenchmarkSuite {
+                    initializer,
+                    syndrome_patterns,
+                } = BenchmarkSuite::from_cbor(&file_path);
+
+                // time construction time
+                let start = std::time::Instant::now();
+                let initializer = Arc::new(initializer);
+                let mut decoder = solver_type.bench_build(&initializer, solver_config);
+                if use_bp {
+                    decoder = match SolverBPWrapper::new(
+                        decoder.solver_base(),
+                        bp_max_iter.unwrap_or(1),
+                        bp_application_ratio.unwrap_or(0.1),
+                    )
+                    .solver
+                    .inner
+                    {
+                        SolverEnum::SolverSerialUnionFind(x) => Box::new(x) as Box<dyn SolverTrait>,
+                        SolverEnum::SolverSerialSingleHair(x) => Box::new(x) as Box<dyn SolverTrait>,
+                        SolverEnum::SolverSerialJointSingleHair(x) => Box::new(x) as Box<dyn SolverTrait>,
+                        SolverEnum::SolverErrorPatternLogger(_) => panic!("not supported"),
+                    };
+                }
+                let construction_time = start.elapsed();
+                eprintln!("construction time {:?}", construction_time);
+
+                // time solving time
+                let start = std::time::Instant::now();
+                for syndrome_pattern in syndrome_patterns.into_iter() {
+                    decoder.solve(syndrome_pattern);
+                    decoder.clear();
+                }
+                let solving_time = start.elapsed();
+                eprintln!("solving time {:?}", solving_time);
+            }
+            Commands::CustomTest => {
+                // custom test: ported from test_override_weights_decoding
+                let vertex_num = 3;
+                let edge1 = HyperEdge {
+                    vertices: vec![0, 1],
+                    weight: Weight::from_float(100.0).unwrap(),
+                };
+                let edge2 = HyperEdge {
+                    vertices: vec![1, 2],
+                    weight: Weight::from_float(100.0).unwrap(),
+                };
+                let edge3 = HyperEdge {
+                    vertices: vec![2, 0],
+                    weight: Weight::from_float(100.0).unwrap(),
+                };
+                let initializer = SolverInitializer::new(vertex_num, vec![edge1, edge2, edge3]);
+                let initializer = Arc::new(initializer);
+                let solver: SolverSerialJointSingleHair = SolverSerialJointSingleHair::new(&initializer, json!({}));
+                let mut solver = SolverBPWrapper::new(solver.solver_base(), 1, 0.625);
+
+                // // force set wieghts to [0, 0, 100]
+                // solver.solve(SyndromePattern::new_with_override_weights(
+                //     vec![0, 2],
+                //     vec![0.0.into(), 0.0.into(), 100.0.into()],
+                //     1.0.into(),
+                //     None,
+                // ));
+
+                // let (subgraph, bound) = solver.subgraph_range();
+                // println!("{:?}", subgraph);
+                // println!("({}, {})", bound.lower, bound.upper);
+                // assert_eq!(subgraph.into_iter().collect::<Vec<_>>(), vec![0, 1]);
+                // assert_eq!(bound.lower, bound.upper);
+                // assert_eq!(bound.upper, 0.0);
+
+                // // mix weights of ratio = 0.8
+                // // 0.8 * [0, 0, 100] + 0.2 * [100, 100, 100] = [20, 20, 100]
+                // solver.solve(SyndromePattern::new_with_override_weights(
+                //     vec![0, 2],
+                //     vec![0.0.into(), 0.0.into(), 100.0.into()],
+                //     0.8.into(),
+                //     None,
+                // ));
+                // let (subgraph, bound) = solver.subgraph_range();
+                // println!("{:?}", subgraph);
+                // println!("({}, {})", bound.lower, bound.upper);
+                // assert_eq!(subgraph.into_iter().collect::<Vec<_>>(), vec![0, 1]);
+                // assert_eq!(bound.lower, bound.upper);
+                // assert_eq!(bound.upper, 40.0);
+
+                // set to negative weight
+                // solver.solve(SyndromePattern::new_with_override_weights(
+                //     vec![0, 2],
+                //     vec![(-20.0).into(), 10.0.into(), 100.0.into()],
+                //     1.0.into(),
+                //     None,
+                // ));
+                // let (subgraph, bound) = solver.subgraph_range();
+                // println!("{:?}", subgraph);
+                // println!("({}, {})", bound.lower, bound.upper);
+                // assert_eq!(bound.lower, bound.upper);
+                // assert_eq!(subgraph.into_iter().collect::<Vec<_>>(), vec![0, 1]);
+                // assert_eq!(bound.upper, (-10.0));
+
+                solver.solve(SyndromePattern::new_vertices(vec![0, 2]));
+                let (subgraph, bound) = solver.subgraph_range();
+                println!("{:?}", subgraph);
+                println!("({}, {})", bound.lower, bound.upper);
+                assert_eq!(bound.lower, bound.upper);
+                assert_eq!(subgraph.into_iter().collect::<Vec<_>>(), vec![2]);
+                assert_eq!(bound.upper, Weight::from_float(100.0).unwrap());
+            }
+            Commands::CustomTest2 => {
+                // custom test: ported from test_override_weights_decoding
+                let vertex_num = 3;
+                let edge1 = HyperEdge {
+                    vertices: vec![0, 1],
+                    weight: Weight::from_float(100.0).unwrap(),
+                };
+                let edge2 = HyperEdge {
+                    vertices: vec![1, 2],
+                    weight: Weight::from_float(100.0).unwrap(),
+                };
+                let edge3 = HyperEdge {
+                    vertices: vec![2, 0],
+                    weight: Weight::from_float(100.0).unwrap(),
+                };
+                let initializer = SolverInitializer::new(vertex_num, vec![edge1, edge2, edge3]);
+                let initializer = Arc::new(initializer);
+                let mut solver: SolverSerialJointSingleHair = SolverSerialJointSingleHair::new(&initializer, json!({}));
+                // let mut solver = SolverBPWrapper::new(solver.solver_base(), 1, 0.625);
+
+                // // force set wieghts to [0, 0, 100]
+                // solver.solve(SyndromePattern::new_with_override_weights(
+                //     vec![0, 2],
+                //     vec![0.0.into(), 0.0.into(), 100.0.into()],
+                //     1.0.into(),
+                //     None,
+                // ));
+
+                // let (subgraph, bound) = solver.subgraph_range();
+                // println!("{:?}", subgraph);
+                // println!("({}, {})", bound.lower, bound.upper);
+                // assert_eq!(subgraph.into_iter().collect::<Vec<_>>(), vec![0, 1]);
+                // assert_eq!(bound.lower, bound.upper);
+                // assert_eq!(bound.upper, 0.0);
+
+                // // mix weights of ratio = 0.8
+                // // 0.8 * [0, 0, 100] + 0.2 * [100, 100, 100] = [20, 20, 100]
+                // solver.solve(SyndromePattern::new_with_override_weights(
+                //     vec![0, 2],
+                //     vec![0.0.into(), 0.0.into(), 100.0.into()],
+                //     0.8.into(),
+                //     None,
+                // ));
+                // let (subgraph, bound) = solver.subgraph_range();
+                // println!("{:?}", subgraph);
+                // println!("({}, {})", bound.lower, bound.upper);
+                // assert_eq!(subgraph.into_iter().collect::<Vec<_>>(), vec![0, 1]);
+                // assert_eq!(bound.lower, bound.upper);
+                // assert_eq!(bound.upper, 40.0);
+
+                // set to negative weight
+                // solver.solve(SyndromePattern::new_with_override_weights(
+                //     vec![0, 2],
+                //     vec![(-20.0).into(), 10.0.into(), 100.0.into()],
+                //     1.0.into(),
+                //     None,
+                // ));
+                // let (subgraph, bound) = solver.subgraph_range();
+                // println!("{:?}", subgraph);
+                // println!("({}, {})", bound.lower, bound.upper);
+                // assert_eq!(bound.lower, bound.upper);
+                // assert_eq!(subgraph.into_iter().collect::<Vec<_>>(), vec![0, 1]);
+                // assert_eq!(bound.upper, (-10.0));
+
+                solver.solve(SyndromePattern::new_vertices(vec![0, 2]));
+                let (subgraph, bound) = solver.subgraph_range();
+                println!("{:?}", subgraph);
+                println!("({}, {})", bound.lower, bound.upper);
+                assert_eq!(bound.lower, bound.upper);
+                assert_eq!(subgraph.into_iter().collect::<Vec<_>>(), vec![2]);
+                assert_eq!(bound.upper, Weight::from_float(100.0).unwrap());
+            }
         }
     }
 }
@@ -854,7 +1053,7 @@ impl ExampleCodeType {
 impl SolverType {
     pub fn build(
         &self,
-        initializer: &SolverInitializer,
+        initializer: &Arc<SolverInitializer>,
         code: &dyn ExampleCode,
         solver_config: serde_json::Value,
         partition_info: Option<&PartitionInfo>,
@@ -879,6 +1078,32 @@ impl SolverType {
                 partition_info.unwrap(),
                 solver_config,
             )),
+        }
+    }
+
+    pub fn bench_build(
+        &self,
+        initializer: &Arc<SolverInitializer>,
+        solver_config: serde_json::Value,
+    ) -> Box<dyn SolverTrait> {
+        match self {
+            Self::UnionFind => Box::new(SolverSerialUnionFind::new(initializer, solver_config)),
+            Self::SingleHair => Box::new(SolverSerialSingleHair::new(initializer, solver_config)),
+            Self::JointSingleHair => Box::new(SolverSerialJointSingleHair::new(initializer, solver_config)),
+            Self::ErrorPatternLogger => panic!("error pattern logger does not support decoder (stable) speed benchmark"),
+        }
+    }
+
+    pub fn bench_build(
+        &self,
+        initializer: &Arc<SolverInitializer>,
+        solver_config: serde_json::Value,
+    ) -> Box<dyn SolverTrait> {
+        match self {
+            Self::UnionFind => Box::new(SolverSerialUnionFind::new(initializer, solver_config)),
+            Self::SingleHair => Box::new(SolverSerialSingleHair::new(initializer, solver_config)),
+            Self::JointSingleHair => Box::new(SolverSerialJointSingleHair::new(initializer, solver_config)),
+            Self::ErrorPatternLogger => panic!("error pattern logger does not support decoder (stable) speed benchmark"),
         }
     }
 }
@@ -959,7 +1184,10 @@ impl ResultVerifier for VerifierActualError {
         visualizer: Option<&mut Visualizer>,
         seed: u64,
     ) {
-        if !syndrome_pattern.erasures.is_empty() {
+        if !syndrome_pattern.erasures.is_empty()
+            || !syndrome_pattern.heralds.is_empty()
+            || syndrome_pattern.override_weights.is_some()
+        {
             unimplemented!()
         }
         let actual_weight = if error_pattern.is_empty() && !syndrome_pattern.defect_vertices.is_empty() {

@@ -15,7 +15,7 @@ pub type DualVariableTag = usize;
 /// optimize for small clusters where there are no more than 63 edges
 #[derive(Clone, Debug, Derivative, PartialEq, Eq)]
 #[derivative(Default(new = "true"))]
-#[cfg_attr(feature = "python_binding", pyclass(get_all, set_all))]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf", get_all, set_all))]
 pub struct ParityRow {
     /// the first BIT_UNIT_LENGTH-1 edges are stored here, and the last bit is used the right hand bit value
     first: BitArrayUnit,

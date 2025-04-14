@@ -6,7 +6,7 @@ import { assert, bigInt, tweakpane_find_value } from '@/util'
 import * as HTMLExport from './html_export'
 import { Vector3, OrthographicCamera, WebGLRenderer, Vector2 } from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { RuntimeData, ConfigProps, renderer_params, type Snapshot } from './hyperion'
+import { RuntimeData, ConfigProps, renderer_params, type Snapshot, set_deep_value } from './hyperion'
 import { Prism } from 'prism-esm'
 import { loader as JsonLoader } from 'prism-esm/components/prism-json.js'
 import prismCSS from 'prism-esm/themes/prism.min.css?raw'
@@ -106,6 +106,13 @@ export class Config {
         if (this.config_prop.visualizer_config != undefined) {
             this.parameters = JSON.stringify(this.config_prop.visualizer_config)
             this.import_visualizer_parameters()
+        }
+        // if config_setters is specified, apply then
+        if (this.config_prop.config_setters != undefined) {
+            const config_setters = JSON.parse(JSON.stringify(this.config_prop.config_setters))
+            for (const [key, value] of Object.entries(config_setters)) {
+                set_deep_value(this, key, value)
+            }
         }
         // by default showing the most recent snapshot; user can move back if they want
         if (this.config_prop.snapshot_index != undefined) {
@@ -490,13 +497,12 @@ export class ColorPaletteConfig {
     c4: string = '#7C1DD8' // purple
     c5: string = '#8C4515' // brown
     c6: string = '#E14CB6' // pink
-    c7: string = '#44C03F' // green
-    c8: string = '#F6C231' // yellow
-    c9: string = '#4DCCFB' // light blue
-    c10: string = '#F17B24' // orange
-    c11: string = '#7C1DD8' // purple
-    c12: string = '#8C4515' // brown
-    c13: string = '#E14CB6' // pink
+    c7: string = '#FF2600' // red (PPT apple)
+    c8: string = '#18BDB0' // mint (PPT developer)
+    c9: string = '#00FDFF' // cyan (PPT apple)
+    c10: string = '#AA7942' // brown (PPT apple)
+    c11: string = '#00F900' // green (PPT apple)
+    c12: string = '#FFFB00' // yellow (PPT apple)
 
     ungrown: string = '#1A1A1A' // dark grey
     subgraph: string = '#0000FF' // standard blue
@@ -504,7 +510,7 @@ export class ColorPaletteConfig {
     add_to (pane: FolderApi): void {
         pane.addBinding(this, 'ungrown')
         pane.addBinding(this, 'subgraph')
-        for (let i = 0; i < 14; ++i) {
+        for (let i = 0; i < 13; ++i) {
             // @ts-expect-error cannot guarantee key exists
             pane.addBinding(this, `c${i}`)
         }
@@ -512,7 +518,7 @@ export class ColorPaletteConfig {
 
     get (index: number): string {
         // @ts-expect-error string is not indexable
-        return this[`c${index % 14}`]
+        return this[`c${index % 13}`]
     }
 }
 

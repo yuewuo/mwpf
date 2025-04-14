@@ -54,7 +54,24 @@
             {
                 // show_config: false,
                 full_screen: true,
-                visualizer_config: { "disabled": false, "hidden": false, "children": [{ "disabled": false, "hidden": false, "children": [{ "disabled": false, "hidden": false, "max": 2, "min": 0, "binding": { "key": "index", "value": 0 } }, { "disabled": false, "hidden": false, "label": "name", "options": [{ "text": "grow 0.5", "value": 0 }, { "text": "middle step", "value": 1 }, { "text": "solved", "value": 2 }], "binding": { "key": "name", "value": 0 } }], "expanded": true, "title": "Snapshot" }, { "disabled": false, "hidden": false, "children": [{ "disabled": false, "hidden": false }, { "disabled": false, "hidden": false, "label": "zoom", "max": 1000, "min": 0.001, "binding": { "key": "zoom", "value": 0.1998 } }, { "disabled": false, "hidden": false, "label": "position", "binding": { "key": "position", "value": { "x": 261.767288897019, "y": 393.3471779458625, "z": 881.337553985719 } } }], "expanded": false, "title": "Camera" }], "expanded": true, "title": "MWPF Visualizer (1/3)" },
+                config_setters: {
+                    "edge.radius": 0.05,
+                    "camera.zoom": 0.3,
+                    "camera.position": { "x": 261.767288897019, "y": 393.3471779458625, "z": 881.337553985719 },
+                },
+            }
+            a = {
+                "disabled": false, "hidden": false, "children":
+                    [
+                        { "disabled": false, "hidden": false, "children": [{ "disabled": false, "hidden": false, "max": 2, "min": 0, "binding": { "key": "index", "value": 0 } }, { "disabled": false, "hidden": false, "label": "name", "options": [{ "text": "grow 0.5", "value": 0 }, { "text": "middle step", "value": 1 }, { "text": "solved", "value": 2 }], "binding": { "key": "name", "value": 0 } }], "expanded": true, "title": "Snapshot" },
+                        {
+                            "disabled": false, "hidden": false, "children": [
+                                { "disabled": false, "hidden": false },
+                                { "disabled": false, "hidden": false, "label": "zoom", "max": 1000, "min": 0.001, "binding": { "key": "zoom", "value": 0.1998 } },
+                                { "disabled": false, "hidden": false, "label": "position", "binding": { "key": "position", "value": { "x": 261.767288897019, "y": 393.3471779458625, "z": 881.337553985719 } } }
+                            ], "expanded": false, "title": "Camera"
+                        }
+                    ], "expanded": true, "title": "MWPF Visualizer (1/3)"
             }
             /* HYPERION_VISUAL_OVERRIDE_CONFIG_END */
             window.hyperion_visual.bind_to_div("#hyperion", visualizer_data, { ...window.hyperion_visual.default_config(), ...override_config })

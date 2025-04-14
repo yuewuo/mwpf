@@ -27,7 +27,7 @@ fn main() {
                 .arg("install")
                 .arg("--include=dev")
                 .status()
-                .unwrap()
+                .expect("npm install failed")
                 .success());
 
             assert!(std::process::Command::new("npm")
@@ -35,7 +35,7 @@ fn main() {
                 .arg("run")
                 .arg("build")
                 .status()
-                .unwrap()
+                .expect("npm build failed")
                 .success());
         }
     }

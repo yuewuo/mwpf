@@ -22,7 +22,6 @@
 use crate::util::*;
 use derivative::Derivative;
 use num_traits::{One, Zero};
-use std::collections::BTreeSet;
 
 use crate::dual_module_pq::{EdgeWeak, VertexPtr, VertexWeak};
 #[cfg(feature = "unsafe_pointer")]
@@ -61,8 +60,8 @@ pub trait MatrixBasic {
         self.edge_to_var_index(edge_weak).is_some()
     }
 
-    fn get_edges(&self) -> BTreeSet<EdgeWeak>;
-    fn get_vertices(&self) -> BTreeSet<VertexWeak>;
+    fn get_edges(&self) -> FastIterSet<EdgeWeak>;
+    fn get_vertices(&self) -> FastIterSet<VertexWeak>;
 }
 
 pub trait MatrixView: MatrixBasic {
@@ -101,7 +100,7 @@ pub trait MatrixView: MatrixBasic {
 pub trait MatrixTight: MatrixView {
     fn update_edge_tightness(&mut self, edge_weak: EdgeWeak, is_tight: bool);
     fn is_tight(&self, edge_weak: EdgeWeak) -> bool;
-    fn get_tight_edges(&self) -> &BTreeSet<EdgeWeak>;
+    fn get_tight_edges(&self) -> &FastIterSet<EdgeWeak>;
 
     fn add_variable_with_tightness(&mut self, edge_weak: EdgeWeak, is_tight: bool) {
         self.add_variable(edge_weak.clone());
@@ -114,8 +113,8 @@ pub trait MatrixTight: MatrixView {
 }
 
 pub trait MatrixTail {
-    fn get_tail_edges(&self) -> &BTreeSet<EdgeWeak>;
-    fn get_tail_edges_mut(&mut self) -> &mut BTreeSet<EdgeWeak>;
+    fn get_tail_edges(&self) -> &FastIterSet<EdgeWeak>;
+    fn get_tail_edges_mut(&mut self) -> &mut FastIterSet<EdgeWeak>;
 
     fn set_tail_edges<EdgeIter>(&mut self, edges: EdgeIter)
     where
@@ -172,7 +171,7 @@ pub trait MatrixEchelon: MatrixView {
         if !info.satisfiable {
             return None; // no solution
         }
-        let mut solution = BTreeSet::new();
+        let mut solution = FastIterSet::new();
         for (row, row_info) in info.rows.iter().enumerate() {
             debug_assert!(row_info.has_leading());
             if self.get_rhs(row) {
@@ -243,7 +242,7 @@ pub trait MatrixEchelon: MatrixView {
 
 #[derive(Clone, Debug, Derivative)]
 #[derivative(Default(new = "true"))]
-#[cfg_attr(feature = "python_binding", pyclass(get_all, set_all))]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf", get_all, set_all))]
 pub struct EchelonInfo {
     /// whether it's a satisfiable matrix, only valid when `is_echelon_form` is true
     pub satisfiable: bool,
@@ -268,7 +267,7 @@ impl EchelonInfo {
 
 #[derive(Clone, Copy, Derivative, PartialEq, Eq)]
 #[derivative(Default(new = "true"))]
-#[cfg_attr(feature = "python_binding", pyclass(get_all, set_all))]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf", get_all, set_all))]
 pub struct ColumnInfo {
     pub row: RowIndex,
 }
@@ -281,6 +280,10 @@ impl ColumnInfo {
     }
     fn __str__(&self) -> String {
         self.__repr__()
+    }
+    #[pyo3(name = "is_dependent")]
+    fn py_is_dependent(&self) -> bool {
+        self.row != RowIndex::MAX
     }
 }
 
@@ -312,7 +315,7 @@ impl std::fmt::Debug for ColumnInfo {
 
 #[derive(Clone, Copy, Derivative, PartialEq, Eq)]
 #[derivative(Default(new = "true"))]
-#[cfg_attr(feature = "python_binding", pyclass(get_all, set_all))]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf", get_all, set_all))]
 pub struct RowInfo {
     pub column: ColumnIndex,
 }
@@ -362,7 +365,6 @@ pub mod tests {
     use super::*;
     use crate::dual_module_pq::{EdgePtr, VertexPtr};
     use crate::matrix::basic::tests::{edge_vec_from_indices, initialize_vertex_edges_for_matrix_testing};
-    use std::collections::BTreeMap;
     use std::collections::HashSet;
 
     type TightMatrix = Tight<BasicMatrix>;
@@ -420,7 +422,7 @@ pub mod tests {
 
     #[derive(Default)]
     struct TestEdgeWeights {
-        pub weights: BTreeMap<EdgeWeak, Weight>,
+        pub weights: FastIterMap<EdgeWeak, Weight>,
     }
 
     impl TestEdgeWeights {
@@ -436,7 +438,7 @@ pub mod tests {
                 if let Some(weight) = self.weights.get(&edge_weak) {
                     weight.clone()
                 } else {
-                    Rational::from(1.)
+                    Rational::from_float(1.).unwrap()
                 }
             })
         }
@@ -527,7 +529,7 @@ pub mod tests {
     fn matrix_interface_echelon_no_solution() {
         // cargo test matrix_interface_echelon_no_solution -- --nocapture
         let mut matrix = Echelon::<Tail<BasicMatrix>>::new();
-        let parity_checks = vec![(vec![0, 1], false), (vec![0, 1], true)];
+        let parity_checks = [(vec![0, 1], false), (vec![0, 1], true)];
         let vertex_indices: Vec<usize> = (0..parity_checks.len()).collect();
         let edge_indices: Vec<usize> = (0..10).collect();
         let (vertices, edges) = initialize_vertex_edges_for_matrix_testing(vertex_indices, edge_indices);
