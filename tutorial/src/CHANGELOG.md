@@ -79,3 +79,4 @@ exposed `hyperion_exposed` variable in visualization tool so that user can progr
 ## 0.2.10 - 2025-04-02
 
 - add `config_setters` in frontend configuration for more flexible config
+- add svg download for parity matrix visualization

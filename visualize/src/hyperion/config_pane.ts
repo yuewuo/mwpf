@@ -497,13 +497,12 @@ export class ColorPaletteConfig {
     c4: string = '#7C1DD8' // purple
     c5: string = '#8C4515' // brown
     c6: string = '#E14CB6' // pink
-    c7: string = '#44C03F' // green
-    c8: string = '#F6C231' // yellow
-    c9: string = '#4DCCFB' // light blue
-    c10: string = '#F17B24' // orange
-    c11: string = '#7C1DD8' // purple
-    c12: string = '#8C4515' // brown
-    c13: string = '#E14CB6' // pink
+    c7: string = '#FF2600' // red (PPT apple)
+    c8: string = '#18BDB0' // mint (PPT developer)
+    c9: string = '#00FDFF' // cyan (PPT apple)
+    c10: string = '#AA7942' // brown (PPT apple)
+    c11: string = '#00F900' // green (PPT apple)
+    c12: string = '#FFFB00' // yellow (PPT apple)
 
     ungrown: string = '#1A1A1A' // dark grey
     subgraph: string = '#0000FF' // standard blue
@@ -511,7 +510,7 @@ export class ColorPaletteConfig {
     add_to (pane: FolderApi): void {
         pane.addBinding(this, 'ungrown')
         pane.addBinding(this, 'subgraph')
-        for (let i = 0; i < 14; ++i) {
+        for (let i = 0; i < 13; ++i) {
             // @ts-expect-error cannot guarantee key exists
             pane.addBinding(this, `c${i}`)
         }
@@ -519,7 +518,7 @@ export class ColorPaletteConfig {
 
     get (index: number): string {
         // @ts-expect-error string is not indexable
-        return this[`c${index % 14}`]
+        return this[`c${index % 13}`]
     }
 }
 
