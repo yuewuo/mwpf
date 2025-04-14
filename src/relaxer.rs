@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use crate::dual_module_pq::EdgePtr;
 
-#[derive(Clone, PartialEq, Eq, Derivative, Default)]
+#[derive(Clone, Eq, Derivative, Default)]
 #[derivative(Debug)]
 pub struct Relaxer {
     /// the hash value calculated by other fields

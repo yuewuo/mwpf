@@ -6,7 +6,6 @@ use crate::matrix::*;
 use crate::mwpf_solver::*;
 use crate::num_traits::Zero;
 #[cfg(feature = "unsafe_pointer")]
-#[cfg(feature = "unsafe_pointer")]
 use crate::pointers::UnsafePtr;
 use crate::pointers::*;
 use crate::util::*;
@@ -54,9 +53,9 @@ enum Commands {
     /// decoder speed
     DecoderSpeed(DecoderSpeedParameters),
     /// custom test command, for porting failed python test
-    CustomTest,
+    // CustomTest,
     /// custom test command, for comparing with ported failed python test
-    CustomTest2,
+    // CustomTest2,
     /// built-in tests
     Test {
         #[clap(subcommand)]
@@ -552,17 +551,6 @@ impl Cli {
                     partition_config = graph_time_partition(&initializer, &code.get_positions(), split_num);
                     partition_info = partition_config.info();
                 }
-                if use_bp {
-                    solver = match SolverBPWrapper::new(solver.solver_base(), 1, bp_application_ratio.unwrap_or(0.1))
-                        .solver
-                        .inner
-                    {
-                        SolverEnum::SolverSerialUnionFind(x) => Box::new(x) as Box<dyn SolverTrait>,
-                        SolverEnum::SolverSerialSingleHair(x) => Box::new(x) as Box<dyn SolverTrait>,
-                        SolverEnum::SolverSerialJointSingleHair(x) => Box::new(x) as Box<dyn SolverTrait>,
-                        SolverEnum::SolverErrorPatternLogger(_) => panic!("not supported"),
-                    };
-                }
                 let mut result_verifier = verifier.build(&initializer);
 
                 // prepare progress bar display
@@ -850,151 +838,151 @@ impl Cli {
                 }
                 let solving_time = start.elapsed();
                 eprintln!("solving time {:?}", solving_time);
-            }
-            Commands::CustomTest => {
-                // custom test: ported from test_override_weights_decoding
-                let vertex_num = 3;
-                let edge1 = HyperEdge {
-                    vertices: vec![0, 1],
-                    weight: Weight::from_float(100.0).unwrap(),
-                };
-                let edge2 = HyperEdge {
-                    vertices: vec![1, 2],
-                    weight: Weight::from_float(100.0).unwrap(),
-                };
-                let edge3 = HyperEdge {
-                    vertices: vec![2, 0],
-                    weight: Weight::from_float(100.0).unwrap(),
-                };
-                let initializer = SolverInitializer::new(vertex_num, vec![edge1, edge2, edge3]);
-                let initializer = Arc::new(initializer);
-                let solver: SolverSerialJointSingleHair = SolverSerialJointSingleHair::new(&initializer, json!({}));
-                let mut solver = SolverBPWrapper::new(solver.solver_base(), 1, 0.625);
+            } // Commands::CustomTest => {
+              //     // custom test: ported from test_override_weights_decoding
+              //     let vertex_num = 3;
+              //     let edge1 = HyperEdge {
+              //         vertices: vec![0, 1],
+              //         weight: Weight::from_float(100.0).unwrap(),
+              //         connected_to_boundary_vertex: todo!(),
+              //     };
+              //     let edge2 = HyperEdge {
+              //         vertices: vec![1, 2],
+              //         weight: Weight::from_float(100.0).unwrap(),
+              //     };
+              //     let edge3 = HyperEdge {
+              //         vertices: vec![2, 0],
+              //         weight: Weight::from_float(100.0).unwrap(),
+              //     };
+              //     let initializer = SolverInitializer::new(vertex_num, vec![edge1, edge2, edge3]);
+              //     let initializer = Arc::new(initializer);
+              //     let solver: SolverSerialJointSingleHair = SolverSerialJointSingleHair::new(&initializer, json!({}));
+              //     let mut solver = SolverBPWrapper::new(solver.solver_base(), 1, 0.625);
 
-                // // force set wieghts to [0, 0, 100]
-                // solver.solve(SyndromePattern::new_with_override_weights(
-                //     vec![0, 2],
-                //     vec![0.0.into(), 0.0.into(), 100.0.into()],
-                //     1.0.into(),
-                //     None,
-                // ));
+              //     // // force set wieghts to [0, 0, 100]
+              //     // solver.solve(SyndromePattern::new_with_override_weights(
+              //     //     vec![0, 2],
+              //     //     vec![0.0.into(), 0.0.into(), 100.0.into()],
+              //     //     1.0.into(),
+              //     //     None,
+              //     // ));
 
-                // let (subgraph, bound) = solver.subgraph_range();
-                // println!("{:?}", subgraph);
-                // println!("({}, {})", bound.lower, bound.upper);
-                // assert_eq!(subgraph.into_iter().collect::<Vec<_>>(), vec![0, 1]);
-                // assert_eq!(bound.lower, bound.upper);
-                // assert_eq!(bound.upper, 0.0);
+              //     // let (subgraph, bound) = solver.subgraph_range();
+              //     // println!("{:?}", subgraph);
+              //     // println!("({}, {})", bound.lower, bound.upper);
+              //     // assert_eq!(subgraph.into_iter().collect::<Vec<_>>(), vec![0, 1]);
+              //     // assert_eq!(bound.lower, bound.upper);
+              //     // assert_eq!(bound.upper, 0.0);
 
-                // // mix weights of ratio = 0.8
-                // // 0.8 * [0, 0, 100] + 0.2 * [100, 100, 100] = [20, 20, 100]
-                // solver.solve(SyndromePattern::new_with_override_weights(
-                //     vec![0, 2],
-                //     vec![0.0.into(), 0.0.into(), 100.0.into()],
-                //     0.8.into(),
-                //     None,
-                // ));
-                // let (subgraph, bound) = solver.subgraph_range();
-                // println!("{:?}", subgraph);
-                // println!("({}, {})", bound.lower, bound.upper);
-                // assert_eq!(subgraph.into_iter().collect::<Vec<_>>(), vec![0, 1]);
-                // assert_eq!(bound.lower, bound.upper);
-                // assert_eq!(bound.upper, 40.0);
+              //     // // mix weights of ratio = 0.8
+              //     // // 0.8 * [0, 0, 100] + 0.2 * [100, 100, 100] = [20, 20, 100]
+              //     // solver.solve(SyndromePattern::new_with_override_weights(
+              //     //     vec![0, 2],
+              //     //     vec![0.0.into(), 0.0.into(), 100.0.into()],
+              //     //     0.8.into(),
+              //     //     None,
+              //     // ));
+              //     // let (subgraph, bound) = solver.subgraph_range();
+              //     // println!("{:?}", subgraph);
+              //     // println!("({}, {})", bound.lower, bound.upper);
+              //     // assert_eq!(subgraph.into_iter().collect::<Vec<_>>(), vec![0, 1]);
+              //     // assert_eq!(bound.lower, bound.upper);
+              //     // assert_eq!(bound.upper, 40.0);
 
-                // set to negative weight
-                // solver.solve(SyndromePattern::new_with_override_weights(
-                //     vec![0, 2],
-                //     vec![(-20.0).into(), 10.0.into(), 100.0.into()],
-                //     1.0.into(),
-                //     None,
-                // ));
-                // let (subgraph, bound) = solver.subgraph_range();
-                // println!("{:?}", subgraph);
-                // println!("({}, {})", bound.lower, bound.upper);
-                // assert_eq!(bound.lower, bound.upper);
-                // assert_eq!(subgraph.into_iter().collect::<Vec<_>>(), vec![0, 1]);
-                // assert_eq!(bound.upper, (-10.0));
+              //     // set to negative weight
+              //     // solver.solve(SyndromePattern::new_with_override_weights(
+              //     //     vec![0, 2],
+              //     //     vec![(-20.0).into(), 10.0.into(), 100.0.into()],
+              //     //     1.0.into(),
+              //     //     None,
+              //     // ));
+              //     // let (subgraph, bound) = solver.subgraph_range();
+              //     // println!("{:?}", subgraph);
+              //     // println!("({}, {})", bound.lower, bound.upper);
+              //     // assert_eq!(bound.lower, bound.upper);
+              //     // assert_eq!(subgraph.into_iter().collect::<Vec<_>>(), vec![0, 1]);
+              //     // assert_eq!(bound.upper, (-10.0));
 
-                solver.solve(SyndromePattern::new_vertices(vec![0, 2]));
-                let (subgraph, bound) = solver.subgraph_range();
-                println!("{:?}", subgraph);
-                println!("({}, {})", bound.lower, bound.upper);
-                assert_eq!(bound.lower, bound.upper);
-                assert_eq!(subgraph.into_iter().collect::<Vec<_>>(), vec![2]);
-                assert_eq!(bound.upper, Weight::from_float(100.0).unwrap());
-            }
-            Commands::CustomTest2 => {
-                // custom test: ported from test_override_weights_decoding
-                let vertex_num = 3;
-                let edge1 = HyperEdge {
-                    vertices: vec![0, 1],
-                    weight: Weight::from_float(100.0).unwrap(),
-                };
-                let edge2 = HyperEdge {
-                    vertices: vec![1, 2],
-                    weight: Weight::from_float(100.0).unwrap(),
-                };
-                let edge3 = HyperEdge {
-                    vertices: vec![2, 0],
-                    weight: Weight::from_float(100.0).unwrap(),
-                };
-                let initializer = SolverInitializer::new(vertex_num, vec![edge1, edge2, edge3]);
-                let initializer = Arc::new(initializer);
-                let mut solver: SolverSerialJointSingleHair = SolverSerialJointSingleHair::new(&initializer, json!({}));
-                // let mut solver = SolverBPWrapper::new(solver.solver_base(), 1, 0.625);
+              //     solver.solve(SyndromePattern::new_vertices(vec![0, 2]));
+              //     let (subgraph, bound) = solver.subgraph_range();
+              //     println!("{:?}", subgraph);
+              //     println!("({}, {})", bound.lower, bound.upper);
+              //     assert_eq!(bound.lower, bound.upper);
+              //     assert_eq!(subgraph.into_iter().collect::<Vec<_>>(), vec![2]);
+              //     assert_eq!(bound.upper, Weight::from_float(100.0).unwrap());
+              // }
+              // Commands::CustomTest2 => {
+              //     // custom test: ported from test_override_weights_decoding
+              //     let vertex_num = 3;
+              //     let edge1 = HyperEdge {
+              //         vertices: vec![0, 1],
+              //         weight: Weight::from_float(100.0).unwrap(),
+              //     };
+              //     let edge2 = HyperEdge {
+              //         vertices: vec![1, 2],
+              //         weight: Weight::from_float(100.0).unwrap(),
+              //     };
+              //     let edge3 = HyperEdge {
+              //         vertices: vec![2, 0],
+              //         weight: Weight::from_float(100.0).unwrap(),
+              //     };
+              //     let initializer = SolverInitializer::new(vertex_num, vec![edge1, edge2, edge3]);
+              //     let initializer = Arc::new(initializer);
+              //     let mut solver: SolverSerialJointSingleHair = SolverSerialJointSingleHair::new(&initializer, json!({}));
+              //     // let mut solver = SolverBPWrapper::new(solver.solver_base(), 1, 0.625);
 
-                // // force set wieghts to [0, 0, 100]
-                // solver.solve(SyndromePattern::new_with_override_weights(
-                //     vec![0, 2],
-                //     vec![0.0.into(), 0.0.into(), 100.0.into()],
-                //     1.0.into(),
-                //     None,
-                // ));
+              //     // // force set wieghts to [0, 0, 100]
+              //     // solver.solve(SyndromePattern::new_with_override_weights(
+              //     //     vec![0, 2],
+              //     //     vec![0.0.into(), 0.0.into(), 100.0.into()],
+              //     //     1.0.into(),
+              //     //     None,
+              //     // ));
 
-                // let (subgraph, bound) = solver.subgraph_range();
-                // println!("{:?}", subgraph);
-                // println!("({}, {})", bound.lower, bound.upper);
-                // assert_eq!(subgraph.into_iter().collect::<Vec<_>>(), vec![0, 1]);
-                // assert_eq!(bound.lower, bound.upper);
-                // assert_eq!(bound.upper, 0.0);
+              //     // let (subgraph, bound) = solver.subgraph_range();
+              //     // println!("{:?}", subgraph);
+              //     // println!("({}, {})", bound.lower, bound.upper);
+              //     // assert_eq!(subgraph.into_iter().collect::<Vec<_>>(), vec![0, 1]);
+              //     // assert_eq!(bound.lower, bound.upper);
+              //     // assert_eq!(bound.upper, 0.0);
 
-                // // mix weights of ratio = 0.8
-                // // 0.8 * [0, 0, 100] + 0.2 * [100, 100, 100] = [20, 20, 100]
-                // solver.solve(SyndromePattern::new_with_override_weights(
-                //     vec![0, 2],
-                //     vec![0.0.into(), 0.0.into(), 100.0.into()],
-                //     0.8.into(),
-                //     None,
-                // ));
-                // let (subgraph, bound) = solver.subgraph_range();
-                // println!("{:?}", subgraph);
-                // println!("({}, {})", bound.lower, bound.upper);
-                // assert_eq!(subgraph.into_iter().collect::<Vec<_>>(), vec![0, 1]);
-                // assert_eq!(bound.lower, bound.upper);
-                // assert_eq!(bound.upper, 40.0);
+              //     // // mix weights of ratio = 0.8
+              //     // // 0.8 * [0, 0, 100] + 0.2 * [100, 100, 100] = [20, 20, 100]
+              //     // solver.solve(SyndromePattern::new_with_override_weights(
+              //     //     vec![0, 2],
+              //     //     vec![0.0.into(), 0.0.into(), 100.0.into()],
+              //     //     0.8.into(),
+              //     //     None,
+              //     // ));
+              //     // let (subgraph, bound) = solver.subgraph_range();
+              //     // println!("{:?}", subgraph);
+              //     // println!("({}, {})", bound.lower, bound.upper);
+              //     // assert_eq!(subgraph.into_iter().collect::<Vec<_>>(), vec![0, 1]);
+              //     // assert_eq!(bound.lower, bound.upper);
+              //     // assert_eq!(bound.upper, 40.0);
 
-                // set to negative weight
-                // solver.solve(SyndromePattern::new_with_override_weights(
-                //     vec![0, 2],
-                //     vec![(-20.0).into(), 10.0.into(), 100.0.into()],
-                //     1.0.into(),
-                //     None,
-                // ));
-                // let (subgraph, bound) = solver.subgraph_range();
-                // println!("{:?}", subgraph);
-                // println!("({}, {})", bound.lower, bound.upper);
-                // assert_eq!(bound.lower, bound.upper);
-                // assert_eq!(subgraph.into_iter().collect::<Vec<_>>(), vec![0, 1]);
-                // assert_eq!(bound.upper, (-10.0));
+              //     // set to negative weight
+              //     // solver.solve(SyndromePattern::new_with_override_weights(
+              //     //     vec![0, 2],
+              //     //     vec![(-20.0).into(), 10.0.into(), 100.0.into()],
+              //     //     1.0.into(),
+              //     //     None,
+              //     // ));
+              //     // let (subgraph, bound) = solver.subgraph_range();
+              //     // println!("{:?}", subgraph);
+              //     // println!("({}, {})", bound.lower, bound.upper);
+              //     // assert_eq!(bound.lower, bound.upper);
+              //     // assert_eq!(subgraph.into_iter().collect::<Vec<_>>(), vec![0, 1]);
+              //     // assert_eq!(bound.upper, (-10.0));
 
-                solver.solve(SyndromePattern::new_vertices(vec![0, 2]));
-                let (subgraph, bound) = solver.subgraph_range();
-                println!("{:?}", subgraph);
-                println!("({}, {})", bound.lower, bound.upper);
-                assert_eq!(bound.lower, bound.upper);
-                assert_eq!(subgraph.into_iter().collect::<Vec<_>>(), vec![2]);
-                assert_eq!(bound.upper, Weight::from_float(100.0).unwrap());
-            }
+              //     solver.solve(SyndromePattern::new_vertices(vec![0, 2]));
+              //     let (subgraph, bound) = solver.subgraph_range();
+              //     println!("{:?}", subgraph);
+              //     println!("({}, {})", bound.lower, bound.upper);
+              //     assert_eq!(bound.lower, bound.upper);
+              //     assert_eq!(subgraph.into_iter().collect::<Vec<_>>(), vec![2]);
+              //     assert_eq!(bound.upper, Weight::from_float(100.0).unwrap());
+              // }
         }
     }
 }
@@ -1091,6 +1079,21 @@ impl SolverType {
             Self::SingleHair => Box::new(SolverSerialSingleHair::new(initializer, solver_config)),
             Self::JointSingleHair => Box::new(SolverSerialJointSingleHair::new(initializer, solver_config)),
             Self::ErrorPatternLogger => panic!("error pattern logger does not support decoder (stable) speed benchmark"),
+            Self::ParallelUnionFind => Box::new(SolverParallelUnionFind::new(
+                initializer,
+                &PartitionInfo::new(),
+                solver_config,
+            )),
+            Self::ParallelSingleHair => Box::new(SolverParallelSingleHair::new(
+                initializer,
+                &PartitionInfo::new(),
+                solver_config,
+            )),
+            Self::ParallelJointSingleHair => Box::new(SolverParallelJointSingleHair::new(
+                initializer,
+                &PartitionInfo::new(),
+                solver_config,
+            )),
         }
     }
 
@@ -1104,6 +1107,21 @@ impl SolverType {
             Self::SingleHair => Box::new(SolverSerialSingleHair::new(initializer, solver_config)),
             Self::JointSingleHair => Box::new(SolverSerialJointSingleHair::new(initializer, solver_config)),
             Self::ErrorPatternLogger => panic!("error pattern logger does not support decoder (stable) speed benchmark"),
+            Self::ParallelUnionFind => Box::new(SolverParallelUnionFind::new(
+                initializer,
+                &PartitionInfo::new(),
+                solver_config,
+            )),
+            Self::ParallelSingleHair => Box::new(SolverParallelSingleHair::new(
+                initializer,
+                &PartitionInfo::new(),
+                solver_config,
+            )),
+            Self::ParallelJointSingleHair => Box::new(SolverParallelJointSingleHair::new(
+                initializer,
+                &PartitionInfo::new(),
+                solver_config,
+            )),
         }
     }
 }

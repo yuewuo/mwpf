@@ -1,4 +1,6 @@
 use crate::dual_module_pq::EdgePtr;
+use crate::matrix::CompleteMatrix;
+use crate::matrix::Echelon;
 use crate::model_hypergraph::*;
 use crate::util::*;
 use crate::visualize::*;

@@ -183,6 +183,7 @@ impl PrimalModuleParallel {
                     primal_module.config = PrimalModuleSerialConfig {
                         timeout: config.timeout,
                         cluster_node_limit: config.cluster_node_limit,
+                        only_solve_primal_once: false,
                     };
                     let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone());
 

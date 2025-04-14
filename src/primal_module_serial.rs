@@ -1312,7 +1312,7 @@ impl PrimalModuleSerial {
 
             for cluster_affinity in cluster_affs.into_iter() {
                 let cluster_ptr = cluster_affinity.cluster_ptr;
-                let mut dual_node_deltas = BTreeMap::new();
+                let mut dual_node_deltas = FastIterMap::new();
                 let (mut resolved, optimizer_result) = self.resolve_cluster_tune(
                     &cluster_ptr,
                     interface,
@@ -1326,15 +1326,15 @@ impl PrimalModuleSerial {
                     .get_obstacles_tune(optimizer_result, dual_node_deltas);
 
                 // for cycle resolution
-                let mut order: VecDeque<BTreeSet<Obstacle>> = VecDeque::with_capacity(MAX_HISTORY); // fifo order of the obstacles sets seen
-                let mut current_sequences: Vec<(usize, BTreeSet<Obstacle>)> = Vec::new(); // the indexes that are currently being processed
+                let mut order: VecDeque<FastIterSet<Obstacle>> = VecDeque::with_capacity(MAX_HISTORY); // fifo order of the obstacles sets seen
+                let mut current_sequences: Vec<(usize, FastIterSet<Obstacle>)> = Vec::new(); // the indexes that are currently being processed
 
                 '_resolving: while !resolved {
                     let (_obstacles, _resolved) =
                         self.resolve_tune(obstacles.clone(), interface, dual_module_ptr.write().deref_mut());
 
                     // cycle resolution
-                    let drained: Vec<(usize, BTreeSet<Obstacle>)> = std::mem::take(&mut current_sequences);
+                    let drained: Vec<(usize, FastIterSet<Obstacle>)> = std::mem::take(&mut current_sequences);
                     for (idx, start) in drained.into_iter() {
                         if _obstacles.eq(&start) {
                             dual_module_ptr.write().deref_mut().end_tuning();

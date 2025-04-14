@@ -757,7 +757,15 @@ impl SolverBPWrapper {
         let mut initial_log_ratios = Vec::with_capacity(check_size);
         let mut channel_probabilities = Vec::with_capacity(check_size);
 
-        for (col_index, HyperEdge { weight, vertices }) in model_graph.initializer.weighted_edges.iter().enumerate() {
+        for (
+            col_index,
+            HyperEdge {
+                weight,
+                vertices,
+                connected_to_boundary_vertex,
+            },
+        ) in model_graph.initializer.weighted_edges.iter().enumerate()
+        {
             channel_probabilities.push(p_of_weight(weight.to_f64().unwrap()));
             for row_index in vertices.iter() {
                 pcm.insert_entry(*row_index, col_index);
@@ -1284,7 +1292,7 @@ impl SolverTrait for SolverParallel {
         self.dual_module.adjust_weights_for_negative_edges();
 
         let moved_out_vec = std::mem::take(&mut syndrome_pattern.defect_vertices);
-        let mut moved_out_set = moved_out_vec.into_iter().collect::<BTreeSet<VertexIndex>>();
+        let mut moved_out_set = moved_out_vec.into_iter().collect::<FastIterSet<VertexIndex>>();
 
         for to_flip in self.dual_module.get_flip_vertices().iter() {
             if moved_out_set.contains(to_flip) {
@@ -1365,6 +1373,15 @@ impl SolverTrait for SolverParallel {
 
     fn get_model_graph(&self) -> Arc<ModelHyperGraph> {
         self.model_graph.clone()
+    }
+
+    fn solver_base(&self) -> SolverBase {
+        SolverBase {
+            inner: SolverEnum::SolverSerialUnionFind(SolverSerialUnionFind::new(
+                &self.model_graph.initializer,
+                &self.model_graph.partition_info,
+            )),
+        }
     }
 }
 

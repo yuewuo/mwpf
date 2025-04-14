@@ -463,8 +463,6 @@ where
                 cluster_weights: hashbrown::HashMap::new(),
             };
 
-            original_weights.push(edge.weight.clone());
-
             let edge_ptr = EdgePtr::new_value(edge, (edge_id, 0));
 
             for &vertex_index in hyperedge.vertices.iter() {
@@ -1142,7 +1140,7 @@ where
             negative_weight_sum: Default::default(),
             negative_edges: Default::default(),
             flip_vertices: Default::default(),
-            original_weights,
+            initializer: partitioned_initializer.clone(),
         }
     }
 
@@ -1210,7 +1208,7 @@ where
             negative_weight_sum: Default::default(),
             negative_edges: Default::default(),
             flip_vertices: Default::default(),
-            original_weights,
+            initializer: new_seperate_initializer.clone(),
         }
     }
 }

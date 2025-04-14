@@ -98,7 +98,7 @@ impl RelaxerForest {
                 debug_assert!(
                     self.edge_untightener.contains_key(edge_ptr),
                     "edge {} is tight but no untightener presents, thus new relaxer cannot grow on it",
-                    edge_index
+                    edge_ptr.read_recursive().edge_index
                 );
                 let require_speed = if let Some(mut existing_speed) = untightened_edges.get_mut(edge_ptr) {
                     if *existing_speed >= *speed {

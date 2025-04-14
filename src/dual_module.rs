@@ -24,7 +24,7 @@ use std::sync::Arc;
 use crate::dual_module_pq::{EdgePtr, EdgeWeak, VertexPtr, VertexWeak};
 
 // this is not effectively doing much right now due to the My (Leo's) desire for ultra performance (inlining function > branches)
-#[derive(Default, Debug, PartialEq, Eq, Clone, Clone)]
+#[derive(Default, Debug, PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "python_binding", pyclass(module = "mwpf", eq, eq_int))]
 pub enum DualModuleMode {
     /// Mode 1
@@ -887,12 +887,12 @@ impl DualModuleInterfacePtr {
         node_ptr
     }
 
-    pub fn is_valid_cluster_auto_vertices(&self, edges: &BTreeSet<EdgePtr>) -> bool {
+    pub fn is_valid_cluster_auto_vertices(&self, edges: &FastIterSet<EdgePtr>) -> bool {
         self.find_valid_subgraph_auto_vertices(edges).is_some()
     }
 
-    pub fn find_valid_subgraph_auto_vertices(&self, edges: &BTreeSet<EdgePtr>) -> Option<Vec<EdgeWeak>> {
-        let mut vertices: BTreeSet<VertexPtr> = BTreeSet::new();
+    pub fn find_valid_subgraph_auto_vertices(&self, edges: &FastIterSet<EdgePtr>) -> Option<Vec<EdgeWeak>> {
+        let mut vertices: FastIterSet<VertexPtr> = FastIterSet::new();
         for edge_ptr in edges.iter() {
             let local_vertices = &edge_ptr.read_recursive().vertices;
             for vertex in local_vertices {
@@ -903,7 +903,11 @@ impl DualModuleInterfacePtr {
         self.find_valid_subgraph(edges, &vertices)
     }
 
-    pub fn find_valid_subgraph(&self, edges: &BTreeSet<EdgePtr>, vertices: &BTreeSet<VertexPtr>) -> Option<Vec<EdgeWeak>> {
+    pub fn find_valid_subgraph(
+        &self,
+        edges: &FastIterSet<EdgePtr>,
+        vertices: &FastIterSet<VertexPtr>,
+    ) -> Option<Vec<EdgeWeak>> {
         let mut matrix = Echelon::<CompleteMatrix>::new();
         for edge_ptr in edges.iter() {
             matrix.add_variable(edge_ptr.downgrade());
@@ -927,7 +931,7 @@ impl DualModuleInterfacePtr {
         // let edges_ptr = edges
         //     .iter()
         //     .map(|&idx| dual_module.get_edge_ptr(idx))
-        //     .collect::<BTreeSet<_>>();
+        //     .collect::<FastIterSet<_>>();
         // let invalid_subgraph = Arc::new(InvalidSubgraph::new(&edges_ptr));
         // self.create_node(invalid_subgraph, dual_module)
     }
@@ -941,11 +945,11 @@ impl DualModuleInterfacePtr {
     //         &vertices
     //             .iter()
     //             .filter_map(|weak_vertex| weak_vertex.upgrade())
-    //             .collect::<BTreeSet<_>>(),
+    //             .collect::<FastIterSet<_>>(),
     //         &edges
     //             .iter()
     //             .filter_map(|weak_edge| weak_edge.upgrade())
-    //             .collect::<BTreeSet<_>>(),
+    //             .collect::<FastIterSet<_>>(),
     //     ));
     //     self.create_node(invalid_subgraph, dual_module)
     // }
@@ -957,19 +961,6 @@ impl MWPSVisualizer for DualModuleInterfacePtr {
         let mut dual_nodes = Vec::<serde_json::Value>::new();
         for dual_node_ptr in interface.nodes.iter() {
             let dual_node = dual_node_ptr.read_recursive();
-            #[cfg(feature = "fast_ds")]
-            dual_nodes.push(json!({
-                if abbrev { "e" } else { "edges" }: dual_node.invalid_subgraph.edges.iter().copied().collect::<Vec<_>>(),
-                if abbrev { "v" } else { "vertices" }: dual_node.invalid_subgraph.vertices.iter().copied().collect::<Vec<_>>(),
-                if abbrev { "h" } else { "hair" }: dual_node.invalid_subgraph.hair.iter().copied().collect::<Vec<_>>(),
-                if abbrev { "d" } else { "dual_variable" }: dual_node.get_dual_variable().to_f64(),
-                if abbrev { "dn" } else { "dual_variable_numerator" }: numer_of(&dual_node.get_dual_variable()),
-                if abbrev { "dd" } else { "dual_variable_denominator" }: denom_of(&dual_node.get_dual_variable()),
-                if abbrev { "r" } else { "grow_rate" }: dual_node.grow_rate.to_f64(),
-                if abbrev { "rn" } else { "grow_rate_numerator" }: numer_of(&dual_node.grow_rate),
-                if abbrev { "rd" } else { "grow_rate_denominator" }: denom_of(&dual_node.grow_rate),
-            }));
-            #[cfg(not(feature = "fast_ds"))]
             let edges: Vec<usize> = dual_node
                 .invalid_subgraph
                 .edges
@@ -988,6 +979,19 @@ impl MWPSVisualizer for DualModuleInterfacePtr {
                 .iter()
                 .map(|e| e.read_recursive().edge_index)
                 .collect();
+            #[cfg(feature = "fast_ds")]
+            dual_nodes.push(json!({
+                if abbrev { "e" } else { "edges" }: edges,
+                if abbrev { "v" } else { "vertices" }: vertices,
+                if abbrev { "h" } else { "hair" }: hair,
+                if abbrev { "d" } else { "dual_variable" }: dual_node.get_dual_variable().to_f64(),
+                if abbrev { "dn" } else { "dual_variable_numerator" }: numer_of(&dual_node.get_dual_variable()),
+                if abbrev { "dd" } else { "dual_variable_denominator" }: denom_of(&dual_node.get_dual_variable()),
+                if abbrev { "r" } else { "grow_rate" }: dual_node.grow_rate.to_f64(),
+                if abbrev { "rn" } else { "grow_rate_numerator" }: numer_of(&dual_node.grow_rate),
+                if abbrev { "rd" } else { "grow_rate_denominator" }: denom_of(&dual_node.grow_rate),
+            }));
+            #[cfg(not(feature = "fast_ds"))]
             dual_nodes.push(json!({
                 if abbrev { "e" } else { "edges" }: edges,
                 if abbrev { "v" } else { "vertices" }: vertices,
