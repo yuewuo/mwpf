@@ -1589,7 +1589,8 @@ mod tests {
                 let mut code = CodeCapacityRepetitionCode::new(d, p);
                 code.sanity_check().unwrap();
                 let initializer = code.get_initializer();
-                let mut solver = SolverType::JointSingleHair.build(&initializer, &code, json!({ "cluster_node_limit": 50 }), None);
+                let mut solver =
+                    SolverType::JointSingleHair.build(&initializer, &code, json!({ "cluster_node_limit": 50 }), None);
                 for _ in 0..repeat {
                     let (syndrome, _) = code.generate_random_errors(thread_rng().gen::<u64>());
                     solver.solve(syndrome);
@@ -1613,7 +1614,8 @@ mod tests {
                 let mut code = CodeCapacityDepolarizePlanarCode::new(d, p);
                 code.sanity_check().unwrap();
                 let initializer = code.get_initializer();
-                let mut solver = SolverType::JointSingleHair.build(&initializer, &code, json!({ "cluster_node_limit": 50 }), None);
+                let mut solver =
+                    SolverType::JointSingleHair.build(&initializer, &code, json!({ "cluster_node_limit": 50 }), None);
                 for _ in 0..repeat {
                     let (syndrome, _) = code.generate_random_errors(thread_rng().gen::<u64>());
                     solver.solve(syndrome);
@@ -1637,7 +1639,8 @@ mod tests {
                 let mut code = CodeCapacityColorCode::new(d, p);
                 code.sanity_check().unwrap();
                 let initializer = code.get_initializer();
-                let mut solver = SolverType::JointSingleHair.build(&initializer, &code, json!({ "cluster_node_limit": 50 }), None);
+                let mut solver =
+                    SolverType::JointSingleHair.build(&initializer, &code, json!({ "cluster_node_limit": 50 }), None);
                 for _ in 0..repeat {
                     let (syndrome, _) = code.generate_random_errors(thread_rng().gen::<u64>());
                     solver.solve(syndrome);

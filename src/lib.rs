@@ -13,12 +13,12 @@ extern crate derivative;
 extern crate itertools;
 #[macro_use]
 extern crate lazy_static;
+extern crate core_affinity;
 extern crate more_asserts;
 extern crate num_rational;
 extern crate num_traits;
 extern crate parking_lot;
 extern crate prettytable;
-extern crate core_affinity;
 #[cfg(feature = "python_binding")]
 #[macro_use]
 extern crate pyo3;
@@ -33,13 +33,12 @@ extern crate wasm_bindgen;
 extern crate rayon;
 extern crate weak_table;
 
-
 pub mod cli;
 pub mod cluster;
 pub mod decoding_hypergraph;
 pub mod dual_module;
-pub mod dual_module_pq;
 pub mod dual_module_parallel;
+pub mod dual_module_pq;
 pub mod example_codes;
 pub mod html_export;
 pub mod invalid_subgraph;
@@ -52,9 +51,9 @@ pub mod plugin_single_hair;
 pub mod plugin_union_find;
 pub mod pointers;
 pub mod primal_module;
+pub mod primal_module_parallel;
 pub mod primal_module_serial;
 pub mod primal_module_union_find;
-pub mod primal_module_parallel;
 pub mod relaxer;
 pub mod relaxer_forest;
 pub mod relaxer_optimizer;

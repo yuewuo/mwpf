@@ -24,10 +24,9 @@ use derivative::Derivative;
 use num_traits::{One, Zero};
 use std::collections::BTreeSet;
 
-use crate::dual_module_pq::{EdgeWeak, VertexWeak, VertexPtr};
+use crate::dual_module_pq::{EdgeWeak, VertexPtr, VertexWeak};
 #[cfg(feature = "unsafe_pointer")]
 use crate::pointers::UnsafePtr;
-
 
 pub type VarIndex = usize;
 pub type RowIndex = usize;
@@ -361,11 +360,10 @@ impl std::fmt::Debug for RowInfo {
 pub mod tests {
     use super::super::*;
     use super::*;
-    use std::collections::BTreeMap;
-    use crate::matrix::basic::tests::{initialize_vertex_edges_for_matrix_testing, edge_vec_from_indices};
-    use std::collections::HashSet;
     use crate::dual_module_pq::{EdgePtr, VertexPtr};
-
+    use crate::matrix::basic::tests::{edge_vec_from_indices, initialize_vertex_edges_for_matrix_testing};
+    use std::collections::BTreeMap;
+    use std::collections::HashSet;
 
     type TightMatrix = Tight<BasicMatrix>;
 
@@ -383,8 +381,13 @@ pub mod tests {
         matrix.add_tight_variable(edges[3].downgrade());
         matrix.printstd();
         assert_eq!(
-            matrix.get_view_edges().iter().map(|e| e.upgrade_force().read_recursive().edge_index).collect::<HashSet<_>>(), 
-            [233, 14, 75].into_iter().collect::<HashSet<_>>());
+            matrix
+                .get_view_edges()
+                .iter()
+                .map(|e| e.upgrade_force().read_recursive().edge_index)
+                .collect::<HashSet<_>>(),
+            [233, 14, 75].into_iter().collect::<HashSet<_>>()
+        );
         assert_eq!(matrix.var_to_column_index(0), Some(0));
         assert_eq!(matrix.var_to_column_index(1), Some(1));
         assert_eq!(matrix.var_to_column_index(2), None);
@@ -470,20 +473,54 @@ pub mod tests {
         }
         matrix.printstd();
         assert_eq!(
-            matrix.get_solution().unwrap().iter().map(|e| e.upgrade_force().read_recursive().edge_index).collect::<HashSet<_>>(),
-            vec![0, 1, 2, 3, 4].into_iter().collect::<HashSet<_>>());
-        let weights = TestEdgeWeights::new(&[(edges[3].downgrade(), Rational::from(10.)), (edges[9].downgrade(), Rational::from(10.))]);
+            matrix
+                .get_solution()
+                .unwrap()
+                .iter()
+                .map(|e| e.upgrade_force().read_recursive().edge_index)
+                .collect::<HashSet<_>>(),
+            vec![0, 1, 2, 3, 4].into_iter().collect::<HashSet<_>>()
+        );
+        let weights = TestEdgeWeights::new(&[
+            (edges[3].downgrade(), Rational::from(10.)),
+            (edges[9].downgrade(), Rational::from(10.)),
+        ]);
         assert_eq!(
-            weights.get_solution_local_minimum(&mut matrix).unwrap().iter().map(|e| e.upgrade_force().read_recursive().edge_index).collect::<HashSet<_>>(), 
-            vec![5, 7, 8].into_iter().collect::<HashSet<_>>());
-        let weights = TestEdgeWeights::new(&[(edges[7].downgrade(), Rational::from(10.)), (edges[9].downgrade(), Rational::from(10.))]);
+            weights
+                .get_solution_local_minimum(&mut matrix)
+                .unwrap()
+                .iter()
+                .map(|e| e.upgrade_force().read_recursive().edge_index)
+                .collect::<HashSet<_>>(),
+            vec![5, 7, 8].into_iter().collect::<HashSet<_>>()
+        );
+        let weights = TestEdgeWeights::new(&[
+            (edges[7].downgrade(), Rational::from(10.)),
+            (edges[9].downgrade(), Rational::from(10.)),
+        ]);
         assert_eq!(
-            weights.get_solution_local_minimum(&mut matrix).unwrap().iter().map(|e| e.upgrade_force().read_recursive().edge_index).collect::<HashSet<_>>(), 
-            vec![3, 4, 8].into_iter().collect::<HashSet<_>>());
-        let weights = TestEdgeWeights::new(&[(edges[3].downgrade(), Rational::from(10.)), (edges[4].downgrade(), Rational::from(10.)), (edges[7].downgrade(), Rational::from(10.))]);
+            weights
+                .get_solution_local_minimum(&mut matrix)
+                .unwrap()
+                .iter()
+                .map(|e| e.upgrade_force().read_recursive().edge_index)
+                .collect::<HashSet<_>>(),
+            vec![3, 4, 8].into_iter().collect::<HashSet<_>>()
+        );
+        let weights = TestEdgeWeights::new(&[
+            (edges[3].downgrade(), Rational::from(10.)),
+            (edges[4].downgrade(), Rational::from(10.)),
+            (edges[7].downgrade(), Rational::from(10.)),
+        ]);
         assert_eq!(
-            weights.get_solution_local_minimum(&mut matrix).unwrap().iter().map(|e| e.upgrade_force().read_recursive().edge_index).collect::<HashSet<_>>(),
-            vec![5, 6, 9].into_iter().collect::<HashSet<_>>());
+            weights
+                .get_solution_local_minimum(&mut matrix)
+                .unwrap()
+                .iter()
+                .map(|e| e.upgrade_force().read_recursive().edge_index)
+                .collect::<HashSet<_>>(),
+            vec![5, 6, 9].into_iter().collect::<HashSet<_>>()
+        );
     }
 
     #[test]

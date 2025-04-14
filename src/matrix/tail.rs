@@ -4,7 +4,7 @@ use crate::util::*;
 use derivative::Derivative;
 use std::collections::BTreeSet;
 
-use crate::dual_module_pq::{EdgeWeak, VertexWeak, VertexPtr};
+use crate::dual_module_pq::{EdgeWeak, VertexPtr, VertexWeak};
 #[cfg(feature = "unsafe_pointer")]
 use crate::pointers::UnsafePtr;
 
@@ -155,10 +155,9 @@ pub mod tests {
     use super::super::basic::*;
     use super::super::tight::*;
     use super::*;
-    use crate::matrix::basic::tests::{initialize_vertex_edges_for_matrix_testing, edge_vec_from_indices};
-    use std::collections::HashSet;
     use crate::dual_module_pq::{EdgePtr, VertexPtr};
-
+    use crate::matrix::basic::tests::{edge_vec_from_indices, initialize_vertex_edges_for_matrix_testing};
+    use std::collections::HashSet;
 
     type TailMatrix = Tail<Tight<BasicMatrix>>;
 
@@ -168,16 +167,24 @@ pub mod tests {
         let mut matrix = TailMatrix::new();
         let vertex_indices = vec![0, 1, 2];
         let edge_indices = vec![1, 4, 6, 9];
-        let vertex_incident_edges_vec = vec![
-            vec![0, 1, 2],
-            vec![1, 3],
-            vec![0, 3],
-        ];
+        let vertex_incident_edges_vec = vec![vec![0, 1, 2], vec![1, 3], vec![0, 3]];
         let (vertices, edges) = initialize_vertex_edges_for_matrix_testing(vertex_indices, edge_indices);
-       
-        matrix.add_constraint(vertices[0].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges), true);
-        matrix.add_constraint(vertices[1].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[1], &edges), false);
-        matrix.add_constraint(vertices[2].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[2], &edges), true);
+
+        matrix.add_constraint(
+            vertices[0].downgrade(),
+            &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges),
+            true,
+        );
+        matrix.add_constraint(
+            vertices[1].downgrade(),
+            &edge_vec_from_indices(&vertex_incident_edges_vec[1], &edges),
+            false,
+        );
+        matrix.add_constraint(
+            vertices[2].downgrade(),
+            &edge_vec_from_indices(&vertex_incident_edges_vec[2], &edges),
+            true,
+        );
         assert_eq!(matrix.edge_to_var_index(edges[1].downgrade()), Some(1));
         matrix.printstd();
         assert_eq!(
@@ -229,8 +236,13 @@ pub mod tests {
 "
         );
         assert_eq!(
-            matrix.get_tail_edges_vec().iter().map(|e| e.upgrade_force().read_recursive().edge_index).collect::<HashSet<_>>(), 
-            [1, 6].into_iter().collect::<HashSet<_>>());
+            matrix
+                .get_tail_edges_vec()
+                .iter()
+                .map(|e| e.upgrade_force().read_recursive().edge_index)
+                .collect::<HashSet<_>>(),
+            [1, 6].into_iter().collect::<HashSet<_>>()
+        );
         assert_eq!(matrix.edge_to_var_index(edges[1].downgrade()), Some(1));
     }
 
@@ -241,11 +253,13 @@ pub mod tests {
         let mut matrix = TailMatrix::new();
         let vertex_indices = vec![0, 1, 2];
         let edge_indices = vec![1, 4, 6, 9];
-        let vertex_incident_edges_vec = vec![
-            vec![0, 1, 2],
-        ];
+        let vertex_incident_edges_vec = vec![vec![0, 1, 2]];
         let (vertices, edges) = initialize_vertex_edges_for_matrix_testing(vertex_indices, edge_indices);
-        matrix.add_constraint(vertices[0].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges), true);
+        matrix.add_constraint(
+            vertices[0].downgrade(),
+            &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges),
+            true,
+        );
 
         matrix.update_edge_tightness(edges[0].downgrade(), true);
         // even though there is indeed such a column, we forbid such dangerous calls
@@ -259,17 +273,25 @@ pub mod tests {
         let mut matrix = TailMatrix::new();
         let vertex_indices = vec![0, 1, 2];
         let edge_indices = vec![1, 4, 6, 9, 3];
-        let vertex_incident_edges_vec = vec![
-            vec![0, 1, 2],
-            vec![1, 3],
-            vec![0, 3],
-        ];
+        let vertex_incident_edges_vec = vec![vec![0, 1, 2], vec![1, 3], vec![0, 3]];
         let (vertices, edges) = initialize_vertex_edges_for_matrix_testing(vertex_indices, edge_indices);
-       
+
         matrix.add_variable(edges[4].downgrade()); // untight edges will not show
-        matrix.add_constraint(vertices[0].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges), true);
-        matrix.add_constraint(vertices[1].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[1], &edges), false);
-        matrix.add_constraint(vertices[2].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[2], &edges), true);
+        matrix.add_constraint(
+            vertices[0].downgrade(),
+            &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges),
+            true,
+        );
+        matrix.add_constraint(
+            vertices[1].downgrade(),
+            &edge_vec_from_indices(&vertex_incident_edges_vec[1], &edges),
+            false,
+        );
+        matrix.add_constraint(
+            vertices[2].downgrade(),
+            &edge_vec_from_indices(&vertex_incident_edges_vec[2], &edges),
+            true,
+        );
         matrix.swap_row(2, 1);
         matrix.xor_row(0, 1);
         for edge_index in 0..4 {

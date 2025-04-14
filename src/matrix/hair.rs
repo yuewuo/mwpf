@@ -9,10 +9,9 @@ use crate::util::*;
 use prettytable::*;
 use std::collections::*;
 
-use crate::dual_module_pq::{EdgeWeak, VertexWeak, VertexPtr};
+use crate::dual_module_pq::{EdgeWeak, VertexPtr, VertexWeak};
 #[cfg(feature = "unsafe_pointer")]
 use crate::pointers::UnsafePtr;
-
 
 pub struct HairView<'a, M: MatrixTail + MatrixEchelon> {
     base: &'a mut M,
@@ -176,7 +175,10 @@ impl<'a, M: MatrixTail + MatrixEchelon> VizTrait for HairView<'a, M> {
             let row_info = self.get_echelon_row_info(row);
             let cell = if row_info.has_leading() {
                 Cell::new(
-                    self.column_to_edge_weak(row_info.column - self.column_bias).upgrade_force().read_recursive().edge_index
+                    self.column_to_edge_weak(row_info.column - self.column_bias)
+                        .upgrade_force()
+                        .read_recursive()
+                        .edge_index
                         .to_string()
                         .as_str(),
                 )
@@ -214,10 +216,9 @@ pub mod tests {
     use super::super::tail::*;
     use super::super::tight::*;
     use super::*;
-    use crate::matrix::basic::tests::{initialize_vertex_edges_for_matrix_testing, edge_vec_from_indices};
-    use std::collections::HashSet;
     use crate::dual_module_pq::{EdgePtr, VertexPtr};
-
+    use crate::matrix::basic::tests::{edge_vec_from_indices, initialize_vertex_edges_for_matrix_testing};
+    use std::collections::HashSet;
 
     type EchelonMatrix = Echelon<Tail<Tight<BasicMatrix>>>;
 
@@ -227,16 +228,24 @@ pub mod tests {
         let mut matrix = EchelonMatrix::new();
         let vertex_indices = vec![0, 1, 2];
         let edge_indices = vec![1, 4, 6, 9];
-        let vertex_incident_edges_vec = vec![
-            vec![0, 1, 2],
-            vec![1, 3],
-            vec![0, 3],
-        ];
+        let vertex_incident_edges_vec = vec![vec![0, 1, 2], vec![1, 3], vec![0, 3]];
         let (vertices, edges) = initialize_vertex_edges_for_matrix_testing(vertex_indices, edge_indices);
 
-        matrix.add_constraint(vertices[0].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges), true);
-        matrix.add_constraint(vertices[1].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[1], &edges), false);
-        matrix.add_constraint(vertices[2].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[2], &edges), true);
+        matrix.add_constraint(
+            vertices[0].downgrade(),
+            &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges),
+            true,
+        );
+        matrix.add_constraint(
+            vertices[1].downgrade(),
+            &edge_vec_from_indices(&vertex_incident_edges_vec[1], &edges),
+            false,
+        );
+        matrix.add_constraint(
+            vertices[2].downgrade(),
+            &edge_vec_from_indices(&vertex_incident_edges_vec[2], &edges),
+            true,
+        );
         assert_eq!(matrix.edge_to_var_index(edges[1].downgrade()), Some(1));
         for edge_ptr in edges.iter() {
             matrix.update_edge_tightness(edge_ptr.downgrade(), true);
@@ -305,21 +314,40 @@ pub mod tests {
 "
         );
         assert_eq!(
-            hair_view.get_tail_edges_vec().iter().map(|e| e.upgrade_force().read_recursive().edge_index).collect::<HashSet<_>>(), 
-            [1, 6].into_iter().collect::<HashSet<_>>());
+            hair_view
+                .get_tail_edges_vec()
+                .iter()
+                .map(|e| e.upgrade_force().read_recursive().edge_index)
+                .collect::<HashSet<_>>(),
+            [1, 6].into_iter().collect::<HashSet<_>>()
+        );
         assert!(hair_view.is_tight(edges[0].downgrade()));
         assert!(hair_view.get_echelon_satisfiable());
         assert_eq!(
-            hair_view.get_vertices().iter().map(|v| v.upgrade_force().read_recursive().vertex_index).collect::<HashSet<_>>(), 
-            [0, 1, 2].into_iter().collect::<HashSet<_>>());
+            hair_view
+                .get_vertices()
+                .iter()
+                .map(|v| v.upgrade_force().read_recursive().vertex_index)
+                .collect::<HashSet<_>>(),
+            [0, 1, 2].into_iter().collect::<HashSet<_>>()
+        );
         assert_eq!(
-            hair_view.get_base_view_edges().iter().map(|e| e.upgrade_force().read_recursive().edge_index).collect::<HashSet<_>>(),
-            [4, 9, 1, 6].into_iter().collect::<HashSet<_>>());
+            hair_view
+                .get_base_view_edges()
+                .iter()
+                .map(|e| e.upgrade_force().read_recursive().edge_index)
+                .collect::<HashSet<_>>(),
+            [4, 9, 1, 6].into_iter().collect::<HashSet<_>>()
+        );
     }
 
     fn generate_demo_matrix(edges: &Vec<EdgePtr>, vertices: &Vec<VertexPtr>) -> EchelonMatrix {
         let mut matrix = EchelonMatrix::new();
-        matrix.add_constraint(vertices[0].downgrade(), &[edges[0].downgrade(), edges[1].downgrade(), edges[2].downgrade()], true);
+        matrix.add_constraint(
+            vertices[0].downgrade(),
+            &[edges[0].downgrade(), edges[1].downgrade(), edges[2].downgrade()],
+            true,
+        );
         matrix.add_constraint(vertices[1].downgrade(), &[edges[1].downgrade(), edges[3].downgrade()], false);
         for edge_index in 0..4 {
             matrix.update_edge_tightness(edges[edge_index].downgrade(), true);
@@ -376,7 +404,11 @@ pub mod tests {
 
         let mut matrix = generate_demo_matrix(&edges, &vertices);
         let mut hair_view = HairView::new(&mut matrix, [].into_iter());
-        hair_view.add_constraint(vertices[2].downgrade(), &[edges[0].downgrade(), edges[4].downgrade(), edges[5].downgrade()], false);
+        hair_view.add_constraint(
+            vertices[2].downgrade(),
+            &[edges[0].downgrade(), edges[4].downgrade(), edges[5].downgrade()],
+            false,
+        );
     }
 
     #[test]
@@ -437,18 +469,29 @@ pub mod tests {
         let mut matrix = EchelonMatrix::new();
         let vertex_indices = vec![0, 1, 2, 3];
         let edge_indices = vec![1, 4, 6, 9];
-        let vertex_incident_edges_vec = vec![
-            vec![0, 1, 2],
-            vec![1, 3],
-            vec![0, 3],
-            vec![0, 3],
-        ];
+        let vertex_incident_edges_vec = vec![vec![0, 1, 2], vec![1, 3], vec![0, 3], vec![0, 3]];
         let (vertices, edges) = initialize_vertex_edges_for_matrix_testing(vertex_indices, edge_indices);
-        matrix.add_constraint(vertices[0].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges), true);
-        matrix.add_constraint(vertices[1].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[1], &edges), false);
-        matrix.add_constraint(vertices[2].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[2], &edges), true);
-        matrix.add_constraint(vertices[3].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[3], &edges), false);
-        
+        matrix.add_constraint(
+            vertices[0].downgrade(),
+            &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges),
+            true,
+        );
+        matrix.add_constraint(
+            vertices[1].downgrade(),
+            &edge_vec_from_indices(&vertex_incident_edges_vec[1], &edges),
+            false,
+        );
+        matrix.add_constraint(
+            vertices[2].downgrade(),
+            &edge_vec_from_indices(&vertex_incident_edges_vec[2], &edges),
+            true,
+        );
+        matrix.add_constraint(
+            vertices[3].downgrade(),
+            &edge_vec_from_indices(&vertex_incident_edges_vec[3], &edges),
+            false,
+        );
+
         for edge_ptr in edges.iter() {
             matrix.update_edge_tightness(edge_ptr.downgrade(), true);
         }

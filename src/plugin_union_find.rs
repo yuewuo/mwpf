@@ -4,10 +4,11 @@
 //! This plugin will always be appended to the end of the plugin sequence to make
 //! sure there is a feasible MINLP solution.
 //!
-#![cfg_attr(feature="unsafe_pointer", allow(dropping_references))]
+#![cfg_attr(feature = "unsafe_pointer", allow(dropping_references))]
 
 use crate::decoding_hypergraph::*;
 use crate::dual_module::*;
+use crate::dual_module_pq::EdgePtr;
 use crate::invalid_subgraph::*;
 use crate::matrix::*;
 use crate::num_traits::One;
@@ -15,7 +16,6 @@ use crate::plugin::*;
 use crate::relaxer::*;
 use crate::util::*;
 use std::collections::BTreeSet;
-use crate::dual_module_pq::EdgePtr;
 
 #[derive(Debug, Clone, Default)]
 pub struct PluginUnionFind {}
@@ -26,9 +26,17 @@ impl PluginUnionFind {
         if matrix.get_echelon_info().satisfiable {
             return None; // cannot find any relaxer
         }
-        let local_edges: BTreeSet<EdgePtr> = matrix.get_view_edges().iter().map(|e| e.upgrade_force()).collect::<BTreeSet<_>>();
+        let local_edges: BTreeSet<EdgePtr> = matrix
+            .get_view_edges()
+            .iter()
+            .map(|e| e.upgrade_force())
+            .collect::<BTreeSet<_>>();
         let invalid_subgraph = InvalidSubgraph::new_complete_ptr(
-            &matrix.get_vertices().iter().map(|e| e.upgrade_force()).collect::<BTreeSet<_>>(),
+            &matrix
+                .get_vertices()
+                .iter()
+                .map(|e| e.upgrade_force())
+                .collect::<BTreeSet<_>>(),
             &local_edges,
         );
         Some(Relaxer::new([(invalid_subgraph, Rational::one())].into()))
