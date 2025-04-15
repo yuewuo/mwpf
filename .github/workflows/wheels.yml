@@ -3,7 +3,7 @@ name: Build Python Binding
 on:
   push:
     branches:
-      - ci-build
+      - '**'
     tags:
       - '**'
   # pull_request: {}
@@ -11,17 +11,14 @@ on:
 jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.github/workflows/ci.yml
 
   build_wheels:
-    name: Build wheels py3.${{ matrix.python-version }} on ${{ matrix.os }} (${{ matrix.build-feature }})
+    name: Build wheels on ${{ matrix.os }} (${{ matrix.build-feature }})
     strategy:
       fail-fast: true
-      # fail-fast: false
       matrix:
         os:
           - ubuntu
-          # - macos
+          - macos
           - windows
-        python-version: # Yue 2022.10.9: I enabled abi3-py37 in pyo3, so everything built will be py37-abi3 which is compatible with py37+
-          - '8' # use python 3.8 to build because macos universal2 requires at least python 3.8; however the result will be py37-abi3
         include:
           - os: ubuntu
             platform: linux
@@ -29,14 +26,23 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
             ls: dir
         build-feature:
           - default
-          - rational  # will execute pyproject-rational.py before build
+          - rational
+          - incr
+          - fast
     runs-on: ${{ format('{0}-latest', matrix.os) }}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v3
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+          cache-dependency-path: '.github/requirements-dev.txt'
 
+      - name: Install Python dependencies
+        run: python -m pip install -r .github/requirements-dev.txt
+  
       - name: Install LLVM and Clang (Windows)
         if: matrix.os == 'windows'
         uses: KyleMayes/install-llvm-action@v1
@@ -63,27 +69,25 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
         working-directory: ./visualize
         run: npm install --include=dev && npm run build
 
-      - name: Install Python dependencies
-        run: python -m pip install -U setuptools wheel twine cibuildwheel pytest maturin fusion_blossom==0.2.10
-
-      - name: run Rust test
-        run: cargo test --release
-        env:
-          SKIP_FRONTEND_BUILD: '1'
-
       - name: apply patch to build different packages
         if: matrix.build-feature != 'default'
-        run: python pyproject-${{ matrix.build-feature }}.py apply
+        run: python pyproject-patch.py ${{ matrix.build-feature }} apply
 
       - name: Build Wheels
         run: python -m cibuildwheel --output-dir wheelhouse
         env:
-          CIBW_BUILD: 'cp3${{ matrix.python-version }}-*'
+          CIBW_BUILD: 'cp38-*'
           CIBW_SKIP: '*-win32 *_i686' # do not build for 32bit machines, rustc seems to complain about it
           CIBW_PLATFORM: ${{ matrix.platform || matrix.os }} # only build for specific platform
-          CIBW_ENVIRONMENT_MACOS: PATH="$HOME/.cargo/bin:$PATH" MACOSX_DEPLOYMENT_TARGET=10.12
-          CIBW_ENVIRONMENT_WINDOWS: PATH="$UserProfile\.cargo\bin;$PATH" SKIP_FRONTEND_BUILD=1
-          CIBW_ENVIRONMENT_LINUX: PATH="$HOME/.cargo/bin:$PATH" LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/rh/llvm-toolset-7.0/root/usr/lib64/ SKIP_FRONTEND_BUILD=1
+          CIBW_ENVIRONMENT_MACOS: >
+            PATH="$HOME/.cargo/bin:$PATH" MACOSX_DEPLOYMENT_TARGET=10.12
+            ${{ matrix.build-feature == 'fast' && 'RUSTFLAGS="-C target-feature=+aes"' || 'SOME_USELESS_ENV=""' }}
+          CIBW_ENVIRONMENT_WINDOWS: >
+            PATH="$UserProfile\.cargo\bin;$PATH" SKIP_FRONTEND_BUILD=1
+            ${{ matrix.build-feature == 'fast' && 'RUSTFLAGS="-C target-feature=+aes,+sse2"' || 'SOME_USELESS_ENV=""' }}
+          CIBW_ENVIRONMENT_LINUX: >
+            PATH="$HOME/.cargo/bin:$PATH" LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/rh/llvm-toolset-7.0/root/usr/lib64/ SKIP_FRONTEND_BUILD=1
+            ${{ matrix.build-feature == 'fast' && 'RUSTFLAGS="-C target-feature=+aes,+sse2"' || 'SOME_USELESS_ENV=""' }}
           CIBW_MANYLINUX_X86_64_IMAGE: 'manylinux2014'
           CIBW_MUSLLINUX_X86_64_IMAGE: 'musllinux_1_2'
           # Yue 2022.10.17: build on aarch64 failed due to strange `cargo metadata` exited with an error:     Updating crates.io index
@@ -100,7 +104,11 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
           # manylinux2014 uses centOS 7 (yum install)
           # musllinux_1_2 uses Alpine Linux 3.19 (apk add)
           CIBW_BEFORE_BUILD_LINUX: >
-            if command -v apt > /dev/null; then apt install -y clang; elif command -v yum > /dev/null; then yum install -y llvm-toolset-7.0; elif command -v apk > /dev/null; then apk add clang17-libclang; fi &&
+            if command -v apt > /dev/null; then apt install -y clang; elif command -v yum > /dev/null;
+              then yum install -y llvm-toolset-7.0;
+            elif command -v apk > /dev/null;
+              then apk add clang17-libclang;
+            fi &&
             curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain=nightly-2024-11-03 --profile=minimal -y &&
             . "$HOME/.cargo/env" &&
             rustup show
@@ -118,14 +126,107 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
       - name: install wheel for testing (macOS)
         if: matrix.os == 'macos'
         run: python -m pip install -U wheelhouse/*.whl
-      
+
       - name: install wheel for testing (Windows)
         if: matrix.os == 'windows'
         run: Get-ChildItem -Path wheelhouse -Filter *.whl |ForEach-Object { python -m pip install -U $_.FullName }
 
       - name: run Python test
+        if: matrix.os != 'windows'
         run: pytest tests/python
 
-      - uses: actions/upload-artifact@v3
+      - name: build source distribution (ubuntu only)
+        if: matrix.os == 'ubuntu'
+        run: maturin sdist --out wheelhouse/
+
+      - uses: actions/upload-artifact@v4
         with:
-          path: wheelhouse/*.whl
+          name: binary-${{ matrix.os }}-${{ matrix.build-feature }}
+          path: wheelhouse/*
+
+  rust_tests:
+    name: Run Rust tests on ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        os:
+          - ubuntu
+          - macos
+          - windows
+    runs-on: ${{ format('{0}-latest', matrix.os) }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install LLVM and Clang (Windows)
+        if: matrix.os == 'windows'
+        uses: KyleMayes/install-llvm-action@v1
+        with:
+          version: "11.0"
+
+      - name: Set LIBCLANG_PATH (Windows)
+        if: matrix.os == 'windows'
+        run: echo "LIBCLANG_PATH=${{ env.LLVM_PATH }}/lib" >> "$GITHUB_ENV"
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly-2024-11-03
+          override: true
+
+      - name: Install NodeJs
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      
+      - name: Build Frontend
+        working-directory: ./visualize
+        run: npm install --include=dev && npm run build
+
+      - name: run Rust test
+        run: make ci_rust_test
+        env:
+          SKIP_FRONTEND_BUILD: '1'
+          RUSTFLAGS: -C target-cpu=native
+
+  publish-to-pypi:
+    name: >-
+      Publish Python 🐍 distribution 📦 to PyPI
+    if: startsWith(github.ref, 'refs/tags/')  # only publish to PyPI on tag pushes
+    needs:
+    - build_wheels
+    - rust_tests
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/${{ matrix.build-feature == 'default' && 'mwpf' || format('mwpf-{0}', matrix.build-feature) }}
+    permissions:
+      id-token: write  # IMPORTANT: mandatory for trusted publishing
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu
+          - macos
+          - windows
+        build-feature:
+          - default
+          - rational
+          - incr
+          - fast
+
+    steps:
+      - name: Download all the dists
+        uses: actions/download-artifact@v4
+        with:
+          name: binary-${{ matrix.os }}-${{ matrix.build-feature }}
+          path: wheelhouse/
+      - name: Publish distribution 📦 to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: wheelhouse/
+          skip-existing: true
+          verbose: true
+          print-hash: true
+          password: ${{ secrets.PYPI_API_TOKEN }}

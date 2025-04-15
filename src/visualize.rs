@@ -39,7 +39,7 @@ macro_rules! bind_trait_mwpf_visualizer {
 pub use bind_trait_mwpf_visualizer;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "python_binding", pyclass(get_all, set_all))]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf", get_all, set_all))]
 pub struct VisualizePosition {
     /// vertical axis, -i is up, +i is down (left-up corner is smallest i,j)
     pub i: f64,
@@ -93,7 +93,7 @@ impl VisualizerFileTrait for SpooledTempFile {
 }
 
 #[derive(Debug)]
-#[cfg_attr(feature = "python_binding", pyclass)]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf"))]
 pub struct Visualizer {
     /// original filepath
     pub filepath: Option<String>,
@@ -531,7 +531,7 @@ impl Visualizer {
     }
 
     #[staticmethod]
-    #[pyo3(name = "embed", signature = (force=false))]
+    #[pyo3(name = "embed", signature = (force=true))]
     pub fn embed_py(force: bool) {
         if force || !HTMLExport::library_injected() {
             HTMLExport::force_inject_library();

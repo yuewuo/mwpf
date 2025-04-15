@@ -1,7 +1,12 @@
+use crate::dual_module_pq::EdgePtr;
+use crate::dual_module_pq::EdgeWeak;
+use crate::dual_module_pq::VertexPtr;
+use crate::matrix::CompleteMatrix;
+use crate::matrix::Echelon;
 use crate::model_hypergraph::*;
 use crate::util::*;
 use crate::visualize::*;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::HashSet;
 use std::sync::Arc;
 
 #[derive(Debug, Clone)]
@@ -51,6 +56,52 @@ impl DecodingHyperGraph {
 
     pub fn new_defects(model_graph: Arc<ModelHyperGraph>, defect_vertices: Vec<VertexIndex>) -> Self {
         Self::new(model_graph, Arc::new(SyndromePattern::new_vertices(defect_vertices)))
+    }
+
+    pub fn find_valid_subgraph(&self, edges: &FastIterSet<EdgePtr>, vertices: &FastIterSet<VertexPtr>) -> Option<Subgraph> {
+        let mut matrix = Echelon::<CompleteMatrix>::new();
+        for &edge_ptr in edges.iter() {
+            matrix.add_variable(edge_ptr.downgrade());
+        }
+
+        for vertex_ptr in vertices.iter() {
+            vertex_ptr = vertex_ptr.downgrade();
+            let incident_edges = self.get_vertex_neighbors(vertex_ptr);
+            let parity = self.is_vertex_defect(vertex_ptr);
+            matrix.add_constraint(vertex_ptr.clone(), incident_edges, parity);
+        }
+        matrix.get_solution()
+    }
+
+    pub fn find_valid_subgraph_auto_vertices(&self, edges: &FastIterSet<EdgePtr>) -> Option<Subgraph> {
+        self.find_valid_subgraph(edges, &self.get_edges_neighbors(edges))
+    }
+
+    pub fn is_valid_cluster(&self, edges: &FastIterSet<EdgePtr>, vertices: &FastIterSet<VertexPtr>) -> bool {
+        self.find_valid_subgraph(edges, vertices).is_some()
+    }
+
+    pub fn is_valid_cluster_auto_vertices(&self, edges: &FastIterSet<EdgePtr>) -> bool {
+        self.find_valid_subgraph_auto_vertices(edges).is_some()
+    }
+
+    pub fn is_vertex_defect(&self, vertex_ptr: VertexPtr) -> bool {
+        self.defect_vertices_hashset
+            .contains(&vertex_ptr.read_recursive().vertex_index)
+    }
+
+    pub fn get_edge_neighbors(&self, edge_ptr: EdgePtr) -> &Vec<VertexIndex> {
+        self.model_graph.get_edge_neighbors(edge_ptr.read_recursive().edge_index)
+    }
+
+    pub fn get_vertex_neighbors(&self, vertex_ptr: VertexPtr) -> &Vec<EdgeIndex> {
+        self.model_graph
+            .get_vertex_neighbors(vertex_ptr.read_recursive().vertex_index)
+    }
+
+    pub fn get_edges_neighbors(&self, edges: &FastIterSet<EdgePtr>) -> FastIterSet<VertexIndex> {
+        self.model_graph
+            .get_edges_neighbors(edges.iter().map(|edge_ptr| edge_ptr.read_recursive().edge_index).collect())
     }
 }
 

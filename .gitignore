@@ -46,8 +46,10 @@ rustc-ice*
 *-uncompressed.png
 
 # logs
+logs/
 *.log
 .ipynb_checkpoints
+misc/
 
 src/python/**/*.so
 vite.config.ts.timestamp-*.mjs

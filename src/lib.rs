@@ -40,6 +40,7 @@ pub mod dual_module;
 pub mod dual_module_parallel;
 pub mod dual_module_pq;
 pub mod example_codes;
+pub mod fast_ds;
 pub mod html_export;
 pub mod invalid_subgraph;
 pub mod matrix;
@@ -54,6 +55,8 @@ pub mod primal_module;
 pub mod primal_module_parallel;
 pub mod primal_module_serial;
 pub mod primal_module_union_find;
+#[cfg(feature = "python_binding")]
+pub mod python_signal_checker;
 pub mod relaxer;
 pub mod relaxer_forest;
 pub mod relaxer_optimizer;

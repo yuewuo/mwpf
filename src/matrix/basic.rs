@@ -4,7 +4,6 @@ use super::visualize::*;
 use crate::dual_module_pq::EdgeWeak;
 use crate::util::*;
 use derivative::Derivative;
-use std::collections::{BTreeMap, BTreeSet};
 
 use crate::dual_module_pq::{VertexPtr, VertexWeak};
 
@@ -12,9 +11,9 @@ use crate::dual_module_pq::{VertexPtr, VertexWeak};
 #[derivative(Default(new = "true"))]
 pub struct BasicMatrix {
     /// the vertices already maintained by this parity check
-    pub vertices: BTreeSet<VertexWeak>,
+    pub vertices: FastIterSet<VertexWeak>,
     /// the edges maintained by this parity check, mapping to the local indices
-    pub edges: BTreeMap<EdgeWeak, VarIndex>,
+    pub edges: FastIterMap<EdgeWeak, VarIndex>,
     /// variable index map to edge index
     pub variables: Vec<EdgeWeak>,
     pub constraints: Vec<ParityRow>,
@@ -86,11 +85,11 @@ impl MatrixBasic for BasicMatrix {
         self.edges.get(&edge_weak).cloned()
     }
 
-    fn get_vertices(&self) -> BTreeSet<VertexWeak> {
+    fn get_vertices(&self) -> FastIterSet<VertexWeak> {
         self.vertices.clone()
     }
 
-    fn get_edges(&self) -> BTreeSet<EdgeWeak> {
+    fn get_edges(&self) -> FastIterSet<EdgeWeak> {
         self.edges.keys().cloned().collect()
     }
 }

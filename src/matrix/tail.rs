@@ -2,7 +2,6 @@ use super::interface::*;
 use super::visualize::*;
 use crate::util::*;
 use derivative::Derivative;
-use std::collections::BTreeSet;
 
 use crate::dual_module_pq::{EdgeWeak, VertexPtr, VertexWeak};
 #[cfg(feature = "unsafe_pointer")]
@@ -13,7 +12,7 @@ use crate::pointers::UnsafePtr;
 pub struct Tail<M: MatrixView> {
     base: M,
     /// the set of edges that should be placed at the end, if any
-    tail_edges: BTreeSet<EdgeWeak>,
+    tail_edges: FastIterSet<EdgeWeak>,
     /// var indices are outdated on any changes to the underlying matrix
     #[derivative(Default(value = "true"))]
     is_var_indices_outdated: bool,
@@ -30,7 +29,7 @@ impl<M: MatrixView> Tail<M> {
     pub fn from_base(base: M) -> Self {
         let mut value = Self {
             base,
-            tail_edges: BTreeSet::new(),
+            tail_edges: FastIterSet::new(),
             is_var_indices_outdated: true,
             var_indices: vec![],
             tail_var_indices: vec![],
@@ -41,10 +40,10 @@ impl<M: MatrixView> Tail<M> {
 }
 
 impl<M: MatrixView> MatrixTail for Tail<M> {
-    fn get_tail_edges(&self) -> &BTreeSet<EdgeWeak> {
+    fn get_tail_edges(&self) -> &FastIterSet<EdgeWeak> {
         &self.tail_edges
     }
-    fn get_tail_edges_mut(&mut self) -> &mut BTreeSet<EdgeWeak> {
+    fn get_tail_edges_mut(&mut self) -> &mut FastIterSet<EdgeWeak> {
         self.is_var_indices_outdated = true;
         &mut self.tail_edges
     }
@@ -58,7 +57,7 @@ impl<M: MatrixTight> MatrixTight for Tail<M> {
     fn is_tight(&self, edge_weak: EdgeWeak) -> bool {
         self.base.is_tight(edge_weak)
     }
-    fn get_tight_edges(&self) -> &BTreeSet<EdgeWeak> {
+    fn get_tight_edges(&self) -> &FastIterSet<EdgeWeak> {
         self.base.get_tight_edges()
     }
 }
@@ -96,10 +95,10 @@ impl<M: MatrixView> MatrixBasic for Tail<M> {
     fn edge_to_var_index(&self, edge_weak: EdgeWeak) -> Option<VarIndex> {
         self.get_base().edge_to_var_index(edge_weak)
     }
-    fn get_vertices(&self) -> BTreeSet<VertexWeak> {
+    fn get_vertices(&self) -> FastIterSet<VertexWeak> {
         self.get_base().get_vertices()
     }
-    fn get_edges(&self) -> BTreeSet<EdgeWeak> {
+    fn get_edges(&self) -> FastIterSet<EdgeWeak> {
         self.get_base().get_edges()
     }
 }

@@ -26,6 +26,9 @@ test: clean-env
 	cargo test --no-default-features --features rational_weight,embed_visualizer,qecp_integrate,progress_bar
 	cargo test -r --no-default-features --features rational_weight,embed_visualizer,qecp_integrate,progress_bar
 
+ci_rust_test:
+	cargo test --release
+	cargo test -r --no-default-features --features rational_weight,embed_visualizer,qecp_integrate,progress_bar
 
 build: clean-env
 	cargo build
@@ -53,3 +56,26 @@ wasm: clean-env
 coverage:
 	cargo llvm-cov --html
 	# open target/llvm-cov/html/index.html
+
+install-py:
+	# first check the project is in a clean state
+	python3 pyproject-patch.py rational dry
+	python3 pyproject-patch.py incr dry
+	python3 pyproject-patch.py fast dry
+
+	RUSTFLAGS="-C target-cpu=native" pip install .
+
+	python3 pyproject-patch.py rational apply
+	RUSTFLAGS="-C target-cpu=native" pip install .
+	python3 pyproject-patch.py rational revert
+
+	python3 pyproject-patch.py incr apply
+	RUSTFLAGS="-C target-cpu=native" pip install .
+	python3 pyproject-patch.py incr revert
+
+	python3 pyproject-patch.py fast apply
+	RUSTFLAGS="-C target-cpu=native" pip install .
+	python3 pyproject-patch.py fast revert
+
+uninstall-py:
+	pip uninstall mwpf mwpf_rational mwpf_incr mwpf_fast -y

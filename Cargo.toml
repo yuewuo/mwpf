@@ -1,6 +1,6 @@
 [package]
 name = "mwpf"
-version = "0.2.2"
+version = "0.2.9"
 authors = ["Yue Wu <wuyue16pku@gmail.com>"]
 edition = "2021"
 license = "MIT"
@@ -12,9 +12,6 @@ keywords = ["QEC", "quantum-computing", "error-correction", "visualization"]
 categories = ["science"]
 exclude = ["tutorial/*", "benchmark/*", "visualize/data/persist/*", ".github/*"]
 default-run = "mwpf"
-
-[package.metadata.maturin]
-python-source = "src/python"
 
 # see https://doc.rust-lang.org/1.39.0/cargo/reference/manifest.html#the-documentation-field-optional
 [badges]
@@ -39,36 +36,46 @@ debug = true
 
 [features]
 # to enable a feature, use `--features xxx`
-default = ["f64_weight", "qecp_integrate", "embed_visualizer", "progress_bar"]
+default = [
+    "f64_weight",
+    "qecp_integrate",
+    "embed_visualizer",
+    "progress_bar",
+    "fast_ds",
+]
 f64_weight = ["float_lp"] # use f64 instead of BigRational as weight type
 rational_weight = ["slp"]
+slp = [] # placeholder feature; the src/slp dependency is always included
 python_binding = ["pyo3"] # bind to Python
 wasm_binding = ["wasm-bindgen"] # bind to wasm
 progress_bar = ["pbr"] # make pbr an optional dependency because of wasm
 colorful = [] # enable colorful output in case terminal exists
 qecp_integrate = ["qecp"] # integrate with qecp
 float_lp = ["highs"] # use floating point LP solver, which is highs
+highs = [] # placeholder feature; the src/highs dependency is always included
 incr_lp = [
 ] # solve lp problems incrementally, compatible with highs, by modifying the internal data of the probelm
 embed_visualizer = [
 ] # use nodejs to build frontend and embed in Python instead of outputing individual JSON files
 loose_sanity_check = [] # do not panic when check fails
+fast_ds = ["gxhash"] # use fast data structures to fast iterate
 unsafe_pointer = [] # without the locks
 
 [dependencies]
-pyo3 = { version = "0.22.6", features = [
+pyo3 = { version = "0.23.4", features = [
     "extension-module",
     "multiple-pymethods",
-    "abi3-py37",
+    "abi3-py38",
     "num-bigint",
     "macros",
 ], optional = true }
-serde = { version = "1.0.214", features = ["derive", "rc"] }
+serde = { version = "1.0.217", features = ["derive", "rc"] }
 serde-wasm-bindgen = "0.6.5"
-serde_json = { version = "1.0.59", features = ["arbitrary_precision"] }
-chrono = "0.4.19"
+serde_json = { version = "1.0.138", features = ["arbitrary_precision"] }
+ciborium = "0.2.2"
+chrono = "0.4.39"
 urlencoding = "2.1.0"
-clap = { version = "4.5.20", features = ["cargo", "derive"] }
+clap = { version = "4.5.30", features = ["cargo", "derive"] }
 pbr = { version = "1.0.4", optional = true }
 rand_xoshiro = "0.6.0"
 derivative = "2.2.0"
@@ -79,26 +86,28 @@ num-bigint = { version = "0.4.5", features = ["serde"] }
 more-asserts = "0.3.1"
 rand = { version = "0.8.5", features = ["small_rng"] }
 prettytable-rs = "0.10.0"
-itertools = "0.13.0"
+itertools = "0.14.0"
 cfg-if = "1.0.0"
-getrandom = { version = "0.2", features = ["js"] }
-wasm-bindgen = { version = "0.2.86", optional = true }
+getrandom = { version = "0.2.15", features = ["js"] }
+wasm-bindgen = { version = "0.2.100", optional = true }
 lazy_static = "1.4.0"
-slp = { path = "src/slp", optional = true }
-highs = { path = "src/highs", optional = true }
+slp = { path = "src/slp" }
+highs = { path = "src/highs" }
 sugar = "0.2.0"
 maplit = "1.0.2"
-qecp = { version = "0.2.5", optional = true, default-features = false, features = [
-] }
+qecp = { version = "0.2.5", optional = true, default-features = false }
 serde_variant = "0.1.3"
-priority-queue = "2.1.1"
+priority-queue = "2.1.2"
 heapz = { path = "src/heapz" }
-hashbrown = { version = "0.15.1", features = ["serde"]}
+hashbrown = { version = "0.15.2", features = ["serde"]}
 pheap = { path = "src/pheap" }
-tempfile = "3.14.0"
-flate2 = "1.0.34"
+tempfile = "3.17.1"
+flate2 = "1.0.35"
 base64 = "0.22.1"
 bp = { path = "src/bp" }
+thread-priority = "1.2.0"
+lnexp = "0.2.1"
+gxhash = { version = "3.5.0", optional = true }
 rayon = "1.10.0"
 petgraph = { version = "0.6.0", features = ["serde-1"] }
 core_affinity = "0.8.1"
@@ -108,6 +117,7 @@ weak-table = "0.3.2"
 
 [dev-dependencies]
 test-case = "3.1.0"
+bytebuffer = "2.3.0"
 
 [build-dependencies]
 chrono = "0.4.19"

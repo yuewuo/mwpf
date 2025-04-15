@@ -15,7 +15,6 @@ use crate::num_traits::One;
 use crate::plugin::*;
 use crate::relaxer::*;
 use crate::util::*;
-use std::collections::BTreeSet;
 
 #[derive(Debug, Clone, Default)]
 pub struct PluginUnionFind {}
@@ -36,7 +35,7 @@ impl PluginUnionFind {
                 .get_vertices()
                 .iter()
                 .map(|e| e.upgrade_force())
-                .collect::<BTreeSet<_>>(),
+                .collect::<FastIterSet<_>>(),
             &local_edges,
         );
         Some(Relaxer::new([(invalid_subgraph, Rational::one())].into()))
@@ -74,7 +73,7 @@ pub mod tests {
             code,
             visualize_filename,
             defect_vertices,
-            Rational::from(4.59511985013459),
+            Rational::from_float(4.59511985013459).unwrap(),
             vec![PluginUnionFind::entry()],
         );
     }

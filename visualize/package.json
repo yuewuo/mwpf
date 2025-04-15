@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@pangenerator/tweakpane-textarea-plugin": "^2.0.0",
+    "@recursive/assign": "^3.0.1",
     "@tweakpane/core": "^2.0.4",
     "@tweakpane/plugin-essentials": "^0.2.1",
     "@types/three": "^0.169.0",
