@@ -10,12 +10,12 @@ use crate::derivative::Derivative;
 use crate::dual_module::*;
 use crate::matrix::*;
 use crate::plugin_union_find::*;
+use crate::pointers::UnsafePtr;
 use crate::relaxer::*;
 use crate::relaxer_forest::*;
 use num_traits::Signed;
 use parking_lot::RwLock;
 use std::sync::Arc;
-use crate::pointers::UnsafePtr;
 
 pub type EchelonMatrix = Echelon<Tail<Tight<BasicMatrix>>>;
 

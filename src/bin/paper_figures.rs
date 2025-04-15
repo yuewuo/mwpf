@@ -5,13 +5,13 @@ use mwpf::dual_module_pq::*;
 use mwpf::example_codes::*;
 use mwpf::invalid_subgraph::*;
 use mwpf::model_hypergraph::*;
+use mwpf::pointers::UnsafePtr;
 use mwpf::util::*;
 use mwpf::visualize::*;
 use num_traits::FromPrimitive;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use sugar::*;
-use mwpf::pointers::UnsafePtr;
 
 fn hyperedge_example() {
     let visualize_filename = "paper_hyperedge_example.json".to_string();
@@ -49,7 +49,11 @@ fn hyperedge_example() {
         (btreeset! {1}, 0.5),
     ];
     for (vertices, dual_variable) in dual_variables.into_iter() {
-        let s1 = Arc::new(InvalidSubgraph::new_complete_from_indices(vertices, btreeset! {}, &mut dual_module));
+        let s1 = Arc::new(InvalidSubgraph::new_complete_from_indices(
+            vertices,
+            btreeset! {},
+            &mut dual_module,
+        ));
         let (_, s1_ptr) = interface_ptr.find_or_create_node(&s1, &mut dual_module);
         dual_module.set_grow_rate(&s1_ptr, Rational::from_f64(dual_variable).unwrap());
     }

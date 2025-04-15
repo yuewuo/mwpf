@@ -5,7 +5,7 @@ use crate::util::*;
 use derivative::Derivative;
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::dual_module_pq::{EdgeWeak, VertexWeak, VertexPtr};
+use crate::dual_module_pq::{EdgeWeak, VertexPtr, VertexWeak};
 use crate::pointers::UnsafePtr;
 
 /// complete matrix considers a predefined set of edges and won't consider any other edges
@@ -42,7 +42,6 @@ impl MatrixBasic for CompleteMatrix {
         incident_edges: &[EdgeWeak],
         parity: bool,
     ) -> Option<Vec<VarIndex>> {
-
         if self.vertices.contains(&vertex_weak) {
             // no need to add repeat constraint
             return None;
@@ -117,12 +116,11 @@ impl VizTrait for CompleteMatrix {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::matrix::basic::tests::{edge_vec_from_indices, initialize_vertex_edges_for_matrix_testing};
     use crate::matrix::Echelon;
-    use crate::matrix::basic::tests::{initialize_vertex_edges_for_matrix_testing, edge_vec_from_indices};
     use std::collections::HashSet;
 
     use super::*;
-
 
     #[test]
     fn complete_matrix_1() {
@@ -130,11 +128,7 @@ pub mod tests {
         let mut matrix = CompleteMatrix::new();
         let vertex_indices = vec![0, 1, 2];
         let edge_indices = vec![1, 4, 12, 345];
-        let vertex_incident_edges_vec = vec![
-            vec![0, 1, 2],
-            vec![1, 3],
-            vec![0, 3],
-        ];
+        let vertex_incident_edges_vec = vec![vec![0, 1, 2], vec![1, 3], vec![0, 3]];
         let (vertices, edges) = initialize_vertex_edges_for_matrix_testing(vertex_indices, edge_indices);
 
         for edge_ptr in edges.iter() {
@@ -152,9 +146,21 @@ pub mod tests {
 └┴─┴─┴─┴─┴───┘
 "
         );
-        matrix.add_constraint(vertices[0].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges), true);
-        matrix.add_constraint(vertices[1].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[1], &edges), false);
-        matrix.add_constraint(vertices[2].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[2], &edges), true);
+        matrix.add_constraint(
+            vertices[0].downgrade(),
+            &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges),
+            true,
+        );
+        matrix.add_constraint(
+            vertices[1].downgrade(),
+            &edge_vec_from_indices(&vertex_incident_edges_vec[1], &edges),
+            false,
+        );
+        matrix.add_constraint(
+            vertices[2].downgrade(),
+            &edge_vec_from_indices(&vertex_incident_edges_vec[2], &edges),
+            true,
+        );
         matrix.printstd();
         assert_eq!(
             matrix.clone().printstd_str(),
@@ -173,11 +179,21 @@ pub mod tests {
 "
         );
         assert_eq!(
-            matrix.get_vertices().iter().map(|v| v.upgrade_force().read_recursive().vertex_index).collect::<HashSet<_>>(), 
-            [0, 1, 2].into_iter().collect::<HashSet<_>>());
+            matrix
+                .get_vertices()
+                .iter()
+                .map(|v| v.upgrade_force().read_recursive().vertex_index)
+                .collect::<HashSet<_>>(),
+            [0, 1, 2].into_iter().collect::<HashSet<_>>()
+        );
         assert_eq!(
-            matrix.get_view_edges().iter().map(|e| e.upgrade_force().read_recursive().edge_index).collect::<HashSet<_>>(), 
-            [1, 4, 12, 345].into_iter().collect::<HashSet<_>>());
+            matrix
+                .get_view_edges()
+                .iter()
+                .map(|e| e.upgrade_force().read_recursive().edge_index)
+                .collect::<HashSet<_>>(),
+            [1, 4, 12, 345].into_iter().collect::<HashSet<_>>()
+        );
     }
 
     #[test]
@@ -186,22 +202,39 @@ pub mod tests {
         let mut matrix = CompleteMatrix::new();
         let vertex_indices = vec![0, 1, 2];
         let edge_indices = vec![1, 4, 8];
-        let vertex_incident_edges_vec = vec![
-            vec![0, 1, 2],
-            vec![1, 2],
-            vec![1],
-        ];
+        let vertex_incident_edges_vec = vec![vec![0, 1, 2], vec![1, 2], vec![1]];
         let (vertices, edges) = initialize_vertex_edges_for_matrix_testing(vertex_indices, edge_indices);
 
         for edge_ptr in edges.iter() {
             matrix.add_variable(edge_ptr.downgrade());
         }
-    
-        assert_eq!(matrix.add_constraint(vertices[0].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges), false), None);
-        assert_eq!(matrix.add_constraint(vertices[1].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[1], &edges), true), None);
-        assert_eq!(matrix.add_constraint(vertices[0].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[2], &edges), true), None); // repeated
+
+        assert_eq!(
+            matrix.add_constraint(
+                vertices[0].downgrade(),
+                &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges),
+                false
+            ),
+            None
+        );
+        assert_eq!(
+            matrix.add_constraint(
+                vertices[1].downgrade(),
+                &edge_vec_from_indices(&vertex_incident_edges_vec[1], &edges),
+                true
+            ),
+            None
+        );
+        assert_eq!(
+            matrix.add_constraint(
+                vertices[0].downgrade(),
+                &edge_vec_from_indices(&vertex_incident_edges_vec[2], &edges),
+                true
+            ),
+            None
+        ); // repeated
         matrix.printstd();
-       
+
         assert_eq!(
             matrix.clone().printstd_str(),
             "\
@@ -222,19 +255,27 @@ pub mod tests {
         let mut matrix = CompleteMatrix::new();
         let vertex_indices = vec![0, 1, 2];
         let edge_indices = vec![1, 4, 6, 9];
-        let vertex_incident_edges_vec = vec![
-            vec![0, 1, 2],
-            vec![1, 3],
-            vec![0, 3],
-        ];
+        let vertex_incident_edges_vec = vec![vec![0, 1, 2], vec![1, 3], vec![0, 3]];
         let (vertices, edges) = initialize_vertex_edges_for_matrix_testing(vertex_indices, edge_indices);
         for edge_ptr in edges.iter() {
             matrix.add_variable(edge_ptr.downgrade());
         }
-        
-        matrix.add_constraint(vertices[0].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges), true);
-        matrix.add_constraint(vertices[1].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[1], &edges), false);
-        matrix.add_constraint(vertices[2].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[2], &edges), true);
+
+        matrix.add_constraint(
+            vertices[0].downgrade(),
+            &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges),
+            true,
+        );
+        matrix.add_constraint(
+            vertices[1].downgrade(),
+            &edge_vec_from_indices(&vertex_incident_edges_vec[1], &edges),
+            false,
+        );
+        matrix.add_constraint(
+            vertices[2].downgrade(),
+            &edge_vec_from_indices(&vertex_incident_edges_vec[2], &edges),
+            true,
+        );
         matrix.printstd();
         assert_eq!(
             matrix.clone().printstd_str(),
@@ -290,11 +331,7 @@ pub mod tests {
         let mut matrix = CompleteMatrix::new();
         let vertex_indices = vec![0, 1, 2];
         let edge_indices = vec![1, 4, 6, 9];
-        let vertex_incident_edges_vec = vec![
-            vec![0, 1, 2],
-            vec![1, 3],
-            vec![0, 3],
-        ];
+        let vertex_incident_edges_vec = vec![vec![0, 1, 2], vec![1, 3], vec![0, 3]];
         let (vertices, edges) = initialize_vertex_edges_for_matrix_testing(vertex_indices, edge_indices);
         // add variables [1, 4, 6, 9, 9, 6, 4, 1]
         for edge_ptr in edges.iter() {
@@ -304,9 +341,21 @@ pub mod tests {
             matrix.add_variable(edge_ptr.downgrade());
         }
 
-        matrix.add_constraint(vertices[0].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges), true);
-        matrix.add_constraint(vertices[1].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[1], &edges), false);
-        matrix.add_constraint(vertices[2].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[2], &edges), true);
+        matrix.add_constraint(
+            vertices[0].downgrade(),
+            &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges),
+            true,
+        );
+        matrix.add_constraint(
+            vertices[1].downgrade(),
+            &edge_vec_from_indices(&vertex_incident_edges_vec[1], &edges),
+            false,
+        );
+        matrix.add_constraint(
+            vertices[2].downgrade(),
+            &edge_vec_from_indices(&vertex_incident_edges_vec[2], &edges),
+            true,
+        );
         matrix.xor_row(2, 0);
         matrix.xor_row(0, 1);
         matrix.xor_row(2, 1);
@@ -334,19 +383,27 @@ pub mod tests {
         let mut matrix = Echelon::<CompleteMatrix>::new();
         let vertex_indices = vec![0, 1, 2];
         let edge_indices = vec![1, 4, 6, 9, 11, 12, 23];
-        let vertex_incident_edges_vec = vec![
-            vec![0, 1, 2, 4, 5],
-            vec![1, 3, 6, 5],
-            vec![0, 3, 4],
-        ];
+        let vertex_incident_edges_vec = vec![vec![0, 1, 2, 4, 5], vec![1, 3, 6, 5], vec![0, 3, 4]];
         let (vertices, edges) = initialize_vertex_edges_for_matrix_testing(vertex_indices, edge_indices);
 
         for edge_index in 0..4 {
             matrix.add_variable(edges[edge_index].downgrade());
         }
-        matrix.add_constraint(vertices[0].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges), true);
-        matrix.add_constraint(vertices[1].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[1], &edges), false);
-        matrix.add_constraint(vertices[2].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[2], &edges), true);
+        matrix.add_constraint(
+            vertices[0].downgrade(),
+            &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges),
+            true,
+        );
+        matrix.add_constraint(
+            vertices[1].downgrade(),
+            &edge_vec_from_indices(&vertex_incident_edges_vec[1], &edges),
+            false,
+        );
+        matrix.add_constraint(
+            vertices[2].downgrade(),
+            &edge_vec_from_indices(&vertex_incident_edges_vec[2], &edges),
+            true,
+        );
         matrix.printstd();
         assert_eq!(
             matrix.clone().printstd_str(),
@@ -373,19 +430,27 @@ pub mod tests {
         let mut matrix = Echelon::<CompleteMatrix>::new();
         let vertex_indices = vec![0, 1, 2];
         let edge_indices = vec![1, 4, 6, 9, 2];
-        let vertex_incident_edges_vec = vec![
-            vec![0, 1, 2],
-            vec![1, 3],
-            vec![0, 3],
-        ];
+        let vertex_incident_edges_vec = vec![vec![0, 1, 2], vec![1, 3], vec![0, 3]];
         let (vertices, edges) = initialize_vertex_edges_for_matrix_testing(vertex_indices, edge_indices);
 
         for edge_index in 0..4 {
             matrix.add_variable(edges[edge_index].downgrade());
         }
-        matrix.add_constraint(vertices[0].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges), true);
-        matrix.add_constraint(vertices[1].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[1], &edges), false);
-        matrix.add_constraint(vertices[2].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[2], &edges), true);
+        matrix.add_constraint(
+            vertices[0].downgrade(),
+            &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges),
+            true,
+        );
+        matrix.add_constraint(
+            vertices[1].downgrade(),
+            &edge_vec_from_indices(&vertex_incident_edges_vec[1], &edges),
+            false,
+        );
+        matrix.add_constraint(
+            vertices[2].downgrade(),
+            &edge_vec_from_indices(&vertex_incident_edges_vec[2], &edges),
+            true,
+        );
         matrix.add_variable(edges[4].downgrade());
     }
 }

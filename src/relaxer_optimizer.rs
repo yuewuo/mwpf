@@ -15,8 +15,8 @@ use std::sync::Arc;
 
 use derivative::Derivative;
 
+use crate::dual_module_pq::EdgePtr;
 use num_traits::{Signed, Zero};
-use crate::dual_module_pq::{EdgePtr};
 
 #[cfg(feature = "slp")]
 use num_traits::One;
@@ -452,11 +452,7 @@ impl RelaxerOptimizer {
                     dv_col_map.insert(dual_node_index.clone(), col);
 
                     for edge_ptr in invalid_subgraph.hair.iter() {
-                        edge_contributor
-                            .get_mut(edge_ptr)
-                            .unwrap()
-                            .1
-                            .insert(dual_node_index.clone());
+                        edge_contributor.get_mut(edge_ptr).unwrap().1.insert(dual_node_index.clone());
                     }
                 }
 

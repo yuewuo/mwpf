@@ -4,7 +4,7 @@ use crate::util::*;
 use derivative::Derivative;
 use std::collections::BTreeSet;
 
-use crate::dual_module_pq::{EdgeWeak, EdgePtr, VertexWeak, VertexPtr};
+use crate::dual_module_pq::{EdgePtr, EdgeWeak, VertexPtr, VertexWeak};
 
 #[derive(Clone, Derivative)]
 #[derivative(Debug)]

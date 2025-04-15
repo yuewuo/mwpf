@@ -2,20 +2,20 @@
 //!
 //! Generics for primal modules, defining the necessary interfaces for a primal module
 //!
-#![cfg_attr(feature="unsafe_pointer", allow(dropping_references))]
+#![cfg_attr(feature = "unsafe_pointer", allow(dropping_references))]
 
 use std::collections::VecDeque;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use crate::dual_module::*;
+use crate::num_traits::Zero;
 use crate::ordered_float::OrderedFloat;
 use crate::pointers::*;
 use crate::primal_module_serial::{ClusterAffinity, PrimalClusterPtr, PrimalClusterWeak};
 use crate::relaxer_optimizer::OptimizerResult;
 use crate::util::*;
 use crate::visualize::*;
-use crate::num_traits::Zero;
 
 pub type Affinity = OrderedFloat;
 
@@ -222,7 +222,11 @@ pub trait PrimalModuleImpl {
         }
     }
 
-    fn subgraph(&mut self, interface: &DualModuleInterfacePtr, dual_module: &(impl DualModuleImpl + Send + Sync)) -> OutputSubgraph;
+    fn subgraph(
+        &mut self,
+        interface: &DualModuleInterfacePtr,
+        dual_module: &(impl DualModuleImpl + Send + Sync),
+    ) -> OutputSubgraph;
 
     fn subgraph_range(
         &mut self,
@@ -236,10 +240,7 @@ pub trait PrimalModuleImpl {
             upper += edge_weak.upgrade_force().read_recursive().weight.clone();
         }
 
-        let weight_range = WeightRange::new(
-            interface.sum_dual_variables() + dual_module.get_negative_weight_sum(),
-            upper
-        );
+        let weight_range = WeightRange::new(interface.sum_dual_variables() + dual_module.get_negative_weight_sum(), upper);
         (output_subgraph, weight_range)
     }
 

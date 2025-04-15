@@ -8,10 +8,10 @@
 //!
 
 use super::interface::*;
+use crate::pointers::UnsafePtr;
 use crate::util::*;
 use prettytable::format::TableFormat;
 use prettytable::*;
-use crate::pointers::UnsafePtr;
 
 #[derive(Clone)]
 pub struct VizTable {
@@ -144,10 +144,9 @@ impl VizTable {
 #[cfg(test)]
 pub mod tests {
     use super::super::*;
-    use crate::matrix::basic::tests::{initialize_vertex_edges_for_matrix_testing, edge_vec_from_indices};
-    use std::collections::HashSet;
     use crate::dual_module_pq::{EdgePtr, VertexPtr};
-
+    use crate::matrix::basic::tests::{edge_vec_from_indices, initialize_vertex_edges_for_matrix_testing};
+    use std::collections::HashSet;
 
     #[test]
     fn viz_table_1() {
@@ -155,15 +154,23 @@ pub mod tests {
         let mut matrix = BasicMatrix::new();
         let vertex_indices = vec![0, 1, 2];
         let edge_indices = vec![1, 4, 16, 23];
-        let vertex_incident_edges_vec = vec![
-            vec![0, 1, 2],
-            vec![1, 3],
-            vec![0, 3],
-        ];
+        let vertex_incident_edges_vec = vec![vec![0, 1, 2], vec![1, 3], vec![0, 3]];
         let (vertices, edges) = initialize_vertex_edges_for_matrix_testing(vertex_indices, edge_indices);
-        matrix.add_constraint(vertices[0].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges), true);
-        matrix.add_constraint(vertices[1].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[1], &edges), false);
-        matrix.add_constraint(vertices[2].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[2], &edges), true);
+        matrix.add_constraint(
+            vertices[0].downgrade(),
+            &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges),
+            true,
+        );
+        matrix.add_constraint(
+            vertices[1].downgrade(),
+            &edge_vec_from_indices(&vertex_incident_edges_vec[1], &edges),
+            false,
+        );
+        matrix.add_constraint(
+            vertices[2].downgrade(),
+            &edge_vec_from_indices(&vertex_incident_edges_vec[2], &edges),
+            true,
+        );
         matrix.printstd();
         assert_eq!(
             matrix.clone().printstd_str(),

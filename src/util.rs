@@ -1,7 +1,9 @@
+use crate::dual_module_pq::EdgeWeak;
 use crate::mwpf_solver::*;
 #[cfg(not(feature = "float_lp"))]
 use crate::num_rational;
 use crate::num_traits::{FromPrimitive, ToPrimitive};
+use crate::pointers::UnsafePtr;
 use crate::rand_xoshiro;
 use crate::rand_xoshiro::rand_core::RngCore;
 #[cfg(feature = "python_binding")]
@@ -14,14 +16,12 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyFloat, PyList};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
-use std::fs::{File, create_dir_all};
+use std::fs::{create_dir_all, File};
 use std::io::prelude::*;
 use std::time::Instant;
-use crate::dual_module_pq::EdgeWeak;
-use crate::pointers::UnsafePtr;
 
-use hashbrown::{HashSet, HashMap};
-use petgraph::{Undirected, Graph};
+use hashbrown::{HashMap, HashSet};
+use petgraph::{Graph, Undirected};
 use std::hash::Hash;
 
 cfg_if::cfg_if! {
@@ -50,7 +50,7 @@ pub type EdgeIndex = usize;
 pub type VertexIndex = usize;
 cfg_if::cfg_if! {
     if #[cfg(feature="unsafe_pointer")] {
-        pub type KnownSafeRefCell<T> = std::cell::UnsafeCell<T>; 
+        pub type KnownSafeRefCell<T> = std::cell::UnsafeCell<T>;
     } else {
         pub type KnownSafeRefCell<T> = std::cell::RefCell<T>;
     }
@@ -75,7 +75,11 @@ pub struct HyperEdge {
 
 impl HyperEdge {
     pub fn new(vertices: Vec<VertexIndex>, weight: Weight) -> Self {
-        Self { vertices, weight, connected_to_boundary_vertex: false }
+        Self {
+            vertices,
+            weight,
+            connected_to_boundary_vertex: false,
+        }
     }
 }
 
@@ -223,7 +227,10 @@ impl SolverInitializer {
             let edge_ptr = edge_weak.upgrade_force();
             let edge = edge_ptr.read_recursive();
             let vertices = &edge.vertices;
-            let unique_vertices = vertices.into_iter().map(|v| v.upgrade_force().read_recursive().vertex_index).collect::<Vec<_>>();
+            let unique_vertices = vertices
+                .into_iter()
+                .map(|v| v.upgrade_force().read_recursive().vertex_index)
+                .collect::<Vec<_>>();
             for &vertex_index in unique_vertices.iter() {
                 if defect_vertices.contains(&vertex_index) {
                     defect_vertices.remove(&vertex_index);
@@ -258,7 +265,12 @@ impl MWPSVisualizer for SolverInitializer {
         for _ in 0..self.vertex_num {
             vertices.push(json!({}));
         }
-        for HyperEdge { vertices, weight , connected_to_boundary_vertex: _,} in self.weighted_edges.iter() {
+        for HyperEdge {
+            vertices,
+            weight,
+            connected_to_boundary_vertex: _,
+        } in self.weighted_edges.iter()
+        {
             edges.push(json!({
                 if abbrev { "w" } else { "weight" }: weight.to_f64(),
                 "wn": numer_of(weight),
@@ -371,7 +383,6 @@ pub struct OutputSubgraph {
     // pub defect_vertices: hashbrown::HashSet<VertexIndex>,
 }
 
-
 // impl InternalSubgraph {
 //     pub fn new(internal_subgraph: Vec<EdgeWeak>) -> Self {
 //         Self {
@@ -409,7 +420,11 @@ pub struct OutputSubgraph {
 // }
 
 impl OutputSubgraph {
-    pub fn new(subgraph: Subgraph, flip_edge_indices: hashbrown::HashSet<EdgeIndex>, internal_subgraph: InternalSubgraph) -> Self {
+    pub fn new(
+        subgraph: Subgraph,
+        flip_edge_indices: hashbrown::HashSet<EdgeIndex>,
+        internal_subgraph: InternalSubgraph,
+    ) -> Self {
         Self {
             subgraph,
             flip_edge_indices,
@@ -1506,7 +1521,6 @@ pub fn translated_defect_to_reordered(
         .map(|old_index| old_to_new[*old_index as usize].unwrap())
         .collect()
 }
-
 
 #[cfg(test)]
 pub mod tests {

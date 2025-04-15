@@ -2,7 +2,7 @@
 //!
 //! This implementation targets to be an exact MWPF solver, although it's not yet sure whether it is actually one.
 //!
-#![cfg_attr(feature="unsafe_pointer", allow(dropping_references))]
+#![cfg_attr(feature = "unsafe_pointer", allow(dropping_references))]
 
 use crate::decoding_hypergraph::*;
 use crate::dual_module;
@@ -28,13 +28,12 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 
-use crate::dual_module_pq::{EdgeWeak, EdgePtr, VertexPtr};
-use crate::dual_module_parallel::{DualModuleParallelUnitPtr, DualModuleParallelUnit};
+use crate::dual_module_parallel::{DualModuleParallelUnit, DualModuleParallelUnitPtr};
 use crate::dual_module_pq::FutureQueueMethods;
-use std::ops::DerefMut;
+use crate::dual_module_pq::{EdgePtr, EdgeWeak, VertexPtr};
 use crate::num_traits::FromPrimitive;
 use more_asserts::assert_le;
-
+use std::ops::DerefMut;
 
 const MAX_HISTORY: usize = 10;
 
@@ -69,7 +68,7 @@ pub struct ClusterAffinity {
 
 impl PartialEq for ClusterAffinity {
     fn eq(&self, other: &Self) -> bool {
-        self.affinity == other.affinity && self.cluster_ptr.eq(&other.cluster_ptr) 
+        self.affinity == other.affinity && self.cluster_ptr.eq(&other.cluster_ptr)
     }
 }
 
@@ -80,7 +79,10 @@ impl Ord for ClusterAffinity {
         match other.affinity.cmp(&self.affinity) {
             std::cmp::Ordering::Equal => {
                 // If affinities are equal, compare cluster_index in ascending order
-                self.cluster_ptr.read_recursive().cluster_index.cmp(&other.cluster_ptr.read_recursive().cluster_index)
+                self.cluster_ptr
+                    .read_recursive()
+                    .cluster_index
+                    .cmp(&other.cluster_ptr.read_recursive().cluster_index)
             }
             other => other,
         }
@@ -173,15 +175,10 @@ impl std::fmt::Debug for PrimalClusterPtr {
         write!(
             f,
             "cluster_index: {:?}\tnodes: {:?}\tedges: {:?}\nvertices: {:?}\nsubgraph: {:?}",
-            cluster.cluster_index,
-            cluster.nodes,
-            cluster.edges,
-            cluster.vertices,
-            cluster.subgraph,
+            cluster.cluster_index, cluster.nodes, cluster.edges, cluster.vertices, cluster.subgraph,
         )
     }
 }
-
 
 impl PrimalModuleImpl for PrimalModuleSerial {
     fn new_empty(_initializer: &SolverInitializer) -> Self {
@@ -295,7 +292,11 @@ impl PrimalModuleImpl for PrimalModuleSerial {
         res
     }
 
-    fn subgraph(&mut self, _interface: &DualModuleInterfacePtr, _dual_module: &(impl DualModuleImpl + Send + Sync)) -> OutputSubgraph {
+    fn subgraph(
+        &mut self,
+        _interface: &DualModuleInterfacePtr,
+        _dual_module: &(impl DualModuleImpl + Send + Sync),
+    ) -> OutputSubgraph {
         let mut internal_subgraph = vec![];
         for cluster_ptr in self.clusters.iter() {
             let cluster = cluster_ptr.read_recursive();
@@ -304,14 +305,18 @@ impl PrimalModuleImpl for PrimalModuleSerial {
             }
 
             // note: use `std::panic::catch_unwind` as necessary
-            internal_subgraph.extend(
-                cluster
-                    .subgraph
-                    .clone()
-                    .unwrap_or_else(|| panic!("bug occurs: cluster should be solved, but the subgraph is not yet generated || the cluster is {:?}", cluster.cluster_index))
-            );
+            internal_subgraph.extend(cluster.subgraph.clone().unwrap_or_else(|| {
+                panic!(
+                    "bug occurs: cluster should be solved, but the subgraph is not yet generated || the cluster is {:?}",
+                    cluster.cluster_index
+                )
+            }));
         }
-        let subgraph: Vec<usize> = internal_subgraph.clone().into_iter().map(|edge_weak| edge_weak.upgrade_force().read_recursive().edge_index).collect();
+        let subgraph: Vec<usize> = internal_subgraph
+            .clone()
+            .into_iter()
+            .map(|edge_weak| edge_weak.upgrade_force().read_recursive().edge_index)
+            .collect();
 
         // let mut subgraph_set = subgraph.into_iter().collect::<hashbrown::HashSet<EdgeIndex>>();
         // for to_flip in _dual_module.get_negative_edges().iter() {
@@ -754,7 +759,7 @@ impl PrimalModuleSerial {
         let primal_node_2_ptr = primal_node_2_weak.upgrade_force();
         let primal_node_1 = primal_node_1_ptr.read_recursive();
         let primal_node_2 = primal_node_2_ptr.read_recursive();
-        
+
         if primal_node_1.cluster_weak.eq(&primal_node_2.cluster_weak) {
             return; // already in the same cluster
         }
@@ -1118,8 +1123,7 @@ impl PrimalModuleSerial {
         let mut dual_node_deltas = BTreeMap::new();
         let mut optimizer_result = OptimizerResult::default();
         for cluster_ptr in active_clusters.iter() {
-            let (solved, other) =
-                self.resolve_cluster_tune(cluster_ptr, interface_ptr, dual_module, &mut dual_node_deltas);
+            let (solved, other) = self.resolve_cluster_tune(cluster_ptr, interface_ptr, dual_module, &mut dual_node_deltas);
             if !solved {
                 // todo: investigate more
                 return (dual_module.get_obstacles_tune(other, dual_node_deltas), false);
@@ -1181,9 +1185,9 @@ impl PrimalModuleSerial {
     }
 
     /*
-        For parallel implementation.
-     */
-    // for parallel 
+       For parallel implementation.
+    */
+    // for parallel
     pub fn solve_step_callback_ptr<DualSerialModule: DualModuleImpl + Send + Sync, Queue, F>(
         &mut self,
         interface: &DualModuleInterfacePtr,
@@ -1245,17 +1249,25 @@ impl PrimalModuleSerial {
             for cluster_affinity in cluster_affs.into_iter() {
                 let cluster_ptr = cluster_affinity.cluster_ptr;
                 let mut dual_node_deltas = BTreeMap::new();
-                let (mut resolved, optimizer_result) =
-                    self.resolve_cluster_tune(&cluster_ptr, interface, dual_module_ptr.write().deref_mut(), &mut dual_node_deltas);
+                let (mut resolved, optimizer_result) = self.resolve_cluster_tune(
+                    &cluster_ptr,
+                    interface,
+                    dual_module_ptr.write().deref_mut(),
+                    &mut dual_node_deltas,
+                );
 
-                let mut obstacles = dual_module_ptr.write().deref_mut().get_obstacles_tune(optimizer_result, dual_node_deltas);
+                let mut obstacles = dual_module_ptr
+                    .write()
+                    .deref_mut()
+                    .get_obstacles_tune(optimizer_result, dual_node_deltas);
 
                 // for cycle resolution
                 let mut order: VecDeque<BTreeSet<Obstacle>> = VecDeque::with_capacity(MAX_HISTORY); // fifo order of the obstacles sets seen
                 let mut current_sequences: Vec<(usize, BTreeSet<Obstacle>)> = Vec::new(); // the indexes that are currently being processed
 
                 '_resolving: while !resolved {
-                    let (_obstacles, _resolved) = self.resolve_tune(obstacles.clone(), interface, dual_module_ptr.write().deref_mut());
+                    let (_obstacles, _resolved) =
+                        self.resolve_tune(obstacles.clone(), interface, dual_module_ptr.write().deref_mut());
 
                     // cycle resolution
                     let drained: Vec<(usize, BTreeSet<Obstacle>)> = std::mem::take(&mut current_sequences);
@@ -1298,7 +1310,6 @@ impl PrimalModuleSerial {
             }
         }
     }
-
 }
 
 impl MWPSVisualizer for PrimalModuleSerial {
@@ -1367,10 +1378,7 @@ pub mod tests {
             // error pattern is not generated by the simulator
             Rational::from_usize(usize::MAX).unwrap()
         } else {
-            Rational::from(
-                initializer
-                    .get_subgraph_total_weight(&subgraph),
-            )
+            Rational::from(initializer.get_subgraph_total_weight(&subgraph))
         };
         assert_le!(
             weight_range.lower,
@@ -1383,7 +1391,6 @@ pub mod tests {
         let end_time = std::time::Instant::now();
         let resolve_time = end_time - begin_time;
         println!("resolve time {:?}", resolve_time);
-
 
         assert_eq!(weight_range.upper, weight_range.lower, "lower and upper range do not match");
         assert_eq!(final_dual, weight_range.upper, "unmatched sum dual variables");

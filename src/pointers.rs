@@ -1,6 +1,6 @@
 //! Pointer Types
 //!
-#![cfg_attr(feature="unsafe_pointer", allow(dropping_references))]
+#![cfg_attr(feature = "unsafe_pointer", allow(dropping_references))]
 
 use crate::parking_lot::lock_api::{RwLockReadGuard, RwLockWriteGuard};
 use crate::parking_lot::{RawRwLock, RwLock};
@@ -160,7 +160,7 @@ impl<T: Send + Sync> std::hash::Hash for ArcRwLock<T> {
         address.hash(state);
         // self.ptr.hash(state);
 
-    //    std::ptr::hash(self.ptr(), state);
+        //    std::ptr::hash(self.ptr(), state);
     }
 }
 
@@ -168,7 +168,7 @@ impl<T: Send + Sync> std::hash::Hash for WeakRwLock<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let address = Weak::as_ptr(&self.ptr);
         address.hash(state);
-    //    std::ptr::hash(self, state);
+        //    std::ptr::hash(self, state);
     }
 }
 
@@ -383,11 +383,11 @@ cfg_if::cfg_if! {
                 let address = Arc::as_ptr(&self.ptr);
                 address.hash(state);
                 // self.ptr.hash(state);
-        
+
             //    std::ptr::hash(self.ptr(), state);
             }
         }
-        
+
         impl<T: Send + Sync> std::hash::Hash for WeakUnsafe<T> {
             fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
                 let address = Weak::as_ptr(&self.ptr);
@@ -403,7 +403,7 @@ cfg_if::cfg_if! {
                 ptr1.cmp(&ptr2)
             }
         }
-        
+
         impl<T: Send + Sync> Ord for WeakUnsafe<T> {
             fn cmp(&self, other: &Self) -> std::cmp::Ordering {
                 let ptr1 = Weak::as_ptr(self.ptr());
@@ -417,7 +417,7 @@ cfg_if::cfg_if! {
                 Some(self.cmp(other))
             }
         }
-        
+
         impl<T: Send + Sync> PartialOrd for WeakUnsafe<T> {
             fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
                 Some(self.cmp(other))
@@ -462,7 +462,6 @@ cfg_if::cfg_if! {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -499,7 +498,6 @@ mod tests {
         assert_eq!(ptr.read_recursive().idx, 2);
     }
 }
-
 
 // //! Pointer Types
 // //!
@@ -674,7 +672,6 @@ mod tests {
 // /*
 //     unsafe APIs, used when maximizing speed performance
 // */
-
 // cfg_if::cfg_if! {
 //     if #[cfg(feature="unsafe_pointer")] {
 //         pub trait UnsafePtr<ObjType> {
@@ -805,7 +802,7 @@ mod tests {
 //                 address.hash(state);
 //             }
 //         }
-        
+
 //         impl<T: Send + Sync> std::hash::Hash for WeakUnsafe<T> {
 //             fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
 //                 let address = Weak::as_ptr(&self.ptr);
@@ -820,7 +817,7 @@ mod tests {
 //                 ptr1.cmp(&ptr2)
 //             }
 //         }
-        
+
 //         impl<T: Send + Sync> Ord for WeakUnsafe<T> {
 //             fn cmp(&self, other: &Self) -> std::cmp::Ordering {
 //                 let ptr1 = Weak::as_ptr(self.ptr());
@@ -834,7 +831,7 @@ mod tests {
 //                 Some(self.cmp(other))
 //             }
 //         }
-        
+
 //         impl<T: Send + Sync> PartialOrd for WeakUnsafe<T> {
 //             fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
 //                 Some(self.cmp(other))
@@ -852,7 +849,6 @@ mod tests {
 //         pub type WeakManualSafeLock<T> = WeakRwLock<T>;
 //     }
 // }
-
 
 // #[cfg(test)]
 // mod tests {
