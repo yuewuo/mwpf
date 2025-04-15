@@ -1380,6 +1380,7 @@ impl From<&CompressedBenchmarkSuite> for BenchmarkSuite {
                 .map(|(vertices, weight)| HyperEdge {
                     vertices: vertices.clone(),
                     weight: weight.clone(),
+                    connected_to_boundary_vertex: false, // todo: check
                 })
                 .collect(),
             heralds: compressed_benchmark_suite.heralds.clone(),
