@@ -1,7 +1,7 @@
 use crate::model_hypergraph::*;
 use crate::util::*;
 use crate::visualize::*;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::HashSet;
 use std::sync::Arc;
 
 #[derive(Debug, Clone)]

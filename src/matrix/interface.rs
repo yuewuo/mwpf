@@ -22,7 +22,6 @@
 use crate::util::*;
 use derivative::Derivative;
 use num_traits::{One, Zero};
-use std::collections::BTreeSet;
 
 use crate::dual_module_pq::{EdgeWeak, VertexPtr, VertexWeak};
 #[cfg(feature = "unsafe_pointer")]
@@ -61,8 +60,8 @@ pub trait MatrixBasic {
         self.edge_to_var_index(edge_weak).is_some()
     }
 
-    fn get_edges(&self) -> BTreeSet<EdgeWeak>;
-    fn get_vertices(&self) -> BTreeSet<VertexWeak>;
+    fn get_edges(&self) -> FastIterSet<EdgeWeak>;
+    fn get_vertices(&self) -> FastIterSet<VertexWeak>;
 }
 
 pub trait MatrixView: MatrixBasic {
@@ -101,7 +100,7 @@ pub trait MatrixView: MatrixBasic {
 pub trait MatrixTight: MatrixView {
     fn update_edge_tightness(&mut self, edge_weak: EdgeWeak, is_tight: bool);
     fn is_tight(&self, edge_weak: EdgeWeak) -> bool;
-    fn get_tight_edges(&self) -> &BTreeSet<EdgeWeak>;
+    fn get_tight_edges(&self) -> &FastIterSet<EdgeWeak>;
 
     fn add_variable_with_tightness(&mut self, edge_weak: EdgeWeak, is_tight: bool) {
         self.add_variable(edge_weak.clone());
@@ -114,8 +113,8 @@ pub trait MatrixTight: MatrixView {
 }
 
 pub trait MatrixTail {
-    fn get_tail_edges(&self) -> &BTreeSet<EdgeWeak>;
-    fn get_tail_edges_mut(&mut self) -> &mut BTreeSet<EdgeWeak>;
+    fn get_tail_edges(&self) -> &FastIterSet<EdgeWeak>;
+    fn get_tail_edges_mut(&mut self) -> &mut FastIterSet<EdgeWeak>;
 
     fn set_tail_edges<EdgeIter>(&mut self, edges: EdgeIter)
     where
@@ -172,7 +171,7 @@ pub trait MatrixEchelon: MatrixView {
         if !info.satisfiable {
             return None; // no solution
         }
-        let mut solution = BTreeSet::new();
+        let mut solution = FastIterSet::new();
         for (row, row_info) in info.rows.iter().enumerate() {
             debug_assert!(row_info.has_leading());
             if self.get_rhs(row) {
@@ -362,7 +361,7 @@ pub mod tests {
     use super::*;
     use crate::dual_module_pq::{EdgePtr, VertexPtr};
     use crate::matrix::basic::tests::{edge_vec_from_indices, initialize_vertex_edges_for_matrix_testing};
-    use std::collections::BTreeMap;
+
     use std::collections::HashSet;
 
     type TightMatrix = Tight<BasicMatrix>;
@@ -420,7 +419,7 @@ pub mod tests {
 
     #[derive(Default)]
     struct TestEdgeWeights {
-        pub weights: BTreeMap<EdgeWeak, Weight>,
+        pub weights: FastIterMap<EdgeWeak, Weight>,
     }
 
     impl TestEdgeWeights {

@@ -8,7 +8,7 @@ use crate::num_traits::Zero;
 use crate::relaxer::*;
 use crate::util::*;
 use num_traits::Signed;
-use std::collections::{BTreeMap, BTreeSet};
+
 use std::sync::Arc;
 
 use crate::dual_module_pq::{EdgePtr, EdgeWeak};
@@ -21,17 +21,17 @@ pub type RelaxerVec = Vec<Relaxer>;
 pub struct RelaxerForest {
     /// keep track of the remaining tight edges for quick validation:
     /// these edges cannot grow unless untightened by some relaxers
-    tight_edges: BTreeSet<EdgePtr>,
+    tight_edges: FastIterSet<EdgePtr>,
     /// keep track of the subgraphs that are allowed to shrink:
     /// these should be all positive dual variables, all others are yS = 0
-    shrinkable_subgraphs: BTreeSet<Arc<InvalidSubgraph>>,
+    shrinkable_subgraphs: FastIterSet<Arc<InvalidSubgraph>>,
     /// each untightened edge corresponds to a relaxer with speed:
     /// to untighten the edge for a unit length, how much should a relaxer be executed
-    edge_untightener: BTreeMap<EdgePtr, (Arc<Relaxer>, Rational)>,
+    edge_untightener: FastIterMap<EdgePtr, (Arc<Relaxer>, Rational)>,
     /// expanded relaxer results, as part of the dynamic programming:
     /// the expanded relaxer is a valid relaxer only growing of initial un-tight edges,
     /// not any edges untightened by other relaxers
-    expanded_relaxers: BTreeMap<Arc<Relaxer>, Relaxer>,
+    expanded_relaxers: FastIterMap<Arc<Relaxer>, Relaxer>,
 }
 
 pub const FOREST_ERR_MSG_GROW_TIGHT_EDGE: &str = "invalid relaxer: try to grow a tight edge";
@@ -44,10 +44,10 @@ impl RelaxerForest {
         IterSubgraph: Iterator<Item = Arc<InvalidSubgraph>>,
     {
         Self {
-            tight_edges: BTreeSet::from_iter(tight_edges.map(|e| e.upgrade_force())),
-            shrinkable_subgraphs: BTreeSet::from_iter(shrinkable_subgraphs),
-            edge_untightener: BTreeMap::new(),
-            expanded_relaxers: BTreeMap::new(),
+            tight_edges: FastIterSet::from_iter(tight_edges.map(|e| e.upgrade_force())),
+            shrinkable_subgraphs: FastIterSet::from_iter(shrinkable_subgraphs),
+            edge_untightener: FastIterMap::new(),
+            expanded_relaxers: FastIterMap::new(),
         }
     }
 
@@ -90,8 +90,8 @@ impl RelaxerForest {
         if self.expanded_relaxers.contains_key(relaxer) {
             return;
         }
-        let mut untightened_edges: BTreeMap<EdgePtr, Rational> = BTreeMap::new();
-        let mut directions: BTreeMap<Arc<InvalidSubgraph>, Rational> = relaxer.get_direction().clone();
+        let mut untightened_edges: FastIterMap<EdgePtr, Rational> = FastIterMap::new();
+        let mut directions: FastIterMap<Arc<InvalidSubgraph>, Rational> = relaxer.get_direction().clone();
         for (edge_ptr, speed) in relaxer.get_growing_edges() {
             debug_assert!(speed.is_positive());
             if self.tight_edges.contains(edge_ptr) {

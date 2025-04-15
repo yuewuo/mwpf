@@ -10,7 +10,6 @@ use mwpf::pointers::UnsafePtr;
 use mwpf::util::*;
 use mwpf::visualize::*;
 use num_traits::FromPrimitive;
-use std::collections::BTreeSet;
 use std::sync::Arc;
 use sugar::*;
 
@@ -43,7 +42,7 @@ fn hyperedge_example() {
     }
     // manually grow the dual variables
     let _decoding_graph = interface_ptr.read_recursive().decoding_graph.clone();
-    let dual_variables: Vec<(BTreeSet<VertexIndex>, f64)> = vec![
+    let dual_variables: Vec<(FastIterSet<VertexIndex>, f64)> = vec![
         (btreeset! {5,6}, 0.1),
         (btreeset! {4,5}, 0.1),
         (btreeset! {2}, 0.1),

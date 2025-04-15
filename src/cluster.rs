@@ -2,7 +2,6 @@ use crate::dual_module::*;
 use crate::matrix::*;
 use crate::util::*;
 use derivative::Derivative;
-use std::collections::BTreeSet;
 
 use crate::dual_module_pq::{EdgePtr, EdgeWeak, VertexPtr, VertexWeak};
 
@@ -10,13 +9,13 @@ use crate::dual_module_pq::{EdgePtr, EdgeWeak, VertexPtr, VertexWeak};
 #[derivative(Debug)]
 pub struct Cluster {
     /// vertices of the cluster
-    pub vertices: BTreeSet<VertexPtr>,
+    pub vertices: FastIterSet<VertexPtr>,
     /// tight edges of the cluster
-    pub edges: BTreeSet<EdgePtr>,
+    pub edges: FastIterSet<EdgePtr>,
     /// edges incident to the vertices but are not tight
-    pub hair: BTreeSet<EdgePtr>,
+    pub hair: FastIterSet<EdgePtr>,
     /// dual variables of the cluster
-    pub nodes: BTreeSet<OrderedDualNodePtr>,
+    pub nodes: FastIterSet<OrderedDualNodePtr>,
     /// parity matrix of the cluster
     #[derivative(Debug = "ignore")]
     pub parity_matrix: Tight<BasicMatrix>,
@@ -26,10 +25,10 @@ impl Cluster {
     /// Create a new cluster
     pub fn new() -> Self {
         Cluster {
-            vertices: BTreeSet::new(),
-            edges: BTreeSet::new(),
-            hair: BTreeSet::new(),
-            nodes: BTreeSet::new(),
+            vertices: FastIterSet::new(),
+            edges: FastIterSet::new(),
+            hair: FastIterSet::new(),
+            nodes: FastIterSet::new(),
             parity_matrix: Tight::<BasicMatrix>::new(),
         }
     }
@@ -73,9 +72,9 @@ impl Cluster {
 //         code: &impl ExampleCode,
 //         syndrome: SyndromePattern,
 //         visualize_filename: &str,
-//         expected_vertices: BTreeSet<VertexIndex>,
-//         expected_edges: BTreeSet<EdgeIndex>,
-//         expected_hair: BTreeSet<EdgeIndex>,
+//         expected_vertices: FastIterSet<VertexIndex>,
+//         expected_edges: FastIterSet<EdgeIndex>,
+//         expected_hair: FastIterSet<EdgeIndex>,
 //     ) -> Cluster {
 //         let visualizer_path = visualize_data_folder() + visualize_filename;
 //         let mut visualizer = Visualizer::new(Some(visualizer_path.clone()), code.get_positions(), true).unwrap();

@@ -4,7 +4,6 @@
 
 use crate::parking_lot::lock_api::{RwLockReadGuard, RwLockWriteGuard};
 use crate::parking_lot::{RawRwLock, RwLock};
-use std::collections::BTreeSet;
 use std::sync::{Arc, Weak};
 
 pub trait RwLockPtr<ObjType> {

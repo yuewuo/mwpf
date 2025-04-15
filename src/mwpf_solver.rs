@@ -27,7 +27,6 @@ use core::panic;
 use hashbrown::HashSet;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufWriter;
@@ -152,12 +151,12 @@ macro_rules! bind_trait_to_python {
                 let vertices = if let Some(vertices) = vertices {
                     py_into_btree_set(vertices)?
                 } else {
-                    BTreeSet::new()
+                    FastIterSet::new()
                 };
                 let edges = if let Some(edges) = edges {
                     py_into_btree_set(edges)?
                 } else {
-                    BTreeSet::new()
+                    FastIterSet::new()
                 };
                 let invalid_subgraph = Arc::new(InvalidSubgraph::new_raw(vertices, edges, hair));
                 let interface_ptr = self.0.interface_ptr.clone();
@@ -232,7 +231,7 @@ macro_rules! bind_trait_to_python {
                 let edges = if let Some(edges) = edges {
                     py_into_btree_set(edges)?
                 } else {
-                    BTreeSet::new()
+                    FastIterSet::new()
                 };
                 // vertices must be superset of the union of all edges
                 let interface = self.0.interface_ptr.read_recursive();
@@ -333,10 +332,10 @@ impl SolverSerialPlugins {
     pub fn get_cluster(&self, vertex_ptr: VertexPtr) -> Cluster {
         let mut cluster = Cluster::new();
         // visit the graph via tight edges
-        let mut current_vertices = BTreeSet::new();
+        let mut current_vertices = FastIterSet::new();
         current_vertices.insert(vertex_ptr.clone());
         while !current_vertices.is_empty() {
-            let mut next_vertices = BTreeSet::new();
+            let mut next_vertices = FastIterSet::new();
             for vertex_ptr0 in current_vertices.iter() {
                 cluster.add_vertex(vertex_ptr0.clone());
                 for edge_weak in vertex_ptr0.read_recursive().edges.iter() {
@@ -752,7 +751,7 @@ impl SolverTrait for SolverParallel {
         self.dual_module.adjust_weights_for_negative_edges();
 
         let moved_out_vec = std::mem::take(&mut syndrome_pattern.defect_vertices);
-        let mut moved_out_set = moved_out_vec.into_iter().collect::<BTreeSet<VertexIndex>>();
+        let mut moved_out_set = moved_out_vec.into_iter().collect::<FastIterSet<VertexIndex>>();
 
         for to_flip in self.dual_module.get_flip_vertices().iter() {
             if moved_out_set.contains(to_flip) {

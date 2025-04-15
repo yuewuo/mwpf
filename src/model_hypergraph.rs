@@ -1,6 +1,5 @@
 use crate::util::*;
 use crate::visualize::*;
-use std::collections::BTreeSet;
 use std::sync::Arc;
 
 /// hyper model graph that contains static information regardless of the syndrome
@@ -41,8 +40,8 @@ impl ModelHyperGraph {
         &self.vertices[vertex_index as usize].edges
     }
 
-    pub fn get_edges_neighbors(&self, edges: &BTreeSet<EdgeIndex>) -> BTreeSet<VertexIndex> {
-        let mut vertices = BTreeSet::new();
+    pub fn get_edges_neighbors(&self, edges: &FastIterSet<EdgeIndex>) -> FastIterSet<VertexIndex> {
+        let mut vertices = FastIterSet::new();
         for &edge_index in edges.iter() {
             vertices.extend(self.get_edge_neighbors(edge_index));
         }

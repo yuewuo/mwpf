@@ -40,6 +40,7 @@ pub mod dual_module;
 pub mod dual_module_parallel;
 pub mod dual_module_pq;
 pub mod example_codes;
+pub mod fast_ds;
 pub mod html_export;
 pub mod invalid_subgraph;
 pub mod matrix;

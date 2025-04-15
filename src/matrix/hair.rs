@@ -75,10 +75,10 @@ impl<'a, M: MatrixTail + MatrixEchelon> HairView<'a, M> {
 }
 
 impl<'a, M: MatrixTail + MatrixEchelon> MatrixTail for HairView<'a, M> {
-    fn get_tail_edges(&self) -> &BTreeSet<EdgeWeak> {
+    fn get_tail_edges(&self) -> &FastIterSet<EdgeWeak> {
         self.get_base().get_tail_edges()
     }
-    fn get_tail_edges_mut(&mut self) -> &mut BTreeSet<EdgeWeak> {
+    fn get_tail_edges_mut(&mut self) -> &mut FastIterSet<EdgeWeak> {
         panic!("cannot mutate a hair view");
     }
 }
@@ -99,7 +99,7 @@ impl<'a, M: MatrixTight + MatrixTail + MatrixEchelon> MatrixTight for HairView<'
     fn is_tight(&self, edge_weak: EdgeWeak) -> bool {
         self.get_base().is_tight(edge_weak)
     }
-    fn get_tight_edges(&self) -> &BTreeSet<EdgeWeak> {
+    fn get_tight_edges(&self) -> &FastIterSet<EdgeWeak> {
         self.base.get_tight_edges()
     }
 }
@@ -136,10 +136,10 @@ impl<'a, M: MatrixTail + MatrixEchelon> MatrixBasic for HairView<'a, M> {
     fn edge_to_var_index(&self, edge_weak: EdgeWeak) -> Option<VarIndex> {
         self.get_base().edge_to_var_index(edge_weak)
     }
-    fn get_vertices(&self) -> BTreeSet<VertexWeak> {
+    fn get_vertices(&self) -> FastIterSet<VertexWeak> {
         self.get_base().get_vertices()
     }
-    fn get_edges(&self) -> BTreeSet<EdgeWeak> {
+    fn get_edges(&self) -> FastIterSet<EdgeWeak> {
         self.get_base().get_edges()
     }
 }

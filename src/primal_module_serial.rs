@@ -17,7 +17,7 @@ use crate::relaxer_optimizer::*;
 use crate::util::*;
 use crate::visualize::*;
 
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Instant;
@@ -54,7 +54,7 @@ pub struct PrimalModuleSerial {
     /// the time spent on resolving the obstacles
     pub time_resolve: f64,
     /// sorted clusters by affinity, only exist when needed
-    pub sorted_clusters_aff: Option<BTreeSet<ClusterAffinity>>,
+    pub sorted_clusters_aff: Option<FastIterSet<ClusterAffinity>>,
     #[cfg(feature = "incr_lp")]
     /// parameter indicating if the primal module has initialized states necessary for `incr_lp` slack calculation
     pub cluster_weights_initialized: bool,
@@ -150,9 +150,9 @@ pub struct PrimalCluster {
     /// the nodes that belongs to this cluster
     pub nodes: Vec<PrimalModuleSerialNodePtr>,
     /// all the edges ever exists in any hair
-    pub edges: BTreeSet<EdgePtr>,
+    pub edges: FastIterSet<EdgePtr>,
     /// all the vertices ever touched by any tight edge
-    pub vertices: BTreeSet<VertexPtr>,
+    pub vertices: FastIterSet<VertexPtr>,
     /// the parity matrix to determine whether it's a valid cluster and also find new ways to increase the dual
     pub matrix: EchelonMatrix,
     /// the parity subgraph result, only valid when it's solved
@@ -282,10 +282,10 @@ impl PrimalModuleImpl for PrimalModuleSerial {
 
     fn resolve_tune(
         &mut self,
-        dual_report: BTreeSet<Obstacle>,
+        dual_report: FastIterSet<Obstacle>,
         interface_ptr: &DualModuleInterfacePtr,
         dual_module: &mut impl DualModuleImpl,
-    ) -> (BTreeSet<Obstacle>, bool) {
+    ) -> (FastIterSet<Obstacle>, bool) {
         let begin = Instant::now();
         let res = self.resolve_core_tune(dual_report, interface_ptr, dual_module);
         self.time_resolve += begin.elapsed().as_secs_f64();
@@ -434,8 +434,8 @@ impl PrimalModuleImpl for PrimalModuleSerial {
         cluster_ptr: &PrimalClusterPtr,
         interface_ptr: &DualModuleInterfacePtr,
         dual_module: &mut impl DualModuleImpl,
-        // dual_node_deltas: &mut BTreeMap<OrderedDualNodePtr, Rational>,
-        dual_node_deltas: &mut BTreeMap<OrderedDualNodePtr, (Rational, PrimalClusterPtr)>,
+        // dual_node_deltas: &mut FastIterMap<OrderedDualNodePtr, Rational>,
+        dual_node_deltas: &mut FastIterMap<OrderedDualNodePtr, (Rational, PrimalClusterPtr)>,
     ) -> (bool, OptimizerResult) {
         let mut optimizer_result = OptimizerResult::default();
         #[cfg(feature = "incr_lp")]
@@ -481,7 +481,7 @@ impl PrimalModuleImpl for PrimalModuleSerial {
             if cluster.relaxer_optimizer.should_optimize(&relaxer) {
                 #[cfg(not(feature = "incr_lp"))]
                 {
-                    let dual_variables: BTreeMap<Arc<InvalidSubgraph>, Rational> = cluster
+                    let dual_variables: FastIterMap<Arc<InvalidSubgraph>, Rational> = cluster
                         .nodes
                         .iter()
                         .map(|primal_node_ptr| {
@@ -493,7 +493,7 @@ impl PrimalModuleImpl for PrimalModuleSerial {
                             )
                         })
                         .collect();
-                    let edge_slacks: BTreeMap<EdgePtr, Rational> = dual_variables
+                    let edge_slacks: FastIterMap<EdgePtr, Rational> = dual_variables
                         .keys()
                         .flat_map(|invalid_subgraph: &Arc<InvalidSubgraph>| invalid_subgraph.hair.iter().cloned())
                         .chain(
@@ -525,7 +525,7 @@ impl PrimalModuleImpl for PrimalModuleSerial {
                         cluster_temp = cluster_ptr.write();
                         cluster = &mut *cluster_temp;
                     }
-                    let mut dual_variables: BTreeMap<NodeIndex, (Arc<InvalidSubgraph>, Rational)> = BTreeMap::new();
+                    let mut dual_variables: FastIterMap<NodeIndex, (Arc<InvalidSubgraph>, Rational)> = FastIterMap::new();
                     let mut participating_dual_variable_indices = hashbrown::HashSet::new();
                     for primal_node_ptr in cluster.nodes.iter() {
                         let primal_node = primal_node_ptr.read_recursive();
@@ -570,7 +570,7 @@ impl PrimalModuleImpl for PrimalModuleSerial {
                             };
                         }
                     }
-                    let edge_free_weights: BTreeMap<EdgeIndex, Rational> = dual_variables
+                    let edge_free_weights: FastIterMap<EdgeIndex, Rational> = dual_variables
                         .values()
                         .flat_map(|(invalid_subgraph, _)| invalid_subgraph.hair.iter().cloned())
                         .chain(
@@ -609,7 +609,7 @@ impl PrimalModuleImpl for PrimalModuleSerial {
             #[cfg(not(feature = "float_lp"))]
             // with rationals, it is actually usually better when always optimized
             {
-                let dual_variables: BTreeMap<Arc<InvalidSubgraph>, Rational> = cluster
+                let dual_variables: FastIterMap<Arc<InvalidSubgraph>, Rational> = cluster
                     .nodes
                     .iter()
                     .map(|primal_node_ptr| {
@@ -621,7 +621,7 @@ impl PrimalModuleImpl for PrimalModuleSerial {
                         )
                     })
                     .collect();
-                let edge_slacks: BTreeMap<EdgeIndex, Rational> = dual_variables
+                let edge_slacks: FastIterMap<EdgeIndex, Rational> = dual_variables
                     .keys()
                     .flat_map(|invalid_subgraph: &Arc<InvalidSubgraph>| invalid_subgraph.hair.iter().cloned())
                     .chain(
@@ -681,7 +681,7 @@ impl PrimalModuleImpl for PrimalModuleSerial {
     /// update the sorted clusters_aff, should be None to start with
     fn update_sorted_clusters_aff<D: DualModuleImpl>(&mut self, dual_module: &mut D) {
         let pending_clusters = self.pending_clusters();
-        let mut sorted_clusters_aff = BTreeSet::default();
+        let mut sorted_clusters_aff = FastIterSet::default();
 
         for cluster_weak in pending_clusters.iter() {
             let cluster_ptr = cluster_weak.upgrade_force();
@@ -697,7 +697,7 @@ impl PrimalModuleImpl for PrimalModuleSerial {
     }
 
     /// consume the sorted_clusters_aff
-    fn get_sorted_clusters_aff(&mut self) -> BTreeSet<ClusterAffinity> {
+    fn get_sorted_clusters_aff(&mut self) -> FastIterSet<ClusterAffinity> {
         self.sorted_clusters_aff.take().unwrap()
     }
 
@@ -894,7 +894,7 @@ impl PrimalModuleSerial {
     ) -> bool {
         // println!("resolve core");
         debug_assert!(!dual_report.is_unbounded() && dual_report.get_valid_growth().is_none());
-        let mut active_clusters = BTreeSet::<PrimalClusterPtr>::new();
+        let mut active_clusters = FastIterSet::<PrimalClusterPtr>::new();
         let interface = interface_ptr.read_recursive();
         // let decoding_graph = &interface.decoding_graph;
         while let Some(obstacle) = dual_report.pop() {
@@ -970,7 +970,7 @@ impl PrimalModuleSerial {
         dual_module: &mut impl DualModuleImpl,
     ) -> bool {
         debug_assert!(!dual_report.is_unbounded() && dual_report.get_valid_growth().is_none());
-        let mut active_clusters = BTreeSet::<PrimalClusterPtr>::new();
+        let mut active_clusters = FastIterSet::<PrimalClusterPtr>::new();
         let interface = interface_ptr.read_recursive();
         let decoding_graph = &interface.decoding_graph;
         while let Some(obstacle) = dual_report.pop() {
@@ -1063,11 +1063,11 @@ impl PrimalModuleSerial {
     // returns (obstacles_needing_to_be_resolved, should_grow)
     fn resolve_core_tune(
         &mut self,
-        dual_report: BTreeSet<Obstacle>,
+        dual_report: FastIterSet<Obstacle>,
         interface_ptr: &DualModuleInterfacePtr,
         dual_module: &mut impl DualModuleImpl,
-    ) -> (BTreeSet<Obstacle>, bool) {
-        let mut active_clusters = BTreeSet::<PrimalClusterPtr>::new();
+    ) -> (FastIterSet<Obstacle>, bool) {
+        let mut active_clusters = FastIterSet::<PrimalClusterPtr>::new();
         let interface = interface_ptr.read_recursive();
         let decoding_graph = &interface.decoding_graph;
 
@@ -1120,7 +1120,7 @@ impl PrimalModuleSerial {
             *self.plugin_count.write() = 0; // force only the first plugin
         }
         let mut all_solved = true;
-        let mut dual_node_deltas = BTreeMap::new();
+        let mut dual_node_deltas = FastIterMap::new();
         let mut optimizer_result = OptimizerResult::default();
         for cluster_ptr in active_clusters.iter() {
             let (solved, other) = self.resolve_cluster_tune(cluster_ptr, interface_ptr, dual_module, &mut dual_node_deltas);
@@ -1138,9 +1138,9 @@ impl PrimalModuleSerial {
     }
 
     pub fn print_clusters(&self) {
-        let mut vertices = BTreeSet::new();
-        let mut edges = BTreeSet::new();
-        let mut invalid_subgraphs: BTreeSet<Arc<InvalidSubgraph>> = BTreeSet::new();
+        let mut vertices = FastIterSet::new();
+        let mut edges = FastIterSet::new();
+        let mut invalid_subgraphs: FastIterSet<Arc<InvalidSubgraph>> = FastIterSet::new();
         for cluster in self.clusters.iter() {
             let cluster = cluster.read_recursive();
             if cluster.nodes.is_empty() {
@@ -1248,7 +1248,7 @@ impl PrimalModuleSerial {
 
             for cluster_affinity in cluster_affs.into_iter() {
                 let cluster_ptr = cluster_affinity.cluster_ptr;
-                let mut dual_node_deltas = BTreeMap::new();
+                let mut dual_node_deltas = FastIterMap::new();
                 let (mut resolved, optimizer_result) = self.resolve_cluster_tune(
                     &cluster_ptr,
                     interface,
@@ -1262,15 +1262,15 @@ impl PrimalModuleSerial {
                     .get_obstacles_tune(optimizer_result, dual_node_deltas);
 
                 // for cycle resolution
-                let mut order: VecDeque<BTreeSet<Obstacle>> = VecDeque::with_capacity(MAX_HISTORY); // fifo order of the obstacles sets seen
-                let mut current_sequences: Vec<(usize, BTreeSet<Obstacle>)> = Vec::new(); // the indexes that are currently being processed
+                let mut order: VecDeque<FastIterSet<Obstacle>> = VecDeque::with_capacity(MAX_HISTORY); // fifo order of the obstacles sets seen
+                let mut current_sequences: Vec<(usize, FastIterSet<Obstacle>)> = Vec::new(); // the indexes that are currently being processed
 
                 '_resolving: while !resolved {
                     let (_obstacles, _resolved) =
                         self.resolve_tune(obstacles.clone(), interface, dual_module_ptr.write().deref_mut());
 
                     // cycle resolution
-                    let drained: Vec<(usize, BTreeSet<Obstacle>)> = std::mem::take(&mut current_sequences);
+                    let drained: Vec<(usize, FastIterSet<Obstacle>)> = std::mem::take(&mut current_sequences);
                     for (idx, start) in drained.into_iter() {
                         if _obstacles.eq(&start) {
                             dual_module_ptr.write().deref_mut().end_tuning();

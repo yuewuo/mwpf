@@ -16,7 +16,7 @@ use crate::{add_shared_methods, dual_module::*};
 
 use std::{
     cmp::{Ordering, Reverse},
-    collections::{BTreeSet, BinaryHeap},
+    collections::{BinaryHeap},
     time::Instant,
 };
 
@@ -636,7 +636,7 @@ where
         if let Some((_, event)) = self.obstacle_queue.pop_event() {
             // this is used, since queues are not sets, and can contain duplicate events
             // Note: check that this is the assumption, though not much more overhead anyway
-            // let mut group_max_update_length_set = BTreeSet::default();
+            // let mut group_max_update_length_set = FastIterSet::default();
 
             // Note: With de-dup queue implementation, we could use vectors here
             let mut dual_report = DualReport::new();
@@ -753,7 +753,7 @@ where
     fn sync(&mut self) {
         // note: we can either set the global time to be zero, or just not change it anymore
 
-        let mut nodes_touched = BTreeSet::new();
+        let mut nodes_touched = FastIterSet::new();
 
         for edges in self.edges.iter_mut() {
             let mut edge = edges.write();
@@ -823,7 +823,7 @@ where
             println!("pq: {:?}", self.obstacle_queue.len());
         }
 
-        let mut all_nodes = BTreeSet::default();
+        let mut all_nodes = FastIterSet::default();
         for edge in self.edges.iter() {
             let edge = edge.read_recursive();
             for node in edge.dual_nodes.iter() {

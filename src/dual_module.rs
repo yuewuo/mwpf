@@ -20,8 +20,8 @@ use crate::visualize::*;
 use pyo3::prelude::*;
 
 use crate::matrix::*;
-use std::collections::BTreeMap;
-use std::collections::{BTreeSet, HashMap};
+
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::dual_module_pq::{EdgePtr, EdgeWeak, VertexPtr, VertexWeak};
@@ -396,9 +396,9 @@ pub trait DualModuleImpl {
     fn get_obstacles_tune(
         &self,
         optimizer_result: OptimizerResult,
-        dual_node_deltas: BTreeMap<OrderedDualNodePtr, (Rational, PrimalClusterPtr)>,
-    ) -> BTreeSet<Obstacle> {
-        let mut obstacles = BTreeSet::new();
+        dual_node_deltas: FastIterMap<OrderedDualNodePtr, (Rational, PrimalClusterPtr)>,
+    ) -> FastIterSet<Obstacle> {
+        let mut obstacles = FastIterSet::new();
         match optimizer_result {
             OptimizerResult::EarlyReturned => {
                 // if early returned, meaning optimizer didn't optimize, but simply should find current obstacles and return
@@ -469,7 +469,7 @@ pub trait DualModuleImpl {
                 // in other cases, optimizer should have optimized, so we should apply the deltas and return the nwe obstacles
 
                 // edge deltas needs to be applied at once for accurate obstacles calculation
-                let mut edge_deltas = BTreeMap::new();
+                let mut edge_deltas = FastIterMap::new();
                 for (dual_node_ptr, (grow_rate, _cluster_index)) in dual_node_deltas.into_iter() {
                     // update the dual node and check for obstacles
                     let mut node_ptr_write = dual_node_ptr.ptr.write();
@@ -723,9 +723,9 @@ impl DualModuleInterfacePtr {
         let mut interface = self.write();
         let vertex_ptr = dual_module.get_vertex_ptr(vertex_idx); // this is okay because create_defect_node is only called upon local defect vertices, so we won't access index out of range
         vertex_ptr.write().is_defect = true;
-        let mut vertices = BTreeSet::new();
+        let mut vertices = FastIterSet::new();
         vertices.insert(vertex_ptr);
-        let invalid_subgraph = Arc::new(InvalidSubgraph::new_complete(&vertices, &BTreeSet::new()));
+        let invalid_subgraph = Arc::new(InvalidSubgraph::new_complete(&vertices, &FastIterSet::new()));
         let node_index = interface.nodes.len() as NodeIndex;
         let node_ptr = DualNodePtr::new_value(DualNode {
             index: node_index,
@@ -832,12 +832,12 @@ impl DualModuleInterfacePtr {
         node_ptr
     }
 
-    pub fn is_valid_cluster_auto_vertices(&self, edges: &BTreeSet<EdgePtr>) -> bool {
+    pub fn is_valid_cluster_auto_vertices(&self, edges: &FastIterSet<EdgePtr>) -> bool {
         self.find_valid_subgraph_auto_vertices(edges).is_some()
     }
 
-    pub fn find_valid_subgraph_auto_vertices(&self, edges: &BTreeSet<EdgePtr>) -> Option<Vec<EdgeWeak>> {
-        let mut vertices: BTreeSet<VertexPtr> = BTreeSet::new();
+    pub fn find_valid_subgraph_auto_vertices(&self, edges: &FastIterSet<EdgePtr>) -> Option<Vec<EdgeWeak>> {
+        let mut vertices: FastIterSet<VertexPtr> = FastIterSet::new();
         for edge_ptr in edges.iter() {
             let local_vertices = &edge_ptr.read_recursive().vertices;
             for vertex in local_vertices {
@@ -848,7 +848,11 @@ impl DualModuleInterfacePtr {
         self.find_valid_subgraph(edges, &vertices)
     }
 
-    pub fn find_valid_subgraph(&self, edges: &BTreeSet<EdgePtr>, vertices: &BTreeSet<VertexPtr>) -> Option<Vec<EdgeWeak>> {
+    pub fn find_valid_subgraph(
+        &self,
+        edges: &FastIterSet<EdgePtr>,
+        vertices: &FastIterSet<VertexPtr>,
+    ) -> Option<Vec<EdgeWeak>> {
         let mut matrix = Echelon::<CompleteMatrix>::new();
         for edge_ptr in edges.iter() {
             matrix.add_variable(edge_ptr.downgrade());
@@ -871,7 +875,7 @@ impl DualModuleInterfacePtr {
         let edges_ptr = edges
             .iter()
             .map(|&idx| dual_module.get_edge_ptr(idx))
-            .collect::<BTreeSet<_>>();
+            .collect::<FastIterSet<_>>();
         let invalid_subgraph = Arc::new(InvalidSubgraph::new(&edges_ptr));
         self.create_node(invalid_subgraph, dual_module)
     }
@@ -885,11 +889,11 @@ impl DualModuleInterfacePtr {
             &vertices
                 .iter()
                 .filter_map(|weak_vertex| weak_vertex.upgrade())
-                .collect::<BTreeSet<_>>(),
+                .collect::<FastIterSet<_>>(),
             &edges
                 .iter()
                 .filter_map(|weak_edge| weak_edge.upgrade())
-                .collect::<BTreeSet<_>>(),
+                .collect::<FastIterSet<_>>(),
         ));
         self.create_node(invalid_subgraph, dual_module)
     }

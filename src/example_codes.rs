@@ -19,7 +19,7 @@ use crate::util_py::*;
 use crate::visualize::*;
 #[cfg(feature = "python_binding")]
 use pyo3::prelude::*;
-use std::collections::BTreeMap;
+
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{self, BufRead};
@@ -794,7 +794,7 @@ impl CodeCapacityDepolarizePlanarCode {
         let vertex_num = 2 * row_vertex_num * d;
         // first iterate all vertices
         let mut positions = Vec::new();
-        let mut vertices: BTreeMap<(isize, isize), usize> = BTreeMap::new();
+        let mut vertices: FastIterMap<(isize, isize), usize> = FastIterMap::new();
         // X and Z stabilizer vertices
         for is_z in [false, true] {
             for row in 0..d {

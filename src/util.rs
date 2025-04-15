@@ -1,4 +1,6 @@
 use crate::dual_module_pq::EdgeWeak;
+#[cfg(feature = "fast_ds")]
+use crate::fast_ds;
 use crate::mwpf_solver::*;
 #[cfg(not(feature = "float_lp"))]
 use crate::num_rational;
@@ -16,7 +18,6 @@ use pyo3::prelude::*;
 #[cfg(feature = "python_binding")]
 use pyo3::types::{PyDict, PyFloat, PyList};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
 use std::fs::{create_dir_all, File};
 use std::io::prelude::*;
 use std::time::Instant;
@@ -44,6 +45,42 @@ cfg_if::cfg_if! {
             value.denom().clone()
         }
     }
+}
+
+cfg_if::cfg_if! {
+    if #[cfg(feature="fast_ds")] {
+        pub type DefaultHasher = gxhash::GxHasher;
+    } else {
+        pub type DefaultHasher = std::collections::hash_map::DefaultHasher;
+    }
+}
+
+cfg_if::cfg_if! {
+    if #[cfg(feature="fast_ds")] {
+        pub type FastIterSet<T> = fast_ds::Set<T>;
+        pub type FastIterMap<K, V> = fast_ds::Map<K, V>;
+        pub type FastIterEntry<'a, K, V> = fast_ds::Entry<'a, K, V>;
+    } else {
+        // by default using std FastIterSet and FastIterMap
+        pub type FastIterSet<T> = std::collections::FastIterSet<T>;
+        pub type FastIterMap<K, V> = std::collections::FastIterMap<K, V>;
+        pub type FastIterEntry<'a, K, V> = std::collections::btree_map::Entry<'a, K, V>;
+    }
+}
+
+#[macro_export]
+macro_rules! fast_iter_set {
+    ($($key:expr,)+) => (fast_iter_set!($($key),+));
+
+    ( $($key:expr),* ) => {
+        {
+            let mut _set = FastIterSet::new();
+            $(
+                _set.insert($key);
+            )*
+            _set
+        }
+    };
 }
 
 pub type Weight = Rational;
@@ -147,7 +184,7 @@ impl SolverInitializer {
         json_to_pyobject(self.snapshot(abbrev))
     }
     #[pyo3(name = "get_subgraph_syndrome")]
-    fn py_get_subgraph_syndrome(&self, subgraph: PySubgraph) -> BTreeSet<VertexIndex> {
+    fn py_get_subgraph_syndrome(&self, subgraph: PySubgraph) -> FastIterSet<VertexIndex> {
         self.get_subgraph_syndrome(&subgraph.into())
     }
     #[pyo3(name = "matches_subgraph_syndrome")]
@@ -220,9 +257,9 @@ impl SolverInitializer {
     }
 
     #[allow(clippy::unnecessary_cast)]
-    pub fn get_subgraph_syndrome(&self, subgraph: &OutputSubgraph) -> BTreeSet<VertexIndex> {
+    pub fn get_subgraph_syndrome(&self, subgraph: &OutputSubgraph) -> FastIterSet<VertexIndex> {
         let internal_subgraph = OutputSubgraph::get_internal_subgraph(&subgraph);
-        let mut defect_vertices = BTreeSet::new();
+        let mut defect_vertices = FastIterSet::new();
         for edge_weak in internal_subgraph.iter() {
             // let HyperEdge { vertices, .. } = &self.weighted_edges[edge_index as usize];
             let edge_ptr = edge_weak.upgrade_force();
@@ -988,7 +1025,7 @@ impl<'a> PartitionedSyndromePattern<'a> {
 // #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 // pub struct IndexSet {
 //     // spaced-out individual index
-//     pub individual_indices: BTreeSet<VertexNodeIndex>,
+//     pub individual_indices: FastIterSet<VertexNodeIndex>,
 //     // indices that can be described using range, we assume that there is only one big range among all vertex indices
 //     pub range: [VertexNodeIndex; 2],
 // }
@@ -1003,14 +1040,14 @@ impl<'a> PartitionedSyndromePattern<'a> {
 //     fn new_range(start: VertexNodeIndex, end: VertexNodeIndex) -> Self {
 //         debug_assert!(end > start, "invalid range [{}, {})", start, end);
 //         Self {
-//             individual_indices: BTreeSet::<VertexNodeIndex>::new(),
+//             individual_indices: FastIterSet::<VertexNodeIndex>::new(),
 //             range: [start, end],
 //         }
 //     }
 
 //     // initialize a IndexSet that only has spaced out individual indicies
 //     fn new_individual_indices(indices: Vec<VertexNodeIndex>) -> Self {
-//         let mut new_set = BTreeSet::<VertexNodeIndex>::new();
+//         let mut new_set = FastIterSet::<VertexNodeIndex>::new();
 //         for index in indices {
 //             new_set.insert(index);
 //         }
@@ -1032,7 +1069,7 @@ impl<'a> PartitionedSyndromePattern<'a> {
 //         } else if indices.len() == 0{
 //             return Self::new_range(start, end);
 //         } else {
-//             let mut new_set = BTreeSet::<VertexNodeIndex>::new();
+//             let mut new_set = FastIterSet::<VertexNodeIndex>::new();
 //             for index in indices {
 //                 new_set.insert(index);
 //             }
@@ -1074,7 +1111,7 @@ impl<'a> PartitionedSyndromePattern<'a> {
 //         self.range[0] += bias;
 //         self.range[1] += bias;
 
-//         let set = std::mem::replace(&mut self.individual_indices, BTreeSet::new());
+//         let set = std::mem::replace(&mut self.individual_indices, FastIterSet::new());
 //         self.individual_indices = set.into_iter()
 //             .map(|p| p + bias)
 //             .collect();
@@ -1217,7 +1254,7 @@ pub struct PartitionConfig {
     /// undirected acyclic graph (DAG) to keep track of the relationship between different partition units
     pub dag_partition_units: Graph<(), bool, Undirected>,
     /// defect vertices (global index)
-    pub defect_vertices: BTreeSet<usize>,
+    pub defect_vertices: FastIterSet<usize>,
 }
 
 impl PartitionConfig {
@@ -1227,7 +1264,7 @@ impl PartitionConfig {
             partitions: vec![VertexRange::new(0, vertex_num as VertexIndex)],
             fusions: vec![],
             dag_partition_units: Graph::new_undirected(),
-            defect_vertices: BTreeSet::new(),
+            defect_vertices: FastIterSet::new(),
         }
     }
 
@@ -1237,7 +1274,7 @@ impl PartitionConfig {
             partitions: vec![], // we do not partition this newly (additionally) added unit
             fusions,
             dag_partition_units: Graph::new_undirected(), // we do not use this for the newly (additionally) added unit
-            defect_vertices: BTreeSet::from_iter(defect_vertices),
+            defect_vertices: FastIterSet::from_iter(defect_vertices),
         }
     }
 
@@ -1492,7 +1529,7 @@ pub struct PartitionedSolverInitializer {
     /// whether this unit is boundary-unit
     pub is_boundary_unit: bool,
     /// all defect vertices (global index), not just for this unit
-    pub defect_vertices: BTreeSet<usize>,
+    pub defect_vertices: FastIterSet<usize>,
     // /// (not sure whether we need it, just in case)
     // pub adjacent_partition_units: Vec<usize>,
     // /// applicable when all the owning vertices are partitioned (i.e. this belongs to a fusion unit)

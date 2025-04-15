@@ -15,7 +15,6 @@ use crate::num_traits::One;
 use crate::plugin::*;
 use crate::relaxer::*;
 use crate::util::*;
-use std::collections::BTreeSet;
 
 #[derive(Debug, Clone, Default)]
 pub struct PluginUnionFind {}
@@ -26,17 +25,17 @@ impl PluginUnionFind {
         if matrix.get_echelon_info().satisfiable {
             return None; // cannot find any relaxer
         }
-        let local_edges: BTreeSet<EdgePtr> = matrix
+        let local_edges: FastIterSet<EdgePtr> = matrix
             .get_view_edges()
             .iter()
             .map(|e| e.upgrade_force())
-            .collect::<BTreeSet<_>>();
+            .collect::<FastIterSet<_>>();
         let invalid_subgraph = InvalidSubgraph::new_complete_ptr(
             &matrix
                 .get_vertices()
                 .iter()
                 .map(|e| e.upgrade_force())
-                .collect::<BTreeSet<_>>(),
+                .collect::<FastIterSet<_>>(),
             &local_edges,
         );
         Some(Relaxer::new([(invalid_subgraph, Rational::one())].into()))
