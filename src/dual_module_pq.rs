@@ -20,6 +20,7 @@ use std::{
     time::Instant,
 };
 
+#[cfg(feature = "unsafe_pointer")]
 use crate::pointers::UnsafePtr;
 use derivative::Derivative;
 use hashbrown::hash_map::Entry;

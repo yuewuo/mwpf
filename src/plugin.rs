@@ -10,6 +10,7 @@ use crate::derivative::Derivative;
 use crate::dual_module::*;
 use crate::matrix::*;
 use crate::plugin_union_find::*;
+#[cfg(feature = "unsafe_pointer")]
 use crate::pointers::UnsafePtr;
 use crate::relaxer::*;
 use crate::relaxer_forest::*;

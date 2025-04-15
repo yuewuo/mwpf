@@ -5,6 +5,9 @@ use crate::example_codes::*;
 use crate::matrix::*;
 use crate::mwpf_solver::*;
 use crate::num_traits::Zero;
+#[cfg(not(feature = "unsafe_pointer"))]
+use crate::pointers::RwLockPtr;
+#[cfg(feature = "unsafe_pointer")]
 use crate::pointers::UnsafePtr;
 use crate::util::*;
 use crate::visualize::*;

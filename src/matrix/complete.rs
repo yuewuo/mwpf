@@ -6,6 +6,7 @@ use derivative::Derivative;
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::dual_module_pq::{EdgeWeak, VertexPtr, VertexWeak};
+#[cfg(feature = "unsafe_pointer")]
 use crate::pointers::UnsafePtr;
 
 /// complete matrix considers a predefined set of edges and won't consider any other edges

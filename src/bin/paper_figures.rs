@@ -5,6 +5,7 @@ use mwpf::dual_module_pq::*;
 use mwpf::example_codes::*;
 use mwpf::invalid_subgraph::*;
 use mwpf::model_hypergraph::*;
+#[cfg(feature = "unsafe_pointer")]
 use mwpf::pointers::UnsafePtr;
 use mwpf::util::*;
 use mwpf::visualize::*;
@@ -41,7 +42,7 @@ fn hyperedge_example() {
         dual_module.vertices[*vertex_index].write().is_defect = true;
     }
     // manually grow the dual variables
-    let decoding_graph = interface_ptr.read_recursive().decoding_graph.clone();
+    let _decoding_graph = interface_ptr.read_recursive().decoding_graph.clone();
     let dual_variables: Vec<(BTreeSet<VertexIndex>, f64)> = vec![
         (btreeset! {5,6}, 0.1),
         (btreeset! {4,5}, 0.1),

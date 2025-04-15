@@ -16,6 +16,7 @@ use crate::num_traits::Zero;
 use crate::plugin::*;
 use crate::plugin_single_hair::*;
 use crate::plugin_union_find::PluginUnionFind;
+#[cfg(feature = "unsafe_pointer")]
 use crate::pointers::UnsafePtr;
 use crate::primal_module::*;
 use crate::primal_module_parallel::*;

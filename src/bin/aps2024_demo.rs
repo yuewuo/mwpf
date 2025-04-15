@@ -8,6 +8,7 @@ use mwpf::model_hypergraph::*;
 use mwpf::plugin::*;
 use mwpf::plugin_single_hair::*;
 use mwpf::plugin_union_find::*;
+#[cfg(feature = "unsafe_pointer")]
 use mwpf::pointers::UnsafePtr;
 use mwpf::primal_module::*;
 use mwpf::primal_module_serial::*;
@@ -55,7 +56,7 @@ fn debug_demo() {
             visualizer
                 .snapshot_combined("begin".to_string(), vec![&interface_ptr, &dual_module])
                 .unwrap();
-            let decoding_graph = interface_ptr.read_recursive().decoding_graph.clone();
+            let _decoding_graph = interface_ptr.read_recursive().decoding_graph.clone();
             let s0 = Arc::new(InvalidSubgraph::new_complete_from_indices(
                 btreeset! {3},
                 btreeset! {},
@@ -133,7 +134,7 @@ fn simple_demo() {
             visualizer
                 .snapshot_combined("begin".to_string(), vec![&interface_ptr, &dual_module])
                 .unwrap();
-            let decoding_graph = interface_ptr.read_recursive().decoding_graph.clone();
+            let _decoding_graph = interface_ptr.read_recursive().decoding_graph.clone();
             let s0 = Arc::new(InvalidSubgraph::new_complete_from_indices(
                 btreeset! {3},
                 btreeset! {},
@@ -205,7 +206,7 @@ fn challenge_demo() {
             visualizer
                 .snapshot_combined("begin".to_string(), vec![&interface_ptr, &dual_module])
                 .unwrap();
-            let decoding_graph = interface_ptr.read_recursive().decoding_graph.clone();
+            let _decoding_graph = interface_ptr.read_recursive().decoding_graph.clone();
             let invalid_subgraphs = vec![
                 (btreeset! {10}, btreeset! {}),                                                  // s0, y0
                 (btreeset! {5, 6, 7, 9, 10, 11, 15, 16, 17}, btreeset! {6, 7, 11, 12}),          // s1, y3

@@ -8,6 +8,7 @@
 //!
 
 use super::interface::*;
+#[cfg(feature = "unsafe_pointer")]
 use crate::pointers::UnsafePtr;
 use crate::util::*;
 use prettytable::format::TableFormat;

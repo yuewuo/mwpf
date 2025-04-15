@@ -11,6 +11,7 @@ use std::sync::Arc;
 
 use crate::dual_module::DualModuleImpl;
 use crate::dual_module_pq::{EdgePtr, VertexPtr};
+#[cfg(feature = "unsafe_pointer")]
 use crate::pointers::UnsafePtr;
 
 /// an invalid subgraph $S = (V_S, E_S)$, also store the hair $\delta(S)$

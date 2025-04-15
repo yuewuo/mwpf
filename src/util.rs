@@ -3,6 +3,7 @@ use crate::mwpf_solver::*;
 #[cfg(not(feature = "float_lp"))]
 use crate::num_rational;
 use crate::num_traits::{FromPrimitive, ToPrimitive};
+#[cfg(feature = "unsafe_pointer")]
 use crate::pointers::UnsafePtr;
 use crate::rand_xoshiro;
 use crate::rand_xoshiro::rand_core::RngCore;
