@@ -501,11 +501,11 @@ impl PrimalModuleImpl for PrimalModuleSerial {
         // more complicated dual solution does not necessarily mean better logical error rate. Rather, if we
         // keep looking for smaller weighted solutions in the middle, the result is hopefully better.
         if !self.config.only_solve_primal_once {
-            let weight_of = |edge_index: EdgeIndex| dual_module.get_edge_weight(edge_index);
+            let weight_of = |edge_weak: EdgeWeak| dual_module.get_edge_weight(edge_weak.upgrade_force());
             if let Some(subgraph) = cluster.matrix.get_solution_local_minimum(weight_of) {
                 if let Some(original_subgraph) = &cluster.subgraph {
-                    let original_weight = dual_module.get_subgraph_weight(original_subgraph);
-                    let weight = dual_module.get_subgraph_weight(&subgraph);
+                    let original_weight = dual_module.get_subgraph_weight_pointer_vec(original_subgraph);
+                    let weight = dual_module.get_subgraph_weight_pointer_vec(&subgraph);
                     if weight < original_weight {
                         cluster.subgraph = Some(subgraph);
                     }

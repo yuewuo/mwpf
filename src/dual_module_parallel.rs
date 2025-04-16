@@ -15,6 +15,7 @@ use crate::serde_json;
 use crate::{add_shared_methods, dual_module::*};
 use hashbrown::hash_map::Entry;
 use hashbrown::{HashMap, HashSet};
+use rayon::vec;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 
@@ -22,6 +23,7 @@ use std::collections::VecDeque;
 use std::marker::PhantomData;
 use std::sync::{Arc, Mutex, Weak};
 
+#[derive(Clone)]
 pub struct DualModuleParallel<SerialModule: DualModuleImpl + Send + Sync, Queue>
 where
     Queue: FutureQueueMethods<Rational, Obstacle> + Default + std::fmt::Debug + Send + Sync + Clone,
@@ -268,9 +270,15 @@ where
                     // boundary_vertices: unit_partition_info.boundary_vertices.clone(),
                     // adjacent_partition_units: unit_partition_info.adjacent_partition_units.clone(),
                     // owning_interface: Some(partition_units[unit_index].downgrade()),
+                    heralds: vec![],
                 }
             })
             .collect::<Vec<_>>();
+
+        assert!(
+            initializer.heralds.is_empty(),
+            "non-empty heralds are yet to be supported in DualModuleParallel",
+        );
 
         // now we assign each edge to its unique partition
         // println!("edge num: {}", initializer.weighted_edges.len());
@@ -1258,10 +1266,17 @@ where
             // boundary_vertices: unit_partition_info.boundary_vertices.clone(),
             // adjacent_partition_units: unit_partition_info.adjacent_partition_units.clone(),
             // owning_interface: Some(partition_units[unit_index].downgrade()),
+            heralds: vec![],
         };
+
+        assert!(
+            initializer.heralds.is_empty(),
+            "non-empty heralds are yet to be supported in DualModuleParallel (new_separate_config",
+        );
 
         let mut dual_module: DualModulePQGeneric<Queue> =
             DualModulePQGeneric::new_seperate_unit(&partitioned_solver_initializer);
+
         DualModuleParallelUnit {
             unit_index: partitioned_solver_initializer.unit_index,
             partition_info: Arc::clone(&seperate_partition_info),

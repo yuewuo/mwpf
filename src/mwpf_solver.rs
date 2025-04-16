@@ -712,6 +712,9 @@ pub enum SolverEnum {
     SolverSerialSingleHair(SolverSerialSingleHair),
     SolverSerialJointSingleHair(SolverSerialJointSingleHair),
     SolverErrorPatternLogger(SolverErrorPatternLogger),
+    SolverParallelUnionFind(SolverParallelUnionFind),
+    SolverParallelSingleHair(SolverParallelSingleHair),
+    SolverParallelJointSingleHair(SolverParallelJointSingleHair),
 }
 
 #[cfg_attr(feature = "python_binding", pyclass(module = "mwpf", name = "BPSolverBase"))]
@@ -728,6 +731,9 @@ impl Clone for SolverBase {
                 SolverEnum::SolverSerialSingleHair(x) => SolverEnum::SolverSerialSingleHair(x.clone()),
                 SolverEnum::SolverSerialJointSingleHair(x) => SolverEnum::SolverSerialJointSingleHair(x.clone()),
                 SolverEnum::SolverErrorPatternLogger(_) => panic!("cannot clone error pattern logger"),
+                SolverEnum::SolverParallelUnionFind(x) => SolverEnum::SolverParallelUnionFind(x.clone()),
+                SolverEnum::SolverParallelSingleHair(x) => SolverEnum::SolverParallelSingleHair(x.clone()),
+                SolverEnum::SolverParallelJointSingleHair(x) => SolverEnum::SolverParallelJointSingleHair(x.clone()),
             },
         }
     }
@@ -750,6 +756,9 @@ impl SolverBPWrapper {
             SolverEnum::SolverSerialSingleHair(x) => x.get_model_graph(),
             SolverEnum::SolverSerialJointSingleHair(x) => x.get_model_graph(),
             SolverEnum::SolverErrorPatternLogger(_) => panic!("cannot create BP solver from error pattern logger"),
+            SolverEnum::SolverParallelUnionFind(x) => x.get_model_graph(),
+            SolverEnum::SolverParallelSingleHair(x) => x.get_model_graph(),
+            SolverEnum::SolverParallelJointSingleHair(x) => x.get_model_graph(),
         };
         let vertex_num = model_graph.initializer.vertex_num;
         let check_size = model_graph.initializer.weighted_edges.len();
@@ -758,7 +767,7 @@ impl SolverBPWrapper {
         let mut initial_log_ratios = Vec::with_capacity(check_size);
         let mut channel_probabilities = Vec::with_capacity(check_size);
 
-        for (col_index, HyperEdge { weight, vertices }) in model_graph.initializer.weighted_edges.iter().enumerate() {
+        for (col_index, HyperEdge { weight, vertices, .. }) in model_graph.initializer.weighted_edges.iter().enumerate() {
             channel_probabilities.push(p_of_weight(weight.to_f64().unwrap()));
             for row_index in vertices.iter() {
                 pcm.insert_entry(*row_index, col_index);
@@ -786,6 +795,9 @@ impl SolverBPWrapper {
             SolverEnum::SolverSerialSingleHair(x) => x.get_model_graph(),
             SolverEnum::SolverSerialJointSingleHair(x) => x.get_model_graph(),
             SolverEnum::SolverErrorPatternLogger(_) => panic!("cannot create BP solver from error pattern logger"),
+            SolverEnum::SolverParallelUnionFind(x) => x.get_model_graph(),
+            SolverEnum::SolverParallelSingleHair(x) => x.get_model_graph(),
+            SolverEnum::SolverParallelJointSingleHair(x) => x.get_model_graph(),
         };
         let vertex_num = model_graph.initializer.vertex_num;
         let check_size = model_graph.initializer.weighted_edges.len();
@@ -825,6 +837,9 @@ macro_rules! SolverBase_delegate_solver_method {
                 SolverEnum::SolverErrorPatternLogger(_) => panic!(
                     concat!("cannot call ", stringify!($fn_name), " for error pattern logger")
                 ),
+                SolverEnum::SolverParallelUnionFind(x) => x.0.$fn_name($($arg),*),
+                SolverEnum::SolverParallelSingleHair(x) => x.0.$fn_name($($arg),*),
+                SolverEnum::SolverParallelJointSingleHair(x) => x.0.$fn_name($($arg),*),
             }
         }
     };
@@ -838,6 +853,9 @@ macro_rules! SolverBase_delegate_solver_method {
                 SolverEnum::SolverErrorPatternLogger(_) => panic!(
                     concat!("cannot call ", stringify!($fn_name), " for error pattern logger")
                 ),
+                SolverEnum::SolverParallelUnionFind(x) => x.0.$fn_name($($arg),*),
+                SolverEnum::SolverParallelSingleHair(x) => x.0.$fn_name($($arg),*),
+                SolverEnum::SolverParallelJointSingleHair(x) => x.0.$fn_name($($arg),*),
             }
         }
     };
@@ -856,6 +874,9 @@ macro_rules! SolverBase_delegate_solver_field {
                     stringify!($field_name),
                     " for error pattern logger"
                 )),
+                SolverEnum::SolverParallelUnionFind(x) => &x.0.$field_name,
+                SolverEnum::SolverParallelSingleHair(x) => &x.0.$field_name,
+                SolverEnum::SolverParallelJointSingleHair(x) => &x.0.$field_name,
             }
         }
     };
@@ -881,6 +902,9 @@ impl SolverBase {
             SolverEnum::SolverSerialSingleHair(x) => &mut x.0.dual_module,
             SolverEnum::SolverSerialJointSingleHair(x) => &mut x.0.dual_module,
             SolverEnum::SolverErrorPatternLogger(_) => panic!("cannot get dual module for error pattern logger"),
+            SolverEnum::SolverParallelUnionFind(x) => &mut x.0.dual_module,
+            SolverEnum::SolverParallelSingleHair(x) => &mut x.0.dual_module,
+            SolverEnum::SolverParallelJointSingleHair(x) => &mut x.0.dual_module,
         }
     }
 }
@@ -1049,6 +1073,9 @@ impl SolverBPWrapper {
                     SolverEnum::SolverErrorPatternLogger(_) => {
                         panic!("cannot create visualizer for error pattern logger")
                     }
+                    SolverEnum::SolverParallelUnionFind(x) => &x.0,
+                    SolverEnum::SolverParallelSingleHair(x) => &x.0,
+                    SolverEnum::SolverParallelJointSingleHair(x) => &x.0,
                 },
             )
             .unwrap();
@@ -1105,6 +1132,9 @@ macro_rules! SolverTrait_delegate_solver_call {
             SolverEnum::SolverSerialSingleHair(x) => x.$method($($arg),*),
             SolverEnum::SolverSerialJointSingleHair(x) => x.$method($($arg),*),
             SolverEnum::SolverErrorPatternLogger(x) => x.$method($($arg),*),
+            SolverEnum::SolverParallelUnionFind(x) => x.$method($($arg),*),
+            SolverEnum::SolverParallelSingleHair(x) => x.$method($($arg),*),
+            SolverEnum::SolverParallelJointSingleHair(x) => x.$method($($arg),*),
         }
     };
     ($self:ident . $method:ident ( $($arg:expr),* )) => {
@@ -1113,6 +1143,9 @@ macro_rules! SolverTrait_delegate_solver_call {
             SolverEnum::SolverSerialSingleHair(x) => x.$method($($arg),*),
             SolverEnum::SolverSerialJointSingleHair(x) => x.$method($($arg),*),
             SolverEnum::SolverErrorPatternLogger(x) => x.$method($($arg),*),
+            SolverEnum::SolverParallelUnionFind(x) => x.$method($($arg),*),
+            SolverEnum::SolverParallelSingleHair(x) => x.$method($($arg),*),
+            SolverEnum::SolverParallelJointSingleHair(x) => x.$method($($arg),*),
         }
     };
 }
@@ -1155,6 +1188,11 @@ impl SolverTrait for SolverBPWrapper {
             SolverEnum::SolverSerialSingleHair(x) => SolverTrait_solve_with_bp!(self, x, syndrome_pattern, visualizer),
             SolverEnum::SolverSerialJointSingleHair(x) => SolverTrait_solve_with_bp!(self, x, syndrome_pattern, visualizer),
             SolverEnum::SolverErrorPatternLogger(_) => panic!("error pattern logger does not solve"),
+            SolverEnum::SolverParallelUnionFind(x) => SolverTrait_solve_with_bp!(self, x, syndrome_pattern, visualizer),
+            SolverEnum::SolverParallelSingleHair(x) => SolverTrait_solve_with_bp!(self, x, syndrome_pattern, visualizer),
+            SolverEnum::SolverParallelJointSingleHair(x) => {
+                SolverTrait_solve_with_bp!(self, x, syndrome_pattern, visualizer)
+            }
         }
     }
     fn subgraph_range_visualizer(&mut self, visualizer: Option<&mut Visualizer>) -> (OutputSubgraph, WeightRange) {
@@ -1230,7 +1268,8 @@ pub mod parallel_hyperion_default_configs {
 bind_trait_to_python!(SolverParallel);
 
 #[cfg_attr(feature = "python_binding", cfg_eval)]
-#[cfg_attr(feature = "python_binding", pyclass)]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf"))]
+#[derive(Clone)]
 pub struct SolverParallel {
     dual_module: DualModuleParallel<DualModulePQGeneric<FutureObstacleQueue<Rational>>, FutureObstacleQueue<Rational>>,
     primal_module: PrimalModuleParallel,
@@ -1258,7 +1297,7 @@ impl SolverParallel {
         let model_graph = Arc::new(ModelHyperGraph::new(Arc::new(initializer.clone())));
         let config: SolverParallelConfig = serde_json::from_value(config).unwrap();
         let primal_module = PrimalModuleParallel::new_config(
-            &model_graph.initializer.clone(),
+            &model_graph.initializer,
             &partition_info,
             config.primal.clone(),
             plugins,
@@ -1377,7 +1416,8 @@ impl SolverTrait for SolverParallel {
     }
 }
 
-#[cfg_attr(feature = "python_binding", pyclass)]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf"))]
+#[derive(Clone)]
 pub struct SolverParallelUnionFind(SolverParallel);
 
 impl SolverParallelUnionFind {
@@ -1401,7 +1441,8 @@ bind_solver_trait!(SolverParallelUnionFind);
 #[cfg(feature = "python_binding")]
 bind_trait_to_python!(SolverParallelUnionFind);
 
-#[cfg_attr(feature = "python_binding", pyclass)]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf"))]
+#[derive(Clone)]
 pub struct SolverParallelSingleHair(SolverParallel);
 
 impl SolverParallelSingleHair {
@@ -1433,7 +1474,8 @@ bind_solver_trait!(SolverParallelSingleHair);
 #[cfg(feature = "python_binding")]
 bind_trait_to_python!(SolverParallelSingleHair);
 
-#[cfg_attr(feature = "python_binding", pyclass)]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf"))]
+#[derive(Clone)]
 pub struct SolverParallelJointSingleHair(SolverParallel);
 
 impl SolverParallelJointSingleHair {

@@ -1587,7 +1587,7 @@ impl<'a> PartitionedSyndromePattern<'a> {
 // }
 
 // we leave the code here just in case we need to describe the vertices in continuos range
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(transparent)]
 pub struct IndexRange {
     pub range: [VertexNodeIndex; 2],
@@ -1938,7 +1938,7 @@ impl<'a> PartitionedSyndromePattern<'a> {
         for defect_index in self.owned_defect_range.iter() {
             defect_vertices.push(self.syndrome_pattern.defect_vertices[defect_index as usize]);
         }
-        SyndromePattern::new(defect_vertices, vec![])
+        SyndromePattern::new_vertices(defect_vertices)
     }
 }
 
@@ -1962,7 +1962,7 @@ pub struct PartitionUnitInfo {
     // pub adjacent_partition_units: Vec<usize>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct PartitionedSolverInitializer {
     /// unit index
     pub unit_index: usize,
@@ -1986,6 +1986,19 @@ pub struct PartitionedSolverInitializer {
     // pub adjacent_partition_units: Vec<usize>,
     // /// applicable when all the owning vertices are partitioned (i.e. this belongs to a fusion unit)
     // pub owning_interface: Option<PartitionUnitWeak>,
+
+    // Note: added hearlds to the PartitionedSolverInitializer
+    pub heralds: Vec<Vec<(EdgeIndex, Weight)>>,
+}
+
+impl PartitionedSolverInitializer {
+    pub fn get_solver_initializer(self) -> SolverInitializer {
+        SolverInitializer {
+            vertex_num: self.vertex_num,
+            weighted_edges: self.weighted_edges.iter().map(|(edge, _)| edge.clone()).collect(),
+            heralds: self.heralds,
+        }
+    }
 }
 
 /// perform index transformation

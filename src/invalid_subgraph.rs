@@ -253,7 +253,7 @@ pub mod tests {
         let interface_ptr = DualModuleInterfacePtr::new(decoding_graph.model_graph.clone());
         interface_ptr.load(decoding_graph.syndrome_pattern.clone(), &mut dual_module); // this is needed to load the defect vertices
 
-        let invalid_subgraph_1 = InvalidSubgraph::new_from_indices(FastIterSet! {13}, &mut dual_module);
+        let invalid_subgraph_1 = InvalidSubgraph::new_from_indices(fast_iter_set! {13}, &mut dual_module);
         println!("invalid_subgraph_1: {invalid_subgraph_1:?}");
         assert_eq!(
             invalid_subgraph_1
@@ -289,7 +289,7 @@ pub mod tests {
         let (decoding_graph, ..) = color_code_5_decoding_graph(vec![7, 1], visualize_filename);
         let initializer = decoding_graph.model_graph.initializer.clone();
         let mut dual_module = DualModulePQ::new_empty(&initializer);
-        let invalid_subgraph = InvalidSubgraph::new_from_indices(FastIterSet! {6, 10}, &mut dual_module);
+        let invalid_subgraph = InvalidSubgraph::new_from_indices(fast_iter_set! {6, 10}, &mut dual_module);
         println!("invalid_subgraph: {invalid_subgraph:?}"); // should not print because it panics
     }
 
@@ -334,15 +334,20 @@ pub mod tests {
         // any different value would generate a different invalid subgraph
         assert_ne!(
             invalid_subgraph_1,
-            InvalidSubgraph::new_raw_from_indices(FastIterSet! {1, 2}, edges.clone(), hair.clone(), &mut dual_module)
+            InvalidSubgraph::new_raw_from_indices(fast_iter_set! {1, 2}, edges.clone(), hair.clone(), &mut dual_module)
         );
         assert_ne!(
             invalid_subgraph_1,
-            InvalidSubgraph::new_raw_from_indices(vertices.clone(), FastIterSet! {4, 5, 6}, hair.clone(), &mut dual_module)
+            InvalidSubgraph::new_raw_from_indices(
+                vertices.clone(),
+                fast_iter_set! {4, 5, 6},
+                hair.clone(),
+                &mut dual_module
+            )
         );
         assert_ne!(
             invalid_subgraph_1,
-            InvalidSubgraph::new_raw_from_indices(vertices.clone(), edges.clone(), FastIterSet! {6, 7}, &mut dual_module)
+            InvalidSubgraph::new_raw_from_indices(vertices.clone(), edges.clone(), fast_iter_set! {6, 7}, &mut dual_module)
         );
     }
 }

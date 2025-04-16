@@ -20,16 +20,19 @@ use crate::num_traits::Zero;
 use crate::plugin::*;
 use crate::rayon::prelude::*;
 use crate::{dual_module_parallel::*, plugin};
+use hashbrown::HashMap;
 use hashbrown::HashSet;
 use more_asserts::assert_le;
 use qecp::model_graph;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 
+use std::collections::BTreeSet;
 use std::ops::DerefMut;
 use std::sync::{Arc, Condvar, Mutex, Weak};
 use std::time::{Duration, Instant};
 
+#[derive(Clone)]
 pub struct PrimalModuleParallel {
     /// the basic wrapped serial modules at the beginning, afterwards the fused units are appended after them
     pub units: Vec<PrimalModuleParallelUnitPtr>,
@@ -53,7 +56,7 @@ pub struct PrimalModuleParallelUnit {
     /// the owned serial primal module
     pub serial_module: PrimalModuleSerial,
     /// adjacent parallel units of this unit, and whether they each are fused with this unit
-    pub adjacent_parallel_units: FastIterMap<PrimalModuleParallelUnitWeak, bool>,
+    pub adjacent_parallel_units: HashMap<PrimalModuleParallelUnitWeak, bool>, // todo: use fastiterset if necessary
     /// whether this unit is solved
     pub is_solved: bool,
     /// record the time of events
@@ -171,16 +174,18 @@ impl PrimalModuleParallel {
         let mut units = vec![];
         let plugins_ptr = Arc::new(plugins);
         let unit_count = partition_info.units.len();
+        let arc_initializer = Arc::new(initializer.clone());
         thread_pool.scope(|_| {
             (0..unit_count)
                 .into_par_iter()
                 .map(|unit_index| {
                     // println!("unit_index: {unit_index}");
-                    let mut primal_module = PrimalModuleSerial::new_empty(initializer);
+                    let mut primal_module = PrimalModuleSerial::new_empty(&arc_initializer);
                     primal_module.plugins = plugins_ptr.clone();
                     primal_module.config = PrimalModuleSerialConfig {
                         timeout: config.timeout,
                         cluster_node_limit: config.cluster_node_limit,
+                        only_solve_primal_once: false, // todo: verify this is correct
                     };
                     let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone());
 
@@ -189,7 +194,7 @@ impl PrimalModuleParallel {
                         interface_ptr,
                         partition_info: partition_info.clone(),
                         serial_module: primal_module,
-                        adjacent_parallel_units: FastIterMap::new(),
+                        adjacent_parallel_units: HashMap::new(),
                         is_solved: false,
                         event_time: None,
                     })
@@ -707,7 +712,7 @@ impl PrimalModuleParallelUnit {
         model_graph: Arc<ModelHyperGraph>,
     ) -> Self {
         let partition_info = Arc::new(partition_info.clone());
-        let mut primal_module = PrimalModuleSerial::new_empty(initializer);
+        let mut primal_module = PrimalModuleSerial::new_empty(&Arc::new(initializer.clone()));
         primal_module.plugins = Arc::new(plugins);
         // primal_module.config = PrimalModuleSerialConfig{ timeout: config.timeout};
         let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone());
@@ -717,7 +722,7 @@ impl PrimalModuleParallelUnit {
             interface_ptr,
             partition_info: partition_info.clone(),
             serial_module: primal_module,
-            adjacent_parallel_units: FastIterMap::new(), // to be initalized/filled in later
+            adjacent_parallel_units: HashMap::default(), // to be initalized/filled in later
             is_solved: false,
             event_time: None,
         }

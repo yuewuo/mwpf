@@ -277,7 +277,6 @@ where
 
     // remember the initializer for original weights and heralded weighted edges
     pub initializer: Arc<SolverInitializer>,
-
     /// the number of all vertices (including those partitioned into other serial module)
     pub vertex_num: VertexNum,
     /// the number of all edges (including those partitioned into other seiral module)
@@ -1126,7 +1125,7 @@ where
             negative_weight_sum: Default::default(),
             negative_edges: Default::default(),
             flip_vertices: Default::default(),
-            initializer: partitioned_initializer,
+            initializer: Arc::new(partitioned_initializer.clone().get_solver_initializer()),
         }
     }
 
@@ -1186,7 +1185,7 @@ where
             negative_weight_sum: Default::default(),
             negative_edges: Default::default(),
             flip_vertices: Default::default(),
-            initializer: new_seperate_initializer,
+            initializer: Arc::new(new_seperate_initializer.clone().get_solver_initializer()),
         }
     }
 }

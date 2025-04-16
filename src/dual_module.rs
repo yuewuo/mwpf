@@ -530,6 +530,16 @@ pub trait DualModuleImpl {
         weight
     }
 
+    fn get_subgraph_weight_pointer_vec(&self, subgraph_in_vec: &[EdgeWeak]) -> Weight {
+        let mut weight = Weight::zero();
+        for edge_weak in subgraph_in_vec.iter() {
+            if let Some(edge_ptr) = edge_weak.upgrade() {
+                weight += self.get_edge_weight(edge_ptr);
+            }
+        }
+        weight
+    }
+
     #[cfg(feature = "incr_lp")]
     fn update_edge_cluster_weights(&self, edge_ptr: EdgePtr, cluster_index: NodeIndex, grow_rate: Rational);
 

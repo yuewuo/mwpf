@@ -24,6 +24,7 @@ use rand::RngCore;
 use rand::{thread_rng, Rng, SeedableRng};
 use serde::Serialize;
 use serde_variant::to_variant_name;
+use slp::Solver;
 
 use std::env;
 use std::sync::Arc;
@@ -582,6 +583,9 @@ impl Cli {
                             SolverEnum::SolverSerialSingleHair(x) => Box::new(x) as Box<dyn SolverTrait>,
                             SolverEnum::SolverSerialJointSingleHair(x) => Box::new(x) as Box<dyn SolverTrait>,
                             SolverEnum::SolverErrorPatternLogger(_) => panic!("not supported"),
+                            SolverEnum::SolverParallelUnionFind(x) => Box::new(x) as Box<dyn SolverTrait>,
+                            SolverEnum::SolverParallelSingleHair(x) => Box::new(x) as Box<dyn SolverTrait>,
+                            SolverEnum::SolverParallelJointSingleHair(x) => Box::new(x) as Box<dyn SolverTrait>,
                         };
                     }
 
@@ -641,6 +645,9 @@ impl Cli {
                             SolverEnum::SolverSerialSingleHair(x) => Box::new(x) as Box<dyn SolverTrait>,
                             SolverEnum::SolverSerialJointSingleHair(x) => Box::new(x) as Box<dyn SolverTrait>,
                             SolverEnum::SolverErrorPatternLogger(_) => panic!("not supported"),
+                            SolverEnum::SolverParallelUnionFind(x) => Box::new(x) as Box<dyn SolverTrait>,
+                            SolverEnum::SolverParallelSingleHair(x) => Box::new(x) as Box<dyn SolverTrait>,
+                            SolverEnum::SolverParallelJointSingleHair(x) => Box::new(x) as Box<dyn SolverTrait>,
                         };
                     }
 
@@ -818,6 +825,9 @@ impl Cli {
                         SolverEnum::SolverSerialSingleHair(x) => Box::new(x) as Box<dyn SolverTrait>,
                         SolverEnum::SolverSerialJointSingleHair(x) => Box::new(x) as Box<dyn SolverTrait>,
                         SolverEnum::SolverErrorPatternLogger(_) => panic!("not supported"),
+                        SolverEnum::SolverParallelUnionFind(x) => Box::new(x) as Box<dyn SolverTrait>,
+                        SolverEnum::SolverParallelSingleHair(x) => Box::new(x) as Box<dyn SolverTrait>,
+                        SolverEnum::SolverParallelJointSingleHair(x) => Box::new(x) as Box<dyn SolverTrait>,
                     };
                 }
                 let construction_time = start.elapsed();
@@ -1073,7 +1083,7 @@ impl SolverType {
             Self::ErrorPatternLogger => panic!("error pattern logger does not support decoder (stable) speed benchmark"),
             x => {
                 panic!("parallel solver type {x:?} does not support decoder (stable) speed benchmark yet")
-            }
+            } // TODO: Add parallel default partition infos to build parallel decoders
         }
     }
 }
