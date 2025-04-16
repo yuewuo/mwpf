@@ -132,9 +132,9 @@ impl RelaxerForest {
                         let new_speed = -original_speed * speed_ratio * require_speed.clone(); // todo: check if the arithmetic operations are corect
                         if let Some(mut speed) = untightened_edges.get_mut(edge_ptr) {
                             *speed += new_speed;
-                        } else {
-                            untightened_edges.insert(edge_ptr.clone(), new_speed);
+                            continue;
                         }
+                        untightened_edges.insert(edge_ptr.clone(), new_speed);
                     }
                     debug_assert_eq!(untightened_edges.get(edge_ptr), Some(&require_speed));
                     *untightened_edges.get_mut(edge_ptr).unwrap() -= require_speed;

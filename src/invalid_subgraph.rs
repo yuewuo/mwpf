@@ -57,7 +57,7 @@ impl InvalidSubgraph {
     /// construct an invalid subgraph using only $E_S$, and constructing the $V_S$ by $\cup E_S$
     #[allow(clippy::unnecessary_cast)]
     pub fn new(edges: &FastIterSet<EdgePtr>) -> Self {
-        let mut vertices: BTreeSet<VertexPtr> = FastIterSet::new();
+        let mut vertices: FastIterSet<VertexPtr> = FastIterSet::new();
         for edge_ptr in edges.iter() {
             for vertex_ptr in edge_ptr.read_recursive().vertices.iter() {
                 vertices.insert(vertex_ptr.upgrade_force().clone());
@@ -105,8 +105,8 @@ impl InvalidSubgraph {
     }
 
     // note that only new_from_indices and new_complete_from_indices have sanity_check
-    pub fn new_from_indices(edges: BTreeSet<EdgeIndex>, dual_module: &mut impl DualModuleImpl) -> Self {
-        let edges_ptr = edges.iter().map(|i| dual_module.get_edge_ptr(*i)).collect::<BTreeSet<_>>();
+    pub fn new_from_indices(edges: FastIterSet<EdgeIndex>, dual_module: &mut impl DualModuleImpl) -> Self {
+        let edges_ptr = edges.iter().map(|i| dual_module.get_edge_ptr(*i)).collect::<FastIterSet<_>>();
         let invalid_subgraph = Self::new(&edges_ptr);
         debug_assert_eq!(invalid_subgraph.sanity_check(dual_module), Ok(()));
         invalid_subgraph
@@ -114,32 +114,32 @@ impl InvalidSubgraph {
 
     // note that only new_from_indices and new_complete_from_indices have sanity_check
     pub fn new_complete_from_indices(
-        vertices: BTreeSet<VertexIndex>,
-        edges: BTreeSet<EdgeIndex>,
+        vertices: FastIterSet<VertexIndex>,
+        edges: FastIterSet<EdgeIndex>,
         dual_module: &mut impl DualModuleImpl,
     ) -> Self {
         let vertices_ptr = vertices
             .iter()
             .map(|i| dual_module.get_vertex_ptr(*i))
-            .collect::<BTreeSet<_>>();
-        let edges_ptr = edges.iter().map(|i| dual_module.get_edge_ptr(*i)).collect::<BTreeSet<_>>();
+            .collect::<FastIterSet<_>>();
+        let edges_ptr = edges.iter().map(|i| dual_module.get_edge_ptr(*i)).collect::<FastIterSet<_>>();
         let invalid_subgraph = Self::new_complete(&vertices_ptr, &edges_ptr);
         debug_assert_eq!(invalid_subgraph.sanity_check(dual_module), Ok(()));
         invalid_subgraph
     }
 
     pub fn new_raw_from_indices(
-        vertices: BTreeSet<VertexIndex>,
-        edges: BTreeSet<EdgeIndex>,
-        hair: BTreeSet<EdgeIndex>,
+        vertices: FastIterSet<VertexIndex>,
+        edges: FastIterSet<EdgeIndex>,
+        hair: FastIterSet<EdgeIndex>,
         dual_module: &mut impl DualModuleImpl,
     ) -> Self {
         let vertices_ptr = vertices
             .iter()
             .map(|i| dual_module.get_vertex_ptr(*i))
-            .collect::<BTreeSet<_>>();
-        let edges_ptr = edges.iter().map(|i| dual_module.get_edge_ptr(*i)).collect::<BTreeSet<_>>();
-        let hair_ptr = hair.iter().map(|i| dual_module.get_edge_ptr(*i)).collect::<BTreeSet<_>>();
+            .collect::<FastIterSet<_>>();
+        let edges_ptr = edges.iter().map(|i| dual_module.get_edge_ptr(*i)).collect::<FastIterSet<_>>();
+        let hair_ptr = hair.iter().map(|i| dual_module.get_edge_ptr(*i)).collect::<FastIterSet<_>>();
         Self::new_raw(&vertices_ptr, &edges_ptr, &hair_ptr)
     }
 
@@ -221,7 +221,7 @@ impl InvalidSubgraph {
         Arc::new(Self::new(edges))
     }
     pub fn new_vec_ptr(edges: &[EdgePtr]) -> Arc<Self> {
-        let strong_edges: BTreeSet<EdgePtr> = edges.iter().cloned().collect::<BTreeSet<_>>();
+        let strong_edges: FastIterSet<EdgePtr> = edges.iter().cloned().collect::<FastIterSet<_>>();
         Self::new_ptr(&strong_edges)
     }
     pub fn new_complete_ptr(vertices: &FastIterSet<VertexPtr>, edges: &FastIterSet<EdgePtr>) -> Arc<Self> {
@@ -253,7 +253,7 @@ pub mod tests {
         let interface_ptr = DualModuleInterfacePtr::new(decoding_graph.model_graph.clone());
         interface_ptr.load(decoding_graph.syndrome_pattern.clone(), &mut dual_module); // this is needed to load the defect vertices
 
-        let invalid_subgraph_1 = InvalidSubgraph::new_from_indices(btreeset! {13}, &mut dual_module);
+        let invalid_subgraph_1 = InvalidSubgraph::new_from_indices(FastIterSet! {13}, &mut dual_module);
         println!("invalid_subgraph_1: {invalid_subgraph_1:?}");
         assert_eq!(
             invalid_subgraph_1
@@ -289,7 +289,7 @@ pub mod tests {
         let (decoding_graph, ..) = color_code_5_decoding_graph(vec![7, 1], visualize_filename);
         let initializer = decoding_graph.model_graph.initializer.clone();
         let mut dual_module = DualModulePQ::new_empty(&initializer);
-        let invalid_subgraph = InvalidSubgraph::new_from_indices(btreeset! {6, 10}, &mut dual_module);
+        let invalid_subgraph = InvalidSubgraph::new_from_indices(FastIterSet! {6, 10}, &mut dual_module);
         println!("invalid_subgraph: {invalid_subgraph:?}"); // should not print because it panics
     }
 
@@ -334,15 +334,15 @@ pub mod tests {
         // any different value would generate a different invalid subgraph
         assert_ne!(
             invalid_subgraph_1,
-            InvalidSubgraph::new_raw_from_indices(btreeset! {1, 2}, edges.clone(), hair.clone(), &mut dual_module)
+            InvalidSubgraph::new_raw_from_indices(FastIterSet! {1, 2}, edges.clone(), hair.clone(), &mut dual_module)
         );
         assert_ne!(
             invalid_subgraph_1,
-            InvalidSubgraph::new_raw_from_indices(vertices.clone(), btreeset! {4, 5, 6}, hair.clone(), &mut dual_module)
+            InvalidSubgraph::new_raw_from_indices(vertices.clone(), FastIterSet! {4, 5, 6}, hair.clone(), &mut dual_module)
         );
         assert_ne!(
             invalid_subgraph_1,
-            InvalidSubgraph::new_raw_from_indices(vertices.clone(), edges.clone(), btreeset! {6, 7}, &mut dual_module)
+            InvalidSubgraph::new_raw_from_indices(vertices.clone(), edges.clone(), FastIterSet! {6, 7}, &mut dual_module)
         );
     }
 }

@@ -1289,7 +1289,7 @@ impl SolverTrait for SolverParallel {
         self.dual_module.adjust_weights_for_negative_edges();
 
         let moved_out_vec = std::mem::take(&mut syndrome_pattern.defect_vertices);
-        let mut moved_out_set = moved_out_vec.into_iter().collect::<BTreeSet<VertexIndex>>();
+        let mut moved_out_set = moved_out_vec.into_iter().collect::<FastIterSet<VertexIndex>>();
 
         for to_flip in self.dual_module.get_flip_vertices().iter() {
             if moved_out_set.contains(to_flip) {
@@ -1364,12 +1364,16 @@ impl SolverTrait for SolverParallel {
         self.dual_module.clear_tuning_time();
     }
 
-    fn update_weights(&mut self, new_weights: Vec<Rational>, mix_ratio: f64) {
+    fn update_weights(&mut self, new_weights: Vec<Rational>, mix_ratio: Weight) {
         self.dual_module.update_weights(new_weights, mix_ratio);
     }
 
     fn get_model_graph(&self) -> Arc<ModelHyperGraph> {
         self.model_graph.clone()
+    }
+
+    fn solver_base(&self) -> SolverBase {
+        panic!("solver base is not implemented for parallel solver (just like SolverSerialPlugins)")
     }
 }
 

@@ -75,9 +75,9 @@ impl Relaxer {
             for edge_ptr in invalid_subgraph.hair.iter() {
                 if let Some(mut edge) = edges.get_mut(edge_ptr) {
                     *edge += speed;
-                } else {
-                    edges.insert(edge_ptr.clone(), speed.clone());
+                    continue;
                 }
+                edges.insert(edge_ptr.clone(), speed.clone());
             }
         }
         let mut untighten_edges = FastIterMap::new();

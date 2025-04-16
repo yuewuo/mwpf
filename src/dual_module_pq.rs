@@ -641,7 +641,7 @@ where
             dual_report.add_obstacle(event);
 
             // append all conflicts that happen at the same time as now
-            // Note: This is Top-of-K operation, BTreeSets could be used.
+            // Note: This is Top-of-K operation, FastIterSets could be used.
             while let Some((time, _)) = self.obstacle_queue.peek_event() {
                 if global_time == *time {
                     let (time, event) = self.obstacle_queue.pop_event().unwrap();

@@ -1,6 +1,5 @@
 use std::{
     cmp::Ordering,
-    collections::{BTreeMap, BTreeSet},
     fmt::Debug,
     hash::{Hash, Hasher},
 };
@@ -9,6 +8,7 @@ use derivative::Derivative;
 use hashbrown::{HashMap, HashSet};
 #[cfg(feature = "python_binding")]
 use pyo3::prelude::*;
+use serde::{Deserialize, Serialize};
 use std::ops::{Deref, DerefMut};
 
 /* MAP implementation */
@@ -247,8 +247,8 @@ impl<K: Ord + Hash + Clone, V: Ord + Hash> Ord for Map<K, V> {
             return order;
         }
 
-        let self_sorted: BTreeMap<_, _> = self.map.iter().collect();
-        let other_sorted: BTreeMap<_, _> = other.map.iter().collect();
+        let self_sorted: std::collections::BTreeMap<_, _> = self.map.iter().collect();
+        let other_sorted: std::collections::BTreeMap<_, _> = other.map.iter().collect();
         self_sorted.cmp(&other_sorted)
     }
 }
@@ -337,8 +337,8 @@ impl<K: Eq + Hash + Clone, V: Hash> Map<K, V> {
 
 /* SET implementation */
 /// A `Set<T>` that provides Ord and fast Hash
-#[derive(Debug, Clone, Derivative)]
-pub struct Set<T: Hash> {
+#[derive(Debug, Clone, Derivative, Serialize, Deserialize)]
+pub struct Set<T: Hash + Eq> {
     set: HashSet<T>,
     combined_hash: u64,
 }
@@ -514,8 +514,8 @@ impl<T: Ord + Hash> Ord for Set<T> {
         if self.combined_hash != other.combined_hash {
             return self.combined_hash.cmp(&other.combined_hash); // ✅ Compare hash first
         }
-        let self_sorted: BTreeSet<_> = self.set.iter().collect();
-        let other_sorted: BTreeSet<_> = other.set.iter().collect();
+        let self_sorted: std::collections::BTreeSet<_> = self.set.iter().collect();
+        let other_sorted: std::collections::BTreeSet<_> = other.set.iter().collect();
         self_sorted.cmp(&other_sorted)
     }
 }
@@ -526,8 +526,9 @@ impl<T: Eq + Hash + Clone + Debug> Default for Set<T> {
     }
 }
 
-unsafe impl<T: Eq + Hash + Clone + Send> Send for Set<T> {}
-unsafe impl<T: Eq + Hash + Clone + Sync> Sync for Set<T> {}
+// bug: commenting this out because leading to hangin compiler?
+// unsafe impl<T: Eq + Hash + Clone + Send> Send for Set<T> {}
+// unsafe impl<T: Eq + Hash + Clone + Sync> Sync for Set<T> {}
 
 impl<T: Eq + Hash + Clone> Hash for Set<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -538,6 +539,33 @@ impl<T: Eq + Hash + Clone> Hash for Set<T> {
 impl<T: Eq + Hash + Clone + Debug, const N: usize> From<[T; N]> for Set<T> {
     fn from(array: [T; N]) -> Self {
         array.into_iter().collect()
+    }
+}
+
+impl<T: Eq + Hash + Clone + Debug + Ord> Set<T> {
+    /// Returns the smallest element in the set, if any.
+    pub fn first(&self) -> Option<&T> {
+        self.set.iter().min()
+    }
+}
+
+// For &Map
+impl<'a, K: Eq + Hash + Clone, V: Hash> IntoIterator for &'a Map<K, V> {
+    type Item = (&'a K, &'a V);
+    type IntoIter = hashbrown::hash_map::Iter<'a, K, V>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.map.iter()
+    }
+}
+
+// For &mut Map
+impl<'a, K: Eq + Hash + Clone, V: Hash> IntoIterator for &'a mut Map<K, V> {
+    type Item = (&'a K, &'a mut V);
+    type IntoIter = hashbrown::hash_map::IterMut<'a, K, V>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.map.iter_mut()
     }
 }
 

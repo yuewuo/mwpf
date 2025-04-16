@@ -1,5 +1,6 @@
 use super::interface::*;
 use super::visualize::*;
+use crate::matrix::MatrixBasic;
 use crate::util::*;
 use core::panic;
 use derivative::Derivative;

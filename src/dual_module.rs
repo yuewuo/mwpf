@@ -848,12 +848,12 @@ impl DualModuleInterfacePtr {
         node_ptr
     }
 
-    pub fn is_valid_cluster_auto_vertices(&self, edges: &BTreeSet<EdgePtr>) -> bool {
+    pub fn is_valid_cluster_auto_vertices(&self, edges: &FastIterSet<EdgePtr>) -> bool {
         self.find_valid_subgraph_auto_vertices(edges).is_some()
     }
 
-    pub fn find_valid_subgraph_auto_vertices(&self, edges: &BTreeSet<EdgePtr>) -> Option<Vec<EdgeWeak>> {
-        let mut vertices: BTreeSet<VertexPtr> = BTreeSet::new();
+    pub fn find_valid_subgraph_auto_vertices(&self, edges: &FastIterSet<EdgePtr>) -> Option<Vec<EdgeWeak>> {
+        let mut vertices: FastIterSet<VertexPtr> = FastIterSet::new();
         for edge_ptr in edges.iter() {
             let local_vertices = &edge_ptr.read_recursive().vertices;
             for vertex in local_vertices {
@@ -864,7 +864,11 @@ impl DualModuleInterfacePtr {
         self.find_valid_subgraph(edges, &vertices)
     }
 
-    pub fn find_valid_subgraph(&self, edges: &BTreeSet<EdgePtr>, vertices: &BTreeSet<VertexPtr>) -> Option<Vec<EdgeWeak>> {
+    pub fn find_valid_subgraph(
+        &self,
+        edges: &FastIterSet<EdgePtr>,
+        vertices: &FastIterSet<VertexPtr>,
+    ) -> Option<Vec<EdgeWeak>> {
         let mut matrix = Echelon::<CompleteMatrix>::new();
         for edge_ptr in edges.iter() {
             matrix.add_variable(edge_ptr.downgrade());
@@ -887,7 +891,7 @@ impl DualModuleInterfacePtr {
         let edges_ptr = edges
             .iter()
             .map(|&idx| dual_module.get_edge_ptr(idx))
-            .collect::<BTreeSet<_>>();
+            .collect::<FastIterSet<_>>();
         let invalid_subgraph = Arc::new(InvalidSubgraph::new(&edges_ptr));
         self.create_node(invalid_subgraph, dual_module)
     }
@@ -901,11 +905,11 @@ impl DualModuleInterfacePtr {
             &vertices
                 .iter()
                 .filter_map(|weak_vertex| weak_vertex.upgrade())
-                .collect::<BTreeSet<_>>(),
+                .collect::<FastIterSet<_>>(),
             &edges
                 .iter()
                 .filter_map(|weak_edge| weak_edge.upgrade())
-                .collect::<BTreeSet<_>>(),
+                .collect::<FastIterSet<_>>(),
         ));
         self.create_node(invalid_subgraph, dual_module)
     }

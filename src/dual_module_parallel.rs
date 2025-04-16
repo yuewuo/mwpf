@@ -17,7 +17,7 @@ use hashbrown::hash_map::Entry;
 use hashbrown::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
-use std::collections::BTreeSet;
+
 use std::collections::VecDeque;
 use std::marker::PhantomData;
 use std::sync::{Arc, Mutex, Weak};
@@ -39,7 +39,7 @@ where
     // pub empty_sync_request: Vec<SyncRequest>,
     /// a dynamic (to-be-update) undirected graph (DAG) to keep track of the relationship between different partition units, assumed to be acylic if we partition
     /// along the time axis, but could be cyclic depending on the partition and fusion strategy
-    pub dag_partition_units: BTreeSet<(usize, usize, bool)>, // (unit_index0, unit_index1, is_fused)
+    pub dag_partition_units: FastIterSet<(usize, usize, bool)>, // (unit_index0, unit_index1, is_fused)
     /// partitioned initializers, used in both primal and dual parallel modules
     pub partitioned_initializers: Vec<PartitionedSolverInitializer>,
 
@@ -471,7 +471,7 @@ where
         // }
 
         // now we are initializing dag_partition_units
-        let mut dag_partition_units = BTreeSet::new();
+        let mut dag_partition_units = FastIterSet::new();
         let graph = &partition_info.config.dag_partition_units;
         for edge_index in graph.edge_indices() {
             let (source, target) = graph.edge_endpoints(edge_index).unwrap();
@@ -620,7 +620,7 @@ where
     Queue: FutureQueueMethods<Rational, Obstacle> + Default + std::fmt::Debug + Send + Sync + Clone,
 {
     /// create a new dual module with empty syndrome
-    fn new_empty(initializer: &SolverInitializer) -> Self {
+    fn new_empty(initializer: &Arc<SolverInitializer>) -> Self {
         Self::new_config(
             initializer,
             &PartitionConfig::new(initializer.vertex_num).info(),
@@ -851,8 +851,8 @@ where
     // fn get_obstacles_tune(
     //     &self,
     //     optimizer_result: OptimizerResult,
-    //     dual_node_deltas: BTreeMap<OrderedDualNodePtr, (Rational, NodeIndex)>,
-    // ) -> BTreeSet<Obstacle> {
+    //     dual_node_deltas: FastIterMap<OrderedDualNodePtr, (Rational, NodeIndex)>,
+    // ) -> FastIterSet<Obstacle> {
     //     unimplemented!()
     // }
 
@@ -901,7 +901,7 @@ where
 
     /// CHECK!! update weights of dual_module;
     /// the weight of the dual module is set to be `old_weight + mix_ratio * (new_weight - old_weight)`
-    fn update_weights(&mut self, new_weights: Vec<Rational>, mix_ratio: f64) {
+    fn update_weights(&mut self, new_weights: Vec<Rational>, mix_ratio: Weight) {
         self.thread_pool.scope(|_| {
             self.units.par_iter().for_each(|unit_ptr| {
                 let mut unit = unit_ptr.write();
@@ -996,7 +996,7 @@ where
     Queue: FutureQueueMethods<Rational, Obstacle> + Default + std::fmt::Debug + Send + Sync + Clone,
 {
     /// create a new dual module with empty syndrome
-    fn new_empty(initializer: &SolverInitializer) -> Self {
+    fn new_empty(initializer: &Arc<SolverInitializer>) -> Self {
         // tentative, but in the future, I need to modify this so that I can create a new PartitionUnit and fuse it with an existing bigger block
         panic!("creating parallel unit directly from initializer is forbidden, use `DualModuleParallel::new` instead");
     }
@@ -1146,8 +1146,8 @@ where
     // fn get_obstacles_tune(
     //     &self,
     //     optimizer_result: OptimizerResult,
-    //     dual_node_deltas: BTreeMap<OrderedDualNodePtr, (Rational, NodeIndex)>,
-    // ) -> BTreeSet<Obstacle> {
+    //     dual_node_deltas: FastIterMap<OrderedDualNodePtr, (Rational, NodeIndex)>,
+    // ) -> FastIterSet<Obstacle> {
     //     unimplemented!()
     // }
 
@@ -1181,7 +1181,7 @@ where
 
     /// update weights of dual_module;
     /// the weight of the dual module is set to be `old_weight + mix_ratio * (new_weight - old_weight)`
-    fn update_weights(&mut self, _new_weights: Vec<Rational>, _mix_ratio: f64) {
+    fn update_weights(&mut self, _new_weights: Vec<Rational>, _mix_ratio: Weight) {
         unimplemented!()
     }
 
@@ -1300,7 +1300,7 @@ where
             // // could potentially use rayon to optimize it
             // // implement a breadth first search to grow all connected (fused) neighbors
             // let mut queue = VecDeque::new();
-            // let mut visited = BTreeSet::new();
+            // let mut visited = FastIterSet::new();
             // visited.insert(self.clone());
             // queue.push_back(self.clone());
             // drop(dual_module_unit);
@@ -1333,7 +1333,7 @@ where
             // could potentially use rayon to optimize it
             // implement a breadth first search to grow all connected (fused) neighbors
             let queue = Arc::new(Mutex::new(VecDeque::new()));
-            let visited = Arc::new(Mutex::new(BTreeSet::new()));
+            let visited = Arc::new(Mutex::new(FastIterSet::new()));
 
             let mut visited_lock = visited.lock().unwrap();
             visited_lock.insert(self.downgrade());
@@ -1378,7 +1378,7 @@ where
             // could potentially use rayon to optimize it
             // implement a breadth first search to grow all connected (fused) neighbors
             let mut frontier: VecDeque<_> = VecDeque::new();
-            let mut visited = BTreeSet::new();
+            let mut visited = FastIterSet::new();
             // println!("index: {:?}", self.unit_index);
             // visited.insert(Arc::as_ptr(self.ptr()));
             visited.insert(self.downgrade());
@@ -1439,7 +1439,7 @@ where
 
             // implement a breadth first search to grow all connected (fused) neighbors
             let queue = Arc::new(Mutex::new(VecDeque::new()));
-            let visited = Arc::new(Mutex::new(BTreeSet::new()));
+            let visited = Arc::new(Mutex::new(FastIterSet::new()));
 
             let mut visited_lock = visited.lock().unwrap();
             visited_lock.insert(self.downgrade());
@@ -1498,7 +1498,7 @@ where
             // we need to find the maximum update length of all connected (fused) units
             // so we run a bfs, we could potentially use rayon to optimize it
             let mut frontier: VecDeque<_> = VecDeque::new();
-            let mut visited = BTreeSet::new();
+            let mut visited = FastIterSet::new();
             visited.insert(self.downgrade());
             // println!("self pointer: {:?}", Arc::as_ptr(self.ptr()));
 
@@ -1916,7 +1916,7 @@ pub mod tests {
         let a = partition_config.dag_partition_units.add_node(());
         let b = partition_config.dag_partition_units.add_node(());
         partition_config.dag_partition_units.add_edge(a, b, false);
-        partition_config.defect_vertices = BTreeSet::from_iter(defect_vertices.clone());
+        partition_config.defect_vertices = FastIterSet::from_iter(defect_vertices.clone());
 
         let partition_info = partition_config.info();
 
@@ -1954,7 +1954,7 @@ pub mod tests {
         let a = partition_config.dag_partition_units.add_node(());
         let b = partition_config.dag_partition_units.add_node(());
         partition_config.dag_partition_units.add_edge(a, b, false);
-        partition_config.defect_vertices = BTreeSet::from_iter(defect_vertices.clone());
+        partition_config.defect_vertices = FastIterSet::from_iter(defect_vertices.clone());
 
         let partition_info = partition_config.info();
 
@@ -1992,7 +1992,7 @@ pub mod tests {
         let a = partition_config.dag_partition_units.add_node(());
         let b = partition_config.dag_partition_units.add_node(());
         partition_config.dag_partition_units.add_edge(a, b, false);
-        partition_config.defect_vertices = BTreeSet::from_iter(defect_vertices.clone());
+        partition_config.defect_vertices = FastIterSet::from_iter(defect_vertices.clone());
 
         let partition_info = partition_config.info();
 
@@ -2039,7 +2039,7 @@ pub mod tests {
         partition_config.dag_partition_units.add_edge(b, c, false);
         partition_config.dag_partition_units.add_edge(c, d, false);
 
-        partition_config.defect_vertices = BTreeSet::from_iter(defect_vertices.clone());
+        partition_config.defect_vertices = FastIterSet::from_iter(defect_vertices.clone());
 
         let partition_info = partition_config.info();
 
@@ -2165,7 +2165,7 @@ pub mod tests {
                     .add_edge(graph_nodes[i], graph_nodes[i + 1], false);
             }
         }
-        partition_config.defect_vertices = BTreeSet::from_iter(defect_vertices.clone());
+        partition_config.defect_vertices = FastIterSet::from_iter(defect_vertices.clone());
 
         partition_config
     }

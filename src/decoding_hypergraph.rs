@@ -1,8 +1,10 @@
+// TODO: should adopt full pointer implementation
+
 use crate::dual_module_pq::EdgePtr;
 use crate::dual_module_pq::EdgeWeak;
 use crate::dual_module_pq::VertexPtr;
-use crate::matrix::CompleteMatrix;
-use crate::matrix::Echelon;
+use crate::dual_module_pq::VertexWeak;
+use crate::matrix::*;
 use crate::model_hypergraph::*;
 use crate::util::*;
 use crate::visualize::*;
@@ -16,6 +18,7 @@ pub struct DecodingHyperGraph {
     /// syndrome
     pub syndrome_pattern: Arc<SyndromePattern>,
     /// fast check whether a vertex is defect
+    /// TODO: probably should use pointers as well
     pub defect_vertices_hashset: HashSet<VertexIndex>,
     /// fast check whether an edge is erased
     pub erasures_hashset: HashSet<EdgeIndex>,
@@ -58,26 +61,33 @@ impl DecodingHyperGraph {
         Self::new(model_graph, Arc::new(SyndromePattern::new_vertices(defect_vertices)))
     }
 
-    pub fn find_valid_subgraph(&self, edges: &FastIterSet<EdgePtr>, vertices: &FastIterSet<VertexPtr>) -> Option<Subgraph> {
+    pub fn find_valid_subgraph(&self, edges: &FastIterSet<EdgePtr>, vertices: &FastIterSet<VertexWeak>) -> Option<Subgraph> {
         let mut matrix = Echelon::<CompleteMatrix>::new();
-        for &edge_ptr in edges.iter() {
-            matrix.add_variable(edge_ptr.downgrade());
+        for edge_ptr in edges.iter() {
+            matrix.add_variable(edge_ptr.downgrade().clone());
         }
 
-        for vertex_ptr in vertices.iter() {
-            vertex_ptr = vertex_ptr.downgrade();
-            let incident_edges = self.get_vertex_neighbors(vertex_ptr);
-            let parity = self.is_vertex_defect(vertex_ptr);
-            matrix.add_constraint(vertex_ptr.clone(), incident_edges, parity);
+        for vertex_weak in vertices.iter() {
+            let vertex_ptr = vertex_weak.upgrade_force();
+            let vertex_read = vertex_ptr.read_recursive();
+            let vertex_index = vertex_read.vertex_index;
+            let incident_edges = &vertex_read.edges;
+            let parity = self.is_vertex_defect(vertex_index);
+            matrix.add_constraint(vertex_weak.clone(), incident_edges, parity);
         }
-        matrix.get_solution()
+        matrix.get_solution().map(|solution| {
+            solution
+                .into_iter()
+                .map(|edge_weak| edge_weak.upgrade_force().read_recursive().edge_index)
+                .collect()
+        })
     }
 
     pub fn find_valid_subgraph_auto_vertices(&self, edges: &FastIterSet<EdgePtr>) -> Option<Subgraph> {
         self.find_valid_subgraph(edges, &self.get_edges_neighbors(edges))
     }
 
-    pub fn is_valid_cluster(&self, edges: &FastIterSet<EdgePtr>, vertices: &FastIterSet<VertexPtr>) -> bool {
+    pub fn is_valid_cluster(&self, edges: &FastIterSet<EdgePtr>, vertices: &FastIterSet<VertexWeak>) -> bool {
         self.find_valid_subgraph(edges, vertices).is_some()
     }
 
@@ -85,23 +95,23 @@ impl DecodingHyperGraph {
         self.find_valid_subgraph_auto_vertices(edges).is_some()
     }
 
-    pub fn is_vertex_defect(&self, vertex_ptr: VertexPtr) -> bool {
-        self.defect_vertices_hashset
-            .contains(&vertex_ptr.read_recursive().vertex_index)
+    pub fn is_vertex_defect(&self, vertex_index: VertexIndex) -> bool {
+        self.defect_vertices_hashset.contains(&vertex_index)
     }
 
     pub fn get_edge_neighbors(&self, edge_ptr: EdgePtr) -> &Vec<VertexIndex> {
         self.model_graph.get_edge_neighbors(edge_ptr.read_recursive().edge_index)
     }
 
-    pub fn get_vertex_neighbors(&self, vertex_ptr: VertexPtr) -> &Vec<EdgeIndex> {
-        self.model_graph
-            .get_vertex_neighbors(vertex_ptr.read_recursive().vertex_index)
+    pub fn get_vertex_neighbors(&self, vertex_index: VertexIndex) -> &Vec<EdgeIndex> {
+        self.model_graph.get_vertex_neighbors(vertex_index)
     }
 
-    pub fn get_edges_neighbors(&self, edges: &FastIterSet<EdgePtr>) -> FastIterSet<VertexIndex> {
-        self.model_graph
-            .get_edges_neighbors(edges.iter().map(|edge_ptr| edge_ptr.read_recursive().edge_index).collect())
+    pub fn get_edges_neighbors(&self, edges: &FastIterSet<EdgePtr>) -> FastIterSet<VertexWeak> {
+        edges
+            .iter()
+            .flat_map(|edge_ptr| edge_ptr.read_recursive().vertices.clone())
+            .collect()
     }
 }
 

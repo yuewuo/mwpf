@@ -25,7 +25,7 @@ use more_asserts::assert_le;
 use qecp::model_graph;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, BTreeSet};
+
 use std::ops::DerefMut;
 use std::sync::{Arc, Condvar, Mutex, Weak};
 use std::time::{Duration, Instant};
@@ -53,7 +53,7 @@ pub struct PrimalModuleParallelUnit {
     /// the owned serial primal module
     pub serial_module: PrimalModuleSerial,
     /// adjacent parallel units of this unit, and whether they each are fused with this unit
-    pub adjacent_parallel_units: BTreeMap<PrimalModuleParallelUnitWeak, bool>,
+    pub adjacent_parallel_units: FastIterMap<PrimalModuleParallelUnitWeak, bool>,
     /// whether this unit is solved
     pub is_solved: bool,
     /// record the time of events
@@ -189,7 +189,7 @@ impl PrimalModuleParallel {
                         interface_ptr,
                         partition_info: partition_info.clone(),
                         serial_module: primal_module,
-                        adjacent_parallel_units: BTreeMap::new(),
+                        adjacent_parallel_units: FastIterMap::new(),
                         is_solved: false,
                         event_time: None,
                     })
@@ -197,7 +197,7 @@ impl PrimalModuleParallel {
                 .collect_into_vec(&mut units);
         });
 
-        // we need to fill in the BTreeMap of adjacent_parallel_units
+        // we need to fill in the FastIterMap of adjacent_parallel_units
         // we need to fill in the adjacent_parallel_units here
         for unit_index in 0..partition_info.units.len() {
             // println!("for unit {:?}", unit_index);
@@ -431,13 +431,13 @@ impl PrimalModuleParallelUnitPtr {
             } else {
                 let adjacent_unit_ptr = adjacent_unit_weak.upgrade_force();
                 let mut adjacent_unit = adjacent_unit_ptr.write();
-                if let Some(is_fused_with_self) = adjacent_unit.adjacent_parallel_units.get_mut(&self.downgrade()) {
+                if let Some(mut is_fused_with_self) = adjacent_unit.adjacent_parallel_units.get_mut(&self.downgrade()) {
                     *is_fused_with_self = true;
                 } else {
                     panic!("this adjacent unit does not have self as its adjacent unit, check new_config");
                 }
 
-                // after setting the bool in BTreeMap of PrimalModuleParallelUnit, we need to add the corresponding DualModuleParallelUnit
+                // after setting the bool in FastIterMap of PrimalModuleParallelUnit, we need to add the corresponding DualModuleParallelUnit
                 let adjacent_dual_unit_ptr = &parallel_dual_module.units[adjacent_unit.unit_index];
                 let mut adjacent_dual_unit = adjacent_dual_unit_ptr.write();
                 adjacent_dual_unit.adjacent_parallel_units.push(self_dual_ptr.downgrade());
@@ -717,7 +717,7 @@ impl PrimalModuleParallelUnit {
             interface_ptr,
             partition_info: partition_info.clone(),
             serial_module: primal_module,
-            adjacent_parallel_units: BTreeMap::new(), // to be initalized/filled in later
+            adjacent_parallel_units: FastIterMap::new(), // to be initalized/filled in later
             is_solved: false,
             event_time: None,
         }
@@ -1082,7 +1082,7 @@ impl PrimalModuleParallel {
 
 impl PrimalModuleImpl for PrimalModuleParallel {
     /// create a primal module given the dual module
-    fn new_empty(_solver_initializer: &SolverInitializer) -> Self {
+    fn new_empty(_solver_initializer: &Arc<SolverInitializer>) -> Self {
         // use new_config directly instead
         unimplemented!()
         // Self::new_config(
@@ -1127,10 +1127,10 @@ impl PrimalModuleImpl for PrimalModuleParallel {
     /// resolve the conflicts in the "tune" mode
     fn resolve_tune(
         &mut self,
-        _obstacles: BTreeSet<Obstacle>,
+        _obstacles: FastIterSet<Obstacle>,
         _interface: &DualModuleInterfacePtr,
         _dual_module: &mut impl DualModuleImpl,
-    ) -> (BTreeSet<Obstacle>, bool) {
+    ) -> (FastIterSet<Obstacle>, bool) {
         panic!("`resolve_tune` not implemented, this primal module does not work with tuning mode");
     }
 
@@ -1261,7 +1261,7 @@ impl PrimalModuleImpl for PrimalModuleParallel {
 impl PrimalModuleImpl for PrimalModuleParallelUnit {
     /// create a primal module given the dual module
     /// this function needs to be implemented for dynamic fusion
-    fn new_empty(_solver_initializer: &SolverInitializer) -> Self {
+    fn new_empty(_solver_initializer: &Arc<SolverInitializer>) -> Self {
         // we need this to create primal_module for newly (additionally) added unit
         panic!("creating parallel unit directly from initializer is forbidden, use `PrimalModuleParallel::new` instead");
     }
@@ -1295,10 +1295,10 @@ impl PrimalModuleImpl for PrimalModuleParallelUnit {
     /// resolve the conflicts in the "tune" mode
     fn resolve_tune(
         &mut self,
-        dual_report: BTreeSet<Obstacle>,
+        dual_report: FastIterSet<Obstacle>,
         interface_ptr: &DualModuleInterfacePtr,
         dual_module: &mut impl DualModuleImpl,
-    ) -> (BTreeSet<Obstacle>, bool) {
+    ) -> (FastIterSet<Obstacle>, bool) {
         self.serial_module.resolve_tune(dual_report, interface_ptr, dual_module)
     }
 
@@ -1392,7 +1392,7 @@ pub mod tests {
         let a = partition_config.dag_partition_units.add_node(());
         let b = partition_config.dag_partition_units.add_node(());
         partition_config.dag_partition_units.add_edge(a, b, false);
-        partition_config.defect_vertices = BTreeSet::from_iter(defect_vertices.clone());
+        partition_config.defect_vertices = FastIterSet::from_iter(defect_vertices.clone());
 
         let partition_info = partition_config.info();
 
@@ -1665,7 +1665,7 @@ pub mod tests {
         partition_config.dag_partition_units.add_edge(b, c, false);
         partition_config.dag_partition_units.add_edge(c, d, false);
 
-        partition_config.defect_vertices = BTreeSet::from_iter(defect_vertices.clone());
+        partition_config.defect_vertices = FastIterSet::from_iter(defect_vertices.clone());
 
         let partition_info = partition_config.info();
 
@@ -1823,7 +1823,7 @@ pub mod tests {
                     .add_edge(graph_nodes[i], graph_nodes[i + 1], false);
             }
         }
-        partition_config.defect_vertices = BTreeSet::from_iter(defect_vertices.clone());
+        partition_config.defect_vertices = FastIterSet::from_iter(defect_vertices.clone());
 
         (partition_config, no_per_layer)
     }
@@ -2082,7 +2082,7 @@ pub mod tests {
     //     let a = partition_config.dag_partition_units.add_node(());
     //     let b = partition_config.dag_partition_units.add_node(());
     //     partition_config.dag_partition_units.add_edge(a, b, false);
-    //     partition_config.defect_vertices = BTreeSet::from_iter(defect_vertices.clone());
+    //     partition_config.defect_vertices = FastIterSet::from_iter(defect_vertices.clone());
     //     let partition_info = partition_config.info();
     //     let mut dual_module_parallel_config = DualModuleParallelConfig::default();
     //     // dual_module_parallel_config.enable_parallel_execution = true;
@@ -2102,7 +2102,7 @@ pub mod tests {
     //     new_partition_config.fusions = vec![
     //                 (0, 1), // fuse self (this additional unit) with unit_index 1 in the original unit
     //     ];
-    //     new_partition_config.defect_vertices = BTreeSet::from_iter(new_defect_vertices.clone());
+    //     new_partition_config.defect_vertices = FastIterSet::from_iter(new_defect_vertices.clone());
     //     let new_boundary_vertices = VertexRange::new(0, 10); // need to check this
     //     let new_partition_info = new_partition_config.info_seperate(3, new_boundary_vertices);
     //     let mut new_dual_module_parallel_config = DualModuleParallelConfig::default();
@@ -2286,7 +2286,7 @@ pub mod tests {
     //     new_partition_config.fusions = vec![
     //                 (0, 1), // fuse self (this additional unit) with unit_index 1 in the original unit
     //     ];
-    //     new_partition_config.defect_vertices = BTreeSet::from_iter(new_defect_vertices.clone());
+    //     new_partition_config.defect_vertices = FastIterSet::from_iter(new_defect_vertices.clone());
     //     let new_boundary_vertices = VertexRange::new(0, 10); // need to check this
     //     let new_partition_info = new_partition_config.info_seperate(3, new_boundary_vertices);
     //     let mut new_dual_module_parallel_config = DualModuleParallelConfig::default();

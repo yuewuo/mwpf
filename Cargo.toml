@@ -99,7 +99,7 @@ qecp = { version = "0.2.5", optional = true, default-features = false }
 serde_variant = "0.1.3"
 priority-queue = "2.1.2"
 heapz = { path = "src/heapz" }
-hashbrown = { version = "0.15.2", features = ["serde"]}
+hashbrown = { version = "0.15.2", features = ["serde"] }
 pheap = { path = "src/pheap" }
 tempfile = "3.17.1"
 flate2 = "1.0.35"
@@ -112,7 +112,6 @@ rayon = "1.10.0"
 petgraph = { version = "0.6.0", features = ["serde-1"] }
 core_affinity = "0.8.1"
 weak-table = "0.3.2"
-
 
 
 [dev-dependencies]

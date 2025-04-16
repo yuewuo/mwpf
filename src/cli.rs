@@ -24,7 +24,7 @@ use rand::RngCore;
 use rand::{thread_rng, Rng, SeedableRng};
 use serde::Serialize;
 use serde_variant::to_variant_name;
-use std::collections::BTreeSet;
+
 use std::env;
 use std::sync::Arc;
 use std::usize::MAX;
@@ -484,7 +484,7 @@ pub fn graph_time_partition(
                 .add_edge(graph_nodes[i], graph_nodes[i + 1], false);
         }
     }
-    // partition_config.defect_vertices = BTreeSet::from_iter(defect_vertices.clone()); // this can be set outside of this function
+    // partition_config.defect_vertices = FastIterSet::from_iter(defect_vertices.clone()); // this can be set outside of this function
 
     partition_config
 }
@@ -566,7 +566,7 @@ impl Cli {
                     let (syndrome_pattern, error_pattern) = code.generate_random_errors(seed);
                     if split_num > 0 {
                         // partition_config = graph_time_partition(&initializer, &code.get_positions(), split_num);
-                        partition_config.defect_vertices = BTreeSet::from_iter(syndrome_pattern.defect_vertices.clone());
+                        partition_config.defect_vertices = FastIterSet::from_iter(syndrome_pattern.defect_vertices.clone());
                         partition_info = partition_config.info();
                     }
 
@@ -626,7 +626,7 @@ impl Cli {
 
                     if split_num > 0 {
                         // partition_config = graph_time_partition(&initializer, &code.get_positions(), &syndrome_pattern.defect_vertices, split_num);
-                        partition_config.defect_vertices = BTreeSet::from_iter(syndrome_pattern.defect_vertices.clone());
+                        partition_config.defect_vertices = FastIterSet::from_iter(syndrome_pattern.defect_vertices.clone());
                         partition_info = partition_config.info();
                     }
 
