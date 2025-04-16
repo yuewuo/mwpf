@@ -54,3 +54,9 @@ misc/
 src/python/**/*.so
 vite.config.ts.timestamp-*.mjs
 tmp_*
+
+# python venv
+.venv/
+
+# debug
+debug/
