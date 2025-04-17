@@ -287,6 +287,8 @@ where
             let mut boundary_vertices_adjacent_units_index: HashMap<usize, Vec<usize>> = HashMap::new(); // key: unit_index; value: all vertex indices belong to this unit
             let mut exist_boundary_vertex = false;
             let mut exist_boundary_unit_index = 0;
+            // println!("\nprinting out hyperedges for edge_index: {edge_index}:");
+            // println!("hyper_edge: {hyper_edge:?}");
             for vertex_index in hyper_edge.vertices.iter() {
                 let unit_index = partition_info.vertex_to_owning_unit.get(vertex_index).unwrap();
                 let unit = &partition_info.units[*unit_index];
@@ -304,9 +306,7 @@ where
                     if let Some(x) = vertices_unit_indices.get_mut(unit_index) {
                         x.push(*vertex_index);
                     } else {
-                        let mut vertices = vec![];
-                        vertices.push(*vertex_index);
-                        vertices_unit_indices.insert(*unit_index, vertices.clone());
+                        vertices_unit_indices.insert(*unit_index, vec![*vertex_index]);
                     }
                 }
             }
@@ -1166,7 +1166,7 @@ where
     }
 
     fn get_edge_weight(&self, edge_ptr: EdgePtr) -> Rational {
-        unimplemented!()
+        edge_ptr.read_recursive().weight.clone()
     }
 
     #[cfg(feature = "incr_lp")]
