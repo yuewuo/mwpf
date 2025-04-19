@@ -40,7 +40,7 @@ rustc-ice*
 # visualizer files
 /*.json
 
-/docs/
+# /docs/
 /tutorial-dist/
 
 *-uncompressed.png
