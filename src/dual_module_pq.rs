@@ -802,28 +802,29 @@ where
 
     /* affinity */
     fn calculate_cluster_affinity(&mut self, cluster: PrimalClusterPtr) -> Option<Affinity> {
-        let mut start = 0.0;
+        let mut cluster_size = 0.0f64;
         let cluster = cluster.read_recursive();
-        start -= cluster.edges.len() as f64 + cluster.nodes.len() as f64;
-        let global_time = self.global_time.read_recursive().clone();
+        cluster_size += cluster.edges.len() as f64 + cluster.nodes.len() as f64 + 1.0;
 
-        let mut weight = Rational::zero();
+        // It is important to use rational number here because when it's 0, the cluster is considered solved
+        let mut primal_dual_gap = Rational::zero();
+        let global_time = self.global_time.read_recursive().clone();
         for &edge_index in cluster.edges.iter() {
             let edge_ptr = self.edges[edge_index].read_recursive();
-            weight +=
+            primal_dual_gap -=
                 &edge_ptr.growth_at_last_updated_time + (&global_time - &edge_ptr.last_updated_time) * &edge_ptr.grow_rate;
         }
         for node in cluster.nodes.iter() {
             let dual_node = node.read_recursive().dual_node_ptr.clone();
             let dual_node_read_ptr = dual_node.read_recursive();
-            weight -= &dual_node_read_ptr.dual_variable_at_last_updated_time
+            primal_dual_gap += &dual_node_read_ptr.dual_variable_at_last_updated_time
                 + (&global_time - &dual_node_read_ptr.last_updated_time) * &dual_node_read_ptr.grow_rate;
         }
-        if weight.is_zero() {
+        if primal_dual_gap.is_zero() {
             return None;
         }
-        start += weight.to_f64().unwrap();
-        Some(Affinity::from(start))
+        // sort prefers smaller value, so we need to flip the sign
+        Some(Affinity::from(-primal_dual_gap.to_f64().unwrap() / cluster_size.powi(3)))
     }
 
     fn get_edge_free_weight(
