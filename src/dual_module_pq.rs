@@ -809,16 +809,17 @@ where
         // It is important to use rational number here because when it's 0, the cluster is considered solved
         let mut primal_dual_gap = Rational::zero();
         let global_time = self.global_time.read_recursive().clone();
-        for &edge_index in cluster.edges.iter() {
-            let edge_ptr = self.edges[edge_index].read_recursive();
-            primal_dual_gap -=
-                &edge_ptr.growth_at_last_updated_time + (&global_time - &edge_ptr.last_updated_time) * &edge_ptr.grow_rate;
-        }
         for node in cluster.nodes.iter() {
             let dual_node = node.read_recursive().dual_node_ptr.clone();
             let dual_node_read_ptr = dual_node.read_recursive();
             primal_dual_gap += &dual_node_read_ptr.dual_variable_at_last_updated_time
                 + (&global_time - &dual_node_read_ptr.last_updated_time) * &dual_node_read_ptr.grow_rate;
+        }
+        if let Some(subgraph) = cluster.subgraph.as_ref() {
+            for &edge_index in subgraph.iter() {
+                let edge_ptr = self.edges[edge_index].read_recursive();
+                primal_dual_gap -= &edge_ptr.weight;
+            }
         }
         if primal_dual_gap.is_zero() {
             return None;

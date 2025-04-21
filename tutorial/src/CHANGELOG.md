@@ -80,3 +80,4 @@ exposed `hyperion_exposed` variable in visualization tool so that user can progr
 
 - add `config_setters` in frontend configuration for more flexible config
 - add svg download for parity matrix visualization
+- fix the priority calculation of the clusters 
