@@ -124,6 +124,15 @@ macro_rules! bind_trait_to_python {
                 let invalid_subgraph = Arc::new(self.py_construct_invalid_subgraph(vertices, edges)?);
                 Ok(self.0.interface_ptr.find_node(&invalid_subgraph).map(|x| x.into()))
             }
+            #[pyo3(name = "sanity_check_node", signature = (node))]
+            pub fn py_sanity_check_node(&self, node: PyDualNodePtr) {
+                let interface = self.0.interface_ptr.read_recursive();
+                node.0
+                    .read_recursive()
+                    .invalid_subgraph
+                    .sanity_check(&interface.decoding_graph)
+                    .unwrap();
+            }
             #[pyo3(name = "create_node", signature = (vertices=None, edges=None, find_existing_node=true))]
             pub fn py_create_node(
                 &mut self,

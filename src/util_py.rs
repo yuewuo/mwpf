@@ -433,6 +433,9 @@ bind_trait_simple_wrapper!(Subgraph, PySubgraph);
 
 #[pymethods]
 impl PySubgraph {
+    fn __len__(&self) -> usize {
+        self.0.len()
+    }
     fn __iter__(slf: PyRef<Self>) -> PyResult<Py<PySubgraphIter>> {
         let iter = PySubgraphIter {
             inner: slf.0.clone().into_iter(),
@@ -644,6 +647,67 @@ macro_rules! bind_trait_matrix_echelon {
             }
             fn get_corner_row_index(&mut self, tail_start_index: ColumnIndex) -> RowIndex {
                 self.0.get_corner_row_index(tail_start_index)
+            }
+            /// return the number of feasible solutions
+            fn __len__(&mut self) -> usize {
+                let num_free_variables = self
+                    .0
+                    .get_echelon_info()
+                    .columns
+                    .iter()
+                    .filter(|column| !column.is_dependent())
+                    .count();
+                assert!(num_free_variables < 63, "number of free variables is too large");
+                1 << num_free_variables
+            }
+            /// get the proper number of feasible solutions
+            fn __getitem__(&mut self, index: usize) -> PyResult<PySubgraph> {
+                use crate::itertools::Itertools;
+                let echelon_info = self.0.get_echelon_info().clone();
+                let free_variables: Vec<usize> = echelon_info
+                    .columns
+                    .iter()
+                    .enumerate()
+                    .filter(|(_ci, column)| !column.is_dependent())
+                    .map(|(ci, _)| ci)
+                    .collect();
+                assert!(free_variables.len() < 63, "number of free variables is too large");
+                if index >= (1 << free_variables.len()) {
+                    return Err(pyo3::exceptions::PyIndexError::new_err(format!(
+                        "index out of range: {}",
+                        index
+                    )));
+                }
+                let mut selected_free_variables = hashbrown::HashSet::new();
+                for fi in 0..free_variables.len() {
+                    let ci = free_variables[fi];
+                    if ((index >> (free_variables.len() - 1 - fi)) & 1) == 1 {
+                        selected_free_variables.insert(ci);
+                    }
+                }
+                let mut selected_pivot_variables = vec![];
+                for (ci, column) in echelon_info.columns.iter().enumerate() {
+                    if !column.is_dependent() {
+                        continue;
+                    }
+                    let ri = column.row;
+                    let mut parity = self.0.get_rhs(ri);
+                    for ci2 in ci + 1..self.0.columns() {
+                        if self.0.get_lhs(ri, self.0.column_to_var_index(ci2)) {
+                            parity ^= selected_free_variables.contains(&ci2);
+                        }
+                    }
+                    if parity {
+                        selected_pivot_variables.push(ci);
+                    }
+                }
+                let subgraph: Vec<EdgeIndex> = selected_free_variables
+                    .into_iter()
+                    .chain(selected_pivot_variables.into_iter())
+                    .map(|ci| self.0.column_to_edge_index(ci))
+                    .sorted()
+                    .collect();
+                Ok(subgraph.into())
             }
         }
     };
