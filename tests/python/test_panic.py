@@ -14,13 +14,14 @@ def test_basic_panic():
         positions=[mwpf.VisualizePosition(0, 0, 0), mwpf.VisualizePosition(1, 0, 0)]
     )
     syndrome = mwpf.SyndromePattern([0])
-    solver.solve(syndrome, visualizer)  # unsolvable, and should panic
-
-    visualizer.save_html(
-        os.path.join(os.path.dirname(__file__), f"test_basic_panic.html")
-    )
     try:
         try:
+            solver.solve(syndrome, visualizer)  # unsolvable, and should panic
+
+            visualizer.save_html(
+                os.path.join(os.path.dirname(__file__), f"test_basic_panic.html")
+            )
+
             solver.subgraph()
         except BaseException as panic:
             raise ValueError(mwpf.panic_text_of(solver, syndrome)) from panic
