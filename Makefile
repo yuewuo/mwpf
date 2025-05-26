@@ -65,6 +65,10 @@ install-py:
 
 	RUSTFLAGS="-C target-cpu=native" pip install .
 
+	python3 pyproject-patch.py fast apply
+	RUSTFLAGS="-C target-cpu=native" pip install .
+	python3 pyproject-patch.py fast revert
+
 	python3 pyproject-patch.py rational apply
 	RUSTFLAGS="-C target-cpu=native" pip install .
 	python3 pyproject-patch.py rational revert
@@ -73,9 +77,6 @@ install-py:
 	RUSTFLAGS="-C target-cpu=native" pip install .
 	python3 pyproject-patch.py incr revert
 
-	python3 pyproject-patch.py fast apply
-	RUSTFLAGS="-C target-cpu=native" pip install .
-	python3 pyproject-patch.py fast revert
 
 uninstall-py:
 	pip uninstall mwpf mwpf_rational mwpf_incr mwpf_fast -y

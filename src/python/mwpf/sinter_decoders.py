@@ -412,7 +412,7 @@ def decode_common(
     bp_weight_mix_ratio: float,
     floor_weight: Optional[float],
     bp_converge: bool = True,
-):
+) -> int:
     syndrome = predictor.syndrome_of(dets_bit_packed)
     if solver is None:
         if benchmark_suite is not None:

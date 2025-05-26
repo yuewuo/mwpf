@@ -631,10 +631,10 @@ where
 
     /// for pq implementation, simply updating the global time is enough, could be part of the `report` function
     fn grow(&mut self, length: Rational) {
-        if length.is_negative() {
-            println!("{:?}", self.obstacle_queue);
-        }
-        assert!(
+        // if length.is_negative() {
+        //     println!("{:?}", self.obstacle_queue);
+        // }
+        debug_assert!(
             length.is_positive(),
             "growth should be positive; if desired, please set grow rate to negative for shrinking"
         );

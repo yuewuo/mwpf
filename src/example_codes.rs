@@ -1166,6 +1166,11 @@ impl QECPlaygroundCode {
     fn set_edges(&mut self, edges: Vec<CodeEdge>) {
         self.edges = edges;
     }
+    #[new]
+    #[pyo3(signature = (d, p, config))]
+    fn py_new(d: VertexNum, p: f64, config: &Bound<PyAny>) -> Self {
+        Self::new(d, p, serde_json::from_value(pyobject_to_json_locked(config)).unwrap())
+    }
 }
 
 #[cfg(feature = "qecp_integrate")]
@@ -1502,6 +1507,7 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<CodeCapacityTailoredCode>()?;
     m.add_class::<CodeCapacityColorCode>()?;
     m.add_class::<CodeCapacityDepolarizePlanarCode>()?;
+    m.add_class::<QECPlaygroundCode>()?;
     Ok(())
 }
 
