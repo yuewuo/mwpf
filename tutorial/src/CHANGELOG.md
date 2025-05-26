@@ -81,3 +81,4 @@ exposed `hyperion_exposed` variable in visualization tool so that user can progr
 - add `config_setters` in frontend configuration for more flexible config
 - add svg download for parity matrix visualization
 - fix the priority calculation of the clusters 
+- changed `grow` function check on the positive length to debug only, due to numerical errors in floating points
