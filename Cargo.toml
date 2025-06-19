@@ -36,13 +36,7 @@ debug = true
 
 [features]
 # to enable a feature, use `--features xxx`
-default = [
-    "f64_weight",
-    "qecp_integrate",
-    "embed_visualizer",
-    "progress_bar",
-    "fast_ds",
-]
+default = ["rational_weight", "qecp_integrate", "embed_visualizer"]
 f64_weight = ["float_lp"] # use f64 instead of BigRational as weight type
 rational_weight = ["slp"]
 slp = [] # placeholder feature; the src/slp dependency is always included
@@ -91,7 +85,7 @@ getrandom = { version = "0.2.15", features = ["js"] }
 wasm-bindgen = { version = "0.2.100", optional = true }
 lazy_static = "1.4.0"
 slp = { path = "src/slp" }
-highs = { path = "src/highs" }
+# highs = { path = "src/highs" }
 sugar = "0.2.0"
 maplit = "1.0.2"
 qecp = { version = "0.2.5", optional = true, default-features = false }
