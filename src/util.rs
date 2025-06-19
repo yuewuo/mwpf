@@ -3,7 +3,7 @@ use crate::fast_ds;
 use crate::mwpf_solver::*;
 #[cfg(not(feature = "float_lp"))]
 use crate::num_rational;
-use crate::num_traits::{FromPrimitive, ToPrimitive};
+use crate::num_traits::{FromPrimitive, One, ToPrimitive};
 use crate::rand_xoshiro;
 use crate::rand_xoshiro::rand_core::RngCore;
 #[cfg(feature = "python_binding")]
@@ -114,6 +114,7 @@ pub struct HyperEdge {
     /// the vertices incident to the hyperedge
     pub vertices: Vec<VertexIndex>,
     /// the weight of the hyperedge
+    #[serde(default = "Weight::one")]
     pub weight: Weight,
 }
 
