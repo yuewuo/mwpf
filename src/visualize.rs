@@ -42,10 +42,13 @@ pub use bind_trait_mwpf_visualizer;
 #[cfg_attr(feature = "python_binding", pyclass(module = "mwpf", get_all, set_all))]
 pub struct VisualizePosition {
     /// vertical axis, -i is up, +i is down (left-up corner is smallest i,j)
+    #[serde(default = "Default::default")]
     pub i: f64,
     /// horizontal axis, -j is left, +j is right (left-up corner is smallest i,j)
+    #[serde(default = "Default::default")]
     pub j: f64,
     /// time axis, top and bottom (orthogonal to the initial view, which looks at -t direction)
+    #[serde(default = "Default::default")]
     pub t: f64,
 }
 

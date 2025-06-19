@@ -170,6 +170,7 @@ pub struct SolverInitializer {
     /// conditional edge sets; when the heralded detector is one, this specified edges will update
     /// their weight as if these additional errors could be happening (see `compose_weight` function).
     /// note that in case rational number is used, this method only guarantees f64 accuracy
+    #[serde(default = "Default::default")]
     pub heralds: Vec<Vec<(EdgeIndex, Weight)>>,
 }
 
@@ -445,11 +446,14 @@ pub struct SyndromePattern {
     /// the vertices corresponding to defect measurements
     pub defect_vertices: Vec<VertexIndex>,
     /// the edges that experience erasures, i.e. known errors
+    #[serde(default = "Default::default")]
     pub erasures: Vec<EdgeIndex>,
     /// the heralded weighted edges index
+    #[serde(default = "Default::default")]
     pub heralds: Vec<HeraldIndex>,
     /// a set of new weights that are mixed with existing weights; this will override
     /// the weight changes of erasures and heralds
+    #[serde(default = "Default::default")]
     pub override_weights: Option<(Vec<Weight>, Weight, Option<Weight>)>,
 }
 
