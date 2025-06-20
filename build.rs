@@ -21,22 +21,22 @@ fn main() {
             }
         }
 
-        if std::env::var("SKIP_FRONTEND_BUILD").is_err() {
-            assert!(std::process::Command::new("npm")
-                .current_dir("./visualize")
-                .arg("install")
-                .arg("--include=dev")
-                .status()
-                .expect("npm install failed")
-                .success());
+        // if std::env::var("SKIP_FRONTEND_BUILD").is_err() {
+        assert!(std::process::Command::new("npm")
+            .current_dir("./visualize")
+            .arg("install")
+            .arg("--include=dev")
+            .status()
+            .expect("npm install failed")
+            .success());
 
-            assert!(std::process::Command::new("npm")
-                .current_dir("./visualize")
-                .arg("run")
-                .arg("build")
-                .status()
-                .expect("npm build failed")
-                .success());
-        }
+        assert!(std::process::Command::new("npm")
+            .current_dir("./visualize")
+            .arg("run")
+            .arg("build")
+            .status()
+            .expect("npm build failed")
+            .success());
+        // }
     }
 }
