@@ -509,8 +509,14 @@ impl Visualizer {
         self.snapshot_value(name, value)
     }
 
-    #[pyo3(name = "show", signature = (override_config = None, *, snapshot_index=None))]
-    pub fn show_py(&mut self, override_config: Option<PyObject>, snapshot_index: Option<usize>) {
+    #[pyo3(name = "show", signature = (override_config = None, *, snapshot_index=None, width=None, height=None))]
+    pub fn show_py(
+        &mut self,
+        override_config: Option<PyObject>,
+        snapshot_index: Option<usize>,
+        width: Option<String>,
+        height: Option<String>,
+    ) {
         let mut override_config = if let Some(override_config) = override_config {
             pyobject_to_json(override_config)
         } else {
@@ -522,7 +528,7 @@ impl Visualizer {
                 .unwrap()
                 .insert("snapshot_index".to_string(), json!(snapshot_index));
         }
-        HTMLExport::display_jupyter_html(self.get_visualizer_data(), override_config);
+        HTMLExport::display_jupyter_html(self.get_visualizer_data(), override_config, width, height);
     }
 
     #[pyo3(name = "get_visualizer_data")]

@@ -233,11 +233,18 @@ macro_rules! bind_trait_to_python {
             }
             /// a shortcut for creating a visualizer to display the current state of the solver
             #[pyo3(name = "show")]
-            fn py_show(&self, py: Python<'_>, positions: Vec<VisualizePosition>) {
+            #[pyo3(signature = (positions, width=None, height=None))]
+            fn py_show(
+                &self,
+                py: Python<'_>,
+                positions: Vec<VisualizePosition>,
+                width: Option<String>,
+                height: Option<String>,
+            ) {
                 py.allow_threads(move || {
                     let mut visualizer = Visualizer::new(Some(String::new()), positions, true).unwrap();
                     visualizer.snapshot("show".to_string(), &self.0).unwrap();
-                    visualizer.show_py(None, None);
+                    visualizer.show_py(None, None, width, height);
                 });
             }
             #[pyo3(name = "get_initializer")]
@@ -1033,7 +1040,8 @@ impl SolverBPWrapper {
     }
     /// a shortcut for creating a visualizer to display the current state of the solver
     #[pyo3(name = "show")]
-    fn py_show(&self, positions: Vec<VisualizePosition>) {
+    #[pyo3(signature = (positions, width=None, height=None))]
+    fn py_show(&self, positions: Vec<VisualizePosition>, width: Option<String>, height: Option<String>) {
         // NOTE: removed multiple threads for showing, since bp is `unsendable`, but should not be performance hit during actual runs
         let mut visualizer = Visualizer::new(Some(String::new()), positions, true).unwrap();
         visualizer
@@ -1049,7 +1057,7 @@ impl SolverBPWrapper {
                 },
             )
             .unwrap();
-        visualizer.show_py(None, None);
+        visualizer.show_py(None, None, width, height);
     }
     #[pyo3(name = "get_initializer")]
     fn py_get_initializer(&self) -> SolverInitializer {

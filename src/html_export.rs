@@ -157,7 +157,12 @@ impl HTMLExport {
     }
 
     #[cfg(feature = "python_binding")]
-    pub fn display_jupyter_html(visualizer_data: serde_json::Value, mut override_config: serde_json::Value) {
+    pub fn display_jupyter_html(
+        visualizer_data: serde_json::Value,
+        mut override_config: serde_json::Value,
+        width: Option<String>,
+        height: Option<String>,
+    ) {
         let template_html =
             Self::get_template_html().expect("template html not available, please rebuild with `embed_visualizer` feature");
         // if the hyperion_visual library is not loaded yet, load it
@@ -171,7 +176,9 @@ impl HTMLExport {
             let one_char = || CHARSET[rng.gen_range(0..CHARSET.len())] as char;
             std::iter::repeat_with(one_char).take(16).collect()
         };
-        let div_block = format!(r#"<div id="{div_id}" style="width: auto; height: min(max(60vh, 400px), 100vw);"></div>"#);
+        let width_str = width.unwrap_or_else(|| "auto".to_string());
+        let height_str = height.unwrap_or_else(|| "min(max(60vh, 400px), 100vw)".to_string());
+        let div_block = format!(r#"<div id="{div_id}" style="width: {width_str}; height: {height_str};"></div>"#);
         Python::with_gil(|py| -> PyResult<()> {
             let display = PyModule::import(py, "IPython.display")?;
             display.call_method1("display", (display.call_method1("HTML", (div_block,))?,))?;
@@ -394,8 +401,13 @@ impl HTMLExport {
     }
 
     #[staticmethod]
-    #[pyo3(name = "display_jupyter_html", signature = (visualizer_data, override_config = None))]
-    pub fn display_jupyter_html_py(visualizer_data: PyObject, override_config: Option<PyObject>) -> std::io::Result<()> {
+    #[pyo3(name = "display_jupyter_html", signature = (visualizer_data, override_config = None, width = None, height = None))]
+    pub fn display_jupyter_html_py(
+        visualizer_data: PyObject,
+        override_config: Option<PyObject>,
+        width: Option<String>,
+        height: Option<String>,
+    ) -> std::io::Result<()> {
         let visualizer_data = pyobject_to_json(visualizer_data);
         let override_config = if let Some(override_config) = override_config {
             pyobject_to_json(override_config)
@@ -404,7 +416,7 @@ impl HTMLExport {
         };
         cfg_if::cfg_if! {
             if #[cfg(feature="embed_visualizer")] {
-                Self::display_jupyter_html(visualizer_data, override_config);
+                Self::display_jupyter_html(visualizer_data, override_config, width, height);
                 Ok(())
             } else {
                 Err(std::io::Error::new(std::io::ErrorKind::Other, "feature `embed_visualizer` is not enabled"))
