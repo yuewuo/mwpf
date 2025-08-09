@@ -3,7 +3,12 @@
 
 [![Unitary Fund](https://img.shields.io/badge/Supported%20By-UNITARY%20FUND-brightgreen.svg?style=for-the-badge)](https://unitary.fund)
 
-*Preview claim: We publish the Python package that may subject to breaking changes. The source code and the full version will be made publicly available with our coming paper.*
+The paper is available at [https://arxiv.org/abs/2508.04969](https://arxiv.org/abs/2508.04969).
+
+We also provide a web page that allows people to play with some QEC codes, noise models and their decoding processes.
+[Check it out here (https://mwpf.dev)](https://mwpf.dev).
+
+[<img src="./tutorial/src/app.png" width="20%" align="center">](https://mwpf.dev)
 
 Hypergraph MWPF is proven to be **NP-hard** [1]. Our design is taking advantage of clustering technique to lower
 the **average** time complexity and reach **almost-linear** average time complexity at small physical error rate.
