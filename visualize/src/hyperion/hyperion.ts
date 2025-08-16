@@ -177,6 +177,7 @@ export function clickable_of (intersect: Intersection | undefined): any {
 export class ConfigProps {
     show_config: boolean = true
     show_info: boolean = true
+    show_nav: boolean = true
     full_screen: boolean = false
     segments: number = 32
     visualizer_config: any = undefined

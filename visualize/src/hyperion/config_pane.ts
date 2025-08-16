@@ -387,6 +387,7 @@ export class BasicConfig {
     light_intensity: number = 3
     segments: number
     show_stats: boolean = false
+    show_nav: boolean = true
     config_props: ConfigProps
 
     constructor (config_props: ConfigProps) {
@@ -395,6 +396,7 @@ export class BasicConfig {
             this.aspect_ratio = config_props.initial_aspect_ratio
         }
         this.segments = config_props.segments
+        this.show_nav = config_props.show_nav
     }
 
     add_to (pane: FolderApi): void {
@@ -404,6 +406,7 @@ export class BasicConfig {
         pane.addBinding(this, 'selected_color')
         pane.addBinding(this, 'light_intensity', { min: 0.1, max: 10 })
         pane.addBinding(this, 'show_stats')
+        pane.addBinding(this, 'show_nav')
         pane.addBinding(this, 'segments', { step: 1, min: 3, max: 128 })
     }
 }

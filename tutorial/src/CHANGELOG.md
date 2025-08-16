@@ -82,3 +82,8 @@ exposed `hyperion_exposed` variable in visualization tool so that user can progr
 - add svg download for parity matrix visualization
 - fix the priority calculation of the clusters 
 - changed `grow` function check on the positive length to debug only, due to numerical errors in floating points
+
+## 0.2.11 - 2025-08-16
+
+- optimize Jupyter widget: now allow adjusting width and height via Python code
+- optimize visualizer: show buttons on the bottom for easier navigation on phone

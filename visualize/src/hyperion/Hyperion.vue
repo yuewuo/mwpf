@@ -227,6 +227,20 @@ function onKeyDown(event: KeyboardEvent) {
     }
 }
 
+function navigateBack() {
+    if (config.value.snapshot_index > 0) {
+        config.value.snapshot_index -= 1
+        config.value.pane.refresh()
+    }
+}
+
+function navigateForward() {
+    if (config.value.snapshot_index < config.value.snapshot_num - 1) {
+        config.value.snapshot_index += 1
+        config.value.pane.refresh()
+    }
+}
+
 function onMouseChange(event: MouseEvent, is_click: boolean = true) {
     const canvas: HTMLElement = (renderer.value as any).canvas
     const rect = canvas.getBoundingClientRect()
@@ -257,6 +271,14 @@ function onMouseChange(event: MouseEvent, is_click: boolean = true) {
         <!-- placeholder for controller pane container -->
         <div v-show="show_info" ref="container_info_ref" class="info-container"></div>
         <div v-show="show_config" ref="container_config_ref" class="config-container"></div>
+        <div v-show="config.basic.show_nav" class="nav-container">
+            <button class="nav-button nav-button-left" @click="navigateBack">
+                <span class="arrow">←</span>
+            </button>
+            <button class="nav-button nav-button-right" @click="navigateForward">
+                <span class="arrow">→</span>
+            </button>
+        </div>
 
         <Renderer ref="renderer_ref" :width="width + 'px'" :height="height + 'px'" :orbit-ctrl="true" :params="renderer_params">
             <OrthographicCamera
@@ -301,5 +323,46 @@ function onMouseChange(event: MouseEvent, is_click: boolean = true) {
     width: 400px;
     padding: 0;
     margin: 0;
+}
+
+.nav-container {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.nav-button {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: none;
+    background-color: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    font-size: 18px;
+    color: rgba(0, 0, 0, 0.4);
+}
+
+.nav-button:hover {
+    background-color: rgba(255, 255, 255, 0.9);
+    transform: scale(1.05);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+.nav-button:active {
+    transform: scale(0.95);
+}
+
+.arrow {
+    font-weight: bold;
+    line-height: 1;
 }
 </style>
