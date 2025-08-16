@@ -56,7 +56,7 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: nightly-2024-11-03
+          toolchain: stable
           override: true
 
       - name: Install NodeJs
@@ -108,7 +108,7 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
             elif command -v apk > /dev/null;
               then apk add clang17-libclang;
             fi &&
-            curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain=nightly-2024-11-03 --profile=minimal -y &&
+            curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain=stable --profile=minimal -y &&
             . "$HOME/.cargo/env" &&
             rustup show
 
@@ -173,7 +173,7 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: nightly-2024-11-03
+          toolchain: stable
           override: true
 
       - name: Install NodeJs
