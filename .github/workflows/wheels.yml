@@ -172,7 +172,7 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
-          profile: minimal
+          # profile: minimal
           toolchain: stable
           override: true
 
@@ -189,7 +189,8 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
         run: make ci_rust_test
         env:
           SKIP_FRONTEND_BUILD: "1"
-          RUSTFLAGS: -C target-cpu=native
+          # RUSTFLAGS: -C target-cpu=native
+          RUSTFLAGS: -C target-feature=+aes
 
   publish-to-pypi:
     name: >-
