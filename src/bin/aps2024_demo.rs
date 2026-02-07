@@ -12,6 +12,7 @@ use mwpf::primal_module::*;
 use mwpf::primal_module_serial::*;
 use mwpf::util::*;
 use mwpf::visualize::*;
+use mwpf::pointers::*;
 use num_traits::{FromPrimitive, Zero};
 #[cfg(feature = "progress_bar")]
 use pbr::ProgressBar;

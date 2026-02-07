@@ -17,6 +17,7 @@ use crate::primal_module::*;
 use crate::primal_module_serial::*;
 use crate::util::*;
 use crate::visualize::*;
+use crate::pointers::*;
 
 use bp::bp::BpDecoder;
 
@@ -416,7 +417,7 @@ impl SolverSerialPlugins {
             }
         }
         // construct the parity matrix
-        let interface = self.interface_ptr.read();
+        let interface = self.interface_ptr.read_recursive();
         for &vertex_index in cluster.vertices.iter() {
             let incident_edges = self.model_graph.get_vertex_neighbors(vertex_index);
             let parity = interface.decoding_graph.is_vertex_defect(vertex_index);

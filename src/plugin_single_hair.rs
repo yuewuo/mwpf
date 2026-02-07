@@ -13,6 +13,7 @@ use crate::plugin::*;
 use crate::plugin_union_find::*;
 use crate::relaxer::*;
 use crate::util::*;
+use crate::pointers::*;
 use num_traits::One;
 
 use std::sync::Arc;

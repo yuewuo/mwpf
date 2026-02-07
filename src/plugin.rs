@@ -12,6 +12,7 @@ use crate::matrix::*;
 use crate::plugin_union_find::*;
 use crate::relaxer::*;
 use crate::relaxer_forest::*;
+use crate::pointers::*;
 use num_traits::Signed;
 use parking_lot::RwLock;
 use std::sync::Arc;

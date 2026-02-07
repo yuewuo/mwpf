@@ -144,8 +144,8 @@ impl Vertex {
     }
 }
 
-pub type VertexPtr = ArcRwLock<Vertex>;
-pub type VertexWeak = WeakRwLock<Vertex>;
+pub type VertexPtr = ArcManualSafeLock<Vertex>;
+pub type VertexWeak = WeakManualSafeLock<Vertex>;
 
 impl std::fmt::Debug for VertexPtr {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -198,8 +198,8 @@ impl Edge {
     }
 }
 
-pub type EdgePtr = ArcRwLock<Edge>;
-pub type EdgeWeak = WeakRwLock<Edge>;
+pub type EdgePtr = ArcManualSafeLock<Edge>;
+pub type EdgeWeak = WeakManualSafeLock<Edge>;
 
 impl std::fmt::Debug for EdgePtr {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -251,7 +251,7 @@ where
     obstacle_queue: Queue,
     /// the global time of this dual module
     ///     Note: Wrap-around edge case is not currently considered
-    global_time: ArcRwLock<Rational>,
+    global_time: ArcManualSafeLock<Rational>,
 
     /// the current mode of the dual module
     mode: DualModuleMode,
@@ -274,7 +274,8 @@ where
     Queue: FutureQueueMethods<Rational, Obstacle> + Default + std::fmt::Debug + Clone,
 {
     /// helper function to bring an edge update to speed with current time if needed
-    fn update_edge_if_necessary(&self, edge: &mut RwLockWriteGuard<RawRwLock, Edge>) {
+    /// the type of edge was set as `&mut RwLockWriteGuard<RawRwLock, Edge>` previously
+    fn update_edge_if_necessary(&self, edge: &mut Edge) {
         let global_time = self.global_time.read_recursive();
         if global_time.eq(&edge.last_updated_time) {
             // the edge is not behind
@@ -298,7 +299,8 @@ where
     }
 
     /// helper function to bring a dual node update to speed with current time if needed
-    fn update_dual_node_if_necessary(&mut self, node: &mut RwLockWriteGuard<RawRwLock, DualNode>) {
+    /// the type of dual node was set as `&mut RwLockWriteGuard<RawRwLock, DualNode>` previously
+    fn update_dual_node_if_necessary(&mut self, node: &mut DualNode) {
         let global_time = self.global_time.read_recursive();
         if global_time.eq(&node.last_updated_time) {
             // the edge is not behind
@@ -324,13 +326,18 @@ where
     fn debug_update_all(&mut self, dual_node_ptrs: &[DualNodePtr]) {
         // updating all edges
         for edge in self.edges.iter() {
-            let mut edge = edge.write();
-            self.update_edge_if_necessary(&mut edge);
+            // SAFE MODE: returns RwLockWriteGuard
+            // UNSAFE MODE: returns &mut Edge
+            let mut edge_guard = edge.write();
+            // Writing &mut *variable is the universal way to obtain a mutable reference to the data inside this thing.
+            self.update_edge_if_necessary(&mut *edge_guard);
         }
         // updating all dual nodes
         for dual_node_ptr in dual_node_ptrs.iter() {
-            let mut dual_node = dual_node_ptr.write();
-            self.update_dual_node_if_necessary(&mut dual_node);
+            // SAFE MODE: returns RwLockWriteGuard
+            // UNSAFE MODE: returns &mut DualNode
+            let mut dual_node_guard = dual_node_ptr.write();
+            self.update_dual_node_if_necessary(&mut *dual_node_guard);
         }
     }
 
@@ -389,8 +396,8 @@ where
     }
 }
 
-pub type DualModulePQlPtr<Queue> = ArcRwLock<DualModulePQGeneric<Queue>>;
-pub type DualModulePQWeak<Queue> = WeakRwLock<DualModulePQGeneric<Queue>>;
+pub type DualModulePQlPtr<Queue> = ArcManualSafeLock<DualModulePQGeneric<Queue>>;
+pub type DualModulePQWeak<Queue> = WeakManualSafeLock<DualModulePQGeneric<Queue>>;
 
 impl<Queue> DualModuleImpl for DualModulePQGeneric<Queue>
 where
@@ -443,7 +450,7 @@ where
             vertices,
             edges,
             obstacle_queue: Queue::default(),
-            global_time: ArcRwLock::new_value(Rational::zero()),
+            global_time: ArcManualSafeLock::new_value(Rational::zero()),
             mode: DualModuleMode::default(),
             tuning_start_time: None,
             total_tuning_time: None,
@@ -758,7 +765,7 @@ where
                     );
 
                     drop(node);
-                    let mut node: RwLockWriteGuard<RawRwLock, DualNode> = _dual_node_ptr.ptr.write();
+                    let mut node = _dual_node_ptr.ptr.write();
 
                     let dual_variable = node.get_dual_variable();
                     node.set_dual_variable(dual_variable);

@@ -131,8 +131,8 @@ pub struct PrimalModuleSerialNode {
     pub cluster_weak: PrimalClusterWeak,
 }
 
-pub type PrimalModuleSerialNodePtr = ArcRwLock<PrimalModuleSerialNode>;
-pub type PrimalModuleSerialNodeWeak = WeakRwLock<PrimalModuleSerialNode>;
+pub type PrimalModuleSerialNodePtr = ArcManualSafeLock<PrimalModuleSerialNode>;
+pub type PrimalModuleSerialNodeWeak = WeakManualSafeLock<PrimalModuleSerialNode>;
 
 pub struct PrimalCluster {
     /// the index in the cluster
@@ -156,8 +156,8 @@ pub struct PrimalCluster {
     pub incr_solution: Option<Arc<Mutex<IncrLPSolution>>>,
 }
 
-pub type PrimalClusterPtr = ArcRwLock<PrimalCluster>;
-pub type PrimalClusterWeak = WeakRwLock<PrimalCluster>;
+pub type PrimalClusterPtr = ArcManualSafeLock<PrimalCluster>;
+pub type PrimalClusterWeak = WeakManualSafeLock<PrimalCluster>;
 
 impl PrimalModuleImpl for PrimalModuleSerial {
     fn new_empty(_initializer: &Arc<SolverInitializer>) -> Self {

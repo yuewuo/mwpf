@@ -59,6 +59,7 @@ embed_visualizer = [
 ] # use nodejs to build frontend and embed in Python instead of outputing individual JSON files
 loose_sanity_check = [] # do not panic when check fails
 fast_ds = ["gxhash"] # use fast data structures to fast iterate
+unsafe_pointer = [] # if turned on, use unsafe pointers
 
 [dependencies]
 pyo3 = { version = "0.23.4", features = [
@@ -107,6 +108,7 @@ bp = { path = "src/bp" }
 thread-priority = "1.2.0"
 lnexp = "0.2.1"
 gxhash = { version = "3.5.0", optional = true }
+weak-table = "0.3.2"
 
 [dev-dependencies]
 test-case = "3.1.0"

@@ -1627,6 +1627,7 @@ dependencies = [
  "thread-priority",
  "urlencoding",
  "wasm-bindgen",
+ "weak-table",
 ]
 
 [[package]]
@@ -2861,6 +2862,12 @@ checksum = "1a05d73b933a847d6cccdda8f838a22ff101ad9bf93e33684f39c1f5f0eece3d"
 dependencies = [
  "unicode-ident",
 ]
+
+[[package]]
+name = "weak-table"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "323f4da9523e9a669e1eaf9c6e763892769b1d38c623913647bfdc1532fe4549"
 
 [[package]]
 name = "winapi"

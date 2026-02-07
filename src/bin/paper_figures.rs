@@ -7,6 +7,7 @@ use mwpf::invalid_subgraph::*;
 use mwpf::model_hypergraph::*;
 use mwpf::util::*;
 use mwpf::visualize::*;
+use mwpf::pointers::*;
 use num_traits::FromPrimitive;
 
 use std::sync::Arc;
