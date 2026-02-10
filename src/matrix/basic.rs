@@ -156,7 +156,7 @@ pub mod tests {
                         edges: vec![],
                         // mirrored_vertices: vec![],
                     },
-                    (0, 0),
+                    (0, vertex_index),
                 )
             })
             .collect();
