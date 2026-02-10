@@ -18,6 +18,7 @@ use crate::primal_module_serial::*;
 use crate::util::*;
 use crate::visualize::*;
 use crate::pointers::*;
+use crate::dual_module_pq::VertexPtr;
 
 use bp::bp::BpDecoder;
 
@@ -296,8 +297,8 @@ macro_rules! bind_trait_to_python {
 macro_rules! inherit_solver_plugin_methods {
     ($struct_name:ident) => {
         impl $struct_name {
-            pub fn get_cluster(&self, vertex_index: VertexIndex) -> Cluster {
-                self.0.get_cluster(vertex_index)
+            pub fn get_cluster(&self, vertex_ptr: VertexPtr) -> Cluster {
+                self.0.get_cluster(vertex_ptr)
             }
         }
     };
@@ -314,7 +315,7 @@ pub struct SolverSerialPluginsConfig {
 
 #[derive(Clone)]
 pub struct SolverSerialPlugins {
-    dual_module: DualModulePQ,
+    pub dual_module: DualModulePQ,
     primal_module: PrimalModuleSerial,
     interface_ptr: DualModuleInterfacePtr,
     model_graph: Arc<ModelHyperGraph>,
@@ -339,7 +340,7 @@ impl SolverSerialPlugins {
         primal_module.plugins = plugins;
         primal_module.config = config.primal.as_ref().unwrap_or(&config.flatten_primal).clone();
         Self {
-            dual_module: DualModulePQ::new_empty(initializer),
+            dual_module: DualModulePQ::new_empty(initializer, 0),
             primal_module,
             interface_ptr: DualModuleInterfacePtr::new(model_graph.clone()),
             model_graph,
@@ -362,8 +363,8 @@ impl SolverSerialPlugins {
 
         if !skip_initial_duals {
             self.interface_ptr
-                .load(Arc::new(syndrome_pattern.clone()), &mut self.dual_module);
-            self.primal_module.load(&self.interface_ptr, &mut self.dual_module);
+                .load(Arc::new(syndrome_pattern.clone()), &mut self.dual_module, 0); // TODO: double check the partition id here
+            self.primal_module.load(&self.interface_ptr, &mut self.dual_module, 0); // TODO: double check the partition id here
         } else {
             self.interface_ptr
                 .write()
@@ -385,43 +386,47 @@ impl SolverSerialPlugins {
     }
 
     /// get the cluster information of a vertex
-    pub fn get_cluster(&self, vertex_index: VertexIndex) -> Cluster {
+    pub fn get_cluster(&self, vertex_ptr: VertexPtr) -> Cluster {
         let mut cluster = Cluster::new();
         // visit the graph via tight edges
         let mut current_vertices = FastIterSet::new();
-        current_vertices.insert(vertex_index);
+        current_vertices.insert(vertex_ptr);
         while !current_vertices.is_empty() {
             let mut next_vertices = FastIterSet::new();
-            for &vertex_index in current_vertices.iter() {
-                cluster.add_vertex(vertex_index);
-                for &edge_index in self.model_graph.get_vertex_neighbors(vertex_index).iter() {
-                    if self.dual_module.is_edge_tight(edge_index) {
-                        cluster.add_edge(edge_index);
-                        cluster.parity_matrix.add_tight_variable(edge_index);
-                        for &next_vertex_index in self.model_graph.get_edge_neighbors(edge_index).iter() {
-                            if !cluster.vertices.contains(&next_vertex_index) {
-                                next_vertices.insert(next_vertex_index);
+            for vertex_ptr0 in current_vertices.iter() {
+                cluster.add_vertex(vertex_ptr0.clone());
+                for edge_weak in vertex_ptr0.read_recursive().edges.iter() {
+                    let edge_ptr = edge_weak.upgrade_force();
+                    if self.dual_module.is_edge_tight(edge_ptr.clone()) {
+                        cluster.add_edge(edge_ptr.clone());
+                        cluster.parity_matrix.add_tight_variable(edge_weak.clone());
+                        for next_vertex_weak in edge_ptr.read_recursive().vertices.iter() {
+                            let next_vertex_ptr = next_vertex_weak.upgrade_force();
+                            if !cluster.vertices.contains(&next_vertex_ptr) {
+                                next_vertices.insert(next_vertex_ptr);
                             }
                         }
                     } else {
-                        cluster.add_hair(edge_index);
+                        cluster.add_hair(edge_ptr.clone());
                     }
                 }
             }
             current_vertices = next_vertices;
         }
         // add dual variables
-        for &edge_index in cluster.edges.iter() {
-            for node_ptr in self.dual_module.get_edge_nodes(edge_index).iter() {
+        for edge_ptr in cluster.edges.iter() {
+            for node_ptr in self.dual_module.get_edge_nodes(edge_ptr.clone()).iter() {
                 cluster.nodes.insert(node_ptr.clone().into());
             }
         }
         // construct the parity matrix
         let interface = self.interface_ptr.read_recursive();
-        for &vertex_index in cluster.vertices.iter() {
-            let incident_edges = self.model_graph.get_vertex_neighbors(vertex_index);
-            let parity = interface.decoding_graph.is_vertex_defect(vertex_index);
-            cluster.parity_matrix.add_constraint(vertex_index, incident_edges, parity);
+        for vertex_ptr in cluster.vertices.iter() {
+            let vertex_weak = vertex_ptr.downgrade();
+            let vertex = vertex_ptr.read_recursive();
+            let incident_edges = &vertex.edges;
+            let parity = vertex.is_defect;
+            cluster.parity_matrix.add_constraint(vertex_weak, incident_edges, parity);
         }
         cluster
     }
@@ -629,6 +634,10 @@ impl SolverSerialJointSingleHair {
             ]),
             config,
         ))
+    }
+
+    pub fn get_dual_module(&self) -> &DualModulePQ {
+        &self.0.dual_module
     }
 }
 

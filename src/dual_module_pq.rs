@@ -166,25 +166,25 @@ impl std::fmt::Debug for VertexWeak {
 #[derivative(Debug)]
 pub struct Edge {
     /// global edge index
-    edge_index: EdgeIndex,
+    pub edge_index: EdgeIndex,
     /// total weight of this edge
-    weight: Rational,
+    pub weight: Rational,
     #[derivative(Debug = "ignore")]
-    vertices: Vec<VertexWeak>, // note: consider using/constructing ordered vertex, this will speed up `adjust_weights_for_negative_edges`
+    pub vertices: Vec<VertexWeak>, // note: consider using/constructing ordered vertex, this will speed up `adjust_weights_for_negative_edges`
     /// the dual nodes that contributes to this edge
-    dual_nodes: Vec<OrderedDualNodeWeak>,
+    pub dual_nodes: Vec<OrderedDualNodeWeak>,
 
     /// the speed of growth, at the current time
     ///     Note: changing this should cause the `growth_at_last_updated_time` and `last_updated_time` to update
-    grow_rate: Rational,
+    pub grow_rate: Rational,
     /// the last time this Edge is synced/updated with the global time
-    last_updated_time: Rational,
+    pub last_updated_time: Rational,
     /// growth value at the last updated time, also, growth_at_last_updated_time <= weight
-    growth_at_last_updated_time: Rational,
+    pub growth_at_last_updated_time: Rational,
 
     #[cfg(feature = "incr_lp")]
     /// storing the weights of the clusters that are currently contributing to this edge
-    cluster_weights: hashbrown::HashMap<usize, Rational>,
+    pub cluster_weights: hashbrown::HashMap<usize, Rational>,
 }
 
 impl Edge {
@@ -262,8 +262,8 @@ where
 
     // negative weight handling
     negative_weight_sum: Rational,
-    negative_edges: HashSet<EdgeIndex>,
-    flip_vertices: HashSet<VertexIndex>,
+    negative_edges: HashSet<EdgeIndex>, // only used in weight_preprocessing and subgraph
+    flip_vertices: HashSet<VertexIndex>, // only used in weight_preprocessing
 
     // remember the initializer for original weights and heralded weighted edges
     pub initializer: Arc<SolverInitializer>,
@@ -368,8 +368,8 @@ where
     ) -> bool {
         #[allow(clippy::unnecessary_cast)]
         return match obstacle {
-            Obstacle::Conflict { edge_index } => {
-                let edge = self.edges[*edge_index as usize].read_recursive();
+            Obstacle::Conflict { edge_ptr } => {
+                let edge = edge_ptr.read_recursive();
                 // not changing, cannot have conflict
                 if !edge.grow_rate.is_positive() {
                     return false;
@@ -405,7 +405,7 @@ where
 {
     /// initialize the dual module, which is supposed to be reused for multiple decoding tasks with the same structure
     #[allow(clippy::unnecessary_cast)]
-    fn new_empty(initializer: &Arc<SolverInitializer>) -> Self {
+    fn new_empty(initializer: &Arc<SolverInitializer>, partition_id: usize) -> Self where Self: Sized {
         #[cfg(not(feature = "loose_sanity_check"))]
         initializer.sanity_check().unwrap();
 
@@ -416,14 +416,15 @@ where
                     vertex_index,
                     is_defect: false,
                     edges: vec![],
-                })
+                }, (partition_id, vertex_index))
             })
             .collect();
         // set edges
         let mut edges = Vec::<EdgePtr>::new();
         for hyperedge in initializer.weighted_edges.iter() {
+            let edge_id = edges.len() as EdgeIndex;
             let edge = Edge {
-                edge_index: edges.len() as EdgeIndex,
+                edge_index: edge_id,
                 weight: hyperedge.weight.clone(),
                 dual_nodes: vec![],
                 vertices: hyperedge
@@ -438,7 +439,7 @@ where
                 cluster_weights: hashbrown::HashMap::new(),
             };
 
-            let edge_ptr = EdgePtr::new_value(edge);
+            let edge_ptr = EdgePtr::new_value(edge, (partition_id, edge_id));
 
             for &vertex_index in hyperedge.vertices.iter() {
                 vertices[vertex_index as usize].write().edges.push(edge_ptr.downgrade());
@@ -450,7 +451,7 @@ where
             vertices,
             edges,
             obstacle_queue: Queue::default(),
-            global_time: ArcManualSafeLock::new_value(Rational::zero()),
+            global_time: ArcManualSafeLock::new_value(Rational::zero(), (0, 0)),
             mode: DualModuleMode::default(),
             tuning_start_time: None,
             total_tuning_time: None,
@@ -488,6 +489,7 @@ where
 
     #[allow(clippy::unnecessary_cast)]
     /// Adding a defect node to the DualModule
+    /// TODO: Double check if we need to define the defect node here
     fn add_defect_node(&mut self, dual_node_ptr: &DualNodePtr) {
         let dual_node = dual_node_ptr.read_recursive();
         debug_assert!(dual_node.invalid_subgraph.edges.is_empty());
@@ -495,12 +497,12 @@ where
             dual_node.invalid_subgraph.vertices.len() == 1,
             "defect node (without edges) should only work on a single vertex, for simplicity"
         );
-        let vertex_index = dual_node.invalid_subgraph.vertices.iter().next().unwrap();
-        let mut vertex = self.vertices[*vertex_index as usize].write();
-        assert!(!vertex.is_defect, "defect should not be added twice");
-        vertex.is_defect = true;
+        // let vertex_ptr = dual_node.invalid_subgraph.vertices.iter().next().unwrap();
+        // let mut vertex = vertex_ptr.write();
+        // assert!(!vertex.is_defect, "defect should not be added twice");
+        // vertex.is_defect = true;
         drop(dual_node);
-        drop(vertex);
+        // drop(vertex);
         self.add_dual_node(dual_node_ptr);
     }
 
@@ -522,8 +524,8 @@ where
             );
         }
 
-        for &edge_index in dual_node.invalid_subgraph.hair.iter() {
-            let mut edge = self.edges[edge_index as usize].write();
+        for edge_ptr in dual_node.invalid_subgraph.hair.iter() {
+            let mut edge = edge_ptr.write();
 
             // should make sure the edge is up-to-speed before making its variables change
             self.update_edge_if_necessary(&mut edge);
@@ -537,7 +539,7 @@ where
                     // it is okay to use global_time now, as this must be up-to-speed
                     (edge.weight.clone() - edge.growth_at_last_updated_time.clone()) / edge.grow_rate.clone()
                         + global_time.clone(),
-                    Obstacle::Conflict { edge_index },
+                    Obstacle::Conflict { edge_ptr: edge_ptr.clone() },
                 );
             }
         }
@@ -548,8 +550,8 @@ where
         let dual_node_weak = dual_node_ptr.downgrade();
         let dual_node = dual_node_ptr.read_recursive();
 
-        for &edge_index in dual_node.invalid_subgraph.hair.iter() {
-            let mut edge = self.edges[edge_index as usize].write();
+        for edge_ptr in dual_node.invalid_subgraph.hair.iter() {
+            let mut edge = edge_ptr.write();
 
             edge.dual_nodes
                 .push(OrderedDualNodeWeak::new(dual_node.index, dual_node_weak.clone()));
@@ -576,8 +578,8 @@ where
         }
 
         // don't reacquire the read guard
-        for &edge_index in dual_node.invalid_subgraph.hair.iter() {
-            let mut edge = self.edges[edge_index as usize].write();
+        for edge_ptr in dual_node.invalid_subgraph.hair.iter() {
+            let mut edge = edge_ptr.write();
             self.update_edge_if_necessary(&mut edge);
 
             edge.grow_rate += &grow_rate_diff;
@@ -586,7 +588,7 @@ where
                     // it is okay to use global_time now, as this must be up-to-speed
                     (edge.weight.clone() - edge.growth_at_last_updated_time.clone()) / edge.grow_rate.clone()
                         + global_time.clone(),
-                    Obstacle::Conflict { edge_index },
+                    Obstacle::Conflict { edge_ptr: edge_ptr.clone() },
                 );
             }
         }
@@ -651,27 +653,23 @@ where
 
     /* identical with the dual_module_serial */
     #[allow(clippy::unnecessary_cast)]
-    fn get_edge_nodes(&self, edge_index: EdgeIndex) -> Vec<DualNodePtr> {
-        self.edges[edge_index as usize]
-            .read_recursive()
-            .dual_nodes
-            .iter()
-            .map(|x| x.upgrade_force().ptr)
+    fn get_edge_nodes(&self, edge_ptr: EdgePtr) -> Vec<DualNodePtr> {
+        edge_ptr.read_recursive().dual_nodes.iter().map(|x| x.upgrade_force().ptr)
             .collect()
     }
 
     #[allow(clippy::unnecessary_cast)]
     /// how much away from saturated is the edge
-    fn get_edge_slack(&self, edge_index: EdgeIndex) -> Rational {
-        let edge = self.edges[edge_index as usize].read_recursive();
+    fn get_edge_slack(&self, edge_ptr: EdgePtr) -> Rational {
+        let edge = edge_ptr.read_recursive();
         edge.weight.clone()
             - (self.global_time.read_recursive().clone() - edge.last_updated_time.clone()) * edge.grow_rate.clone()
             - edge.growth_at_last_updated_time.clone()
     }
 
     /// is the edge saturated
-    fn is_edge_tight(&self, edge_index: EdgeIndex) -> bool {
-        self.get_edge_slack(edge_index).is_zero()
+    fn is_edge_tight(&self, edge_ptr: EdgePtr) -> bool {
+        self.get_edge_slack(edge_ptr).is_zero()
     }
 
     /* tuning mode related new methods */
@@ -680,13 +678,13 @@ where
     add_shared_methods!();
 
     /// is the edge tight, but for tuning mode
-    fn is_edge_tight_tune(&self, edge_index: EdgeIndex) -> bool {
-        let edge = self.edges[edge_index].read_recursive();
+    fn is_edge_tight_tune(&self, edge_ptr: EdgePtr) -> bool {
+        let edge = edge_ptr.read_recursive();
         edge.weight == edge.growth_at_last_updated_time
     }
 
-    fn get_edge_slack_tune(&self, edge_index: EdgeIndex) -> Rational {
-        let edge = self.edges[edge_index].read_recursive();
+    fn get_edge_slack_tune(&self, edge_ptr: EdgePtr) -> Rational {
+        let edge = edge_ptr.read_recursive();
         edge.weight.clone() - edge.growth_at_last_updated_time.clone()
     }
 
@@ -714,8 +712,8 @@ where
     }
 
     /// grow specific amount for a specific edge
-    fn grow_edge(&self, edge_index: EdgeIndex, amount: &Rational) {
-        let mut edge = self.edges[edge_index].write();
+    fn grow_edge(&self, edge_ptr: EdgePtr, amount: &Rational) {
+        let mut edge = edge_ptr.write();
         edge.growth_at_last_updated_time += amount;
     }
 
@@ -823,9 +821,10 @@ where
                 + (&global_time - &dual_node_read_ptr.last_updated_time) * &dual_node_read_ptr.grow_rate;
         }
         if let Some(subgraph) = cluster.subgraph.as_ref() {
-            for &edge_index in subgraph.iter() {
-                let edge_ptr = self.edges[edge_index].read_recursive();
-                primal_dual_gap -= &edge_ptr.weight;
+            for edge_weak in subgraph.iter() {
+                let edge_ptr = edge_weak.upgrade_force();
+                let edge = edge_ptr.read_recursive();
+                primal_dual_gap -= &edge.weight;
             }
         }
         if primal_dual_gap.is_zero() {
@@ -837,10 +836,10 @@ where
 
     fn get_edge_free_weight(
         &self,
-        edge_index: EdgeIndex,
+        edge_ptr: EdgePtr,
         participating_dual_variables: &hashbrown::HashSet<usize>,
     ) -> Rational {
-        let edge = self.edges[edge_index].read_recursive();
+        let edge = edge_ptr.read_recursive();
         let mut free_weight = edge.weight.clone();
         for dual_node in edge.dual_nodes.iter() {
             if participating_dual_variables.contains(&dual_node.index) {
@@ -853,14 +852,15 @@ where
         free_weight
     }
 
-    fn get_edge_weight(&self, edge_index: EdgeIndex) -> Rational {
-        let edge = self.edges[edge_index].read_recursive();
+    fn get_edge_weight(&self, edge_weak: EdgeWeak) -> Rational {
+        let binding = edge_weak.upgrade_force();
+        let edge = binding.read_recursive();
         edge.weight.clone()
     }
 
     #[cfg(feature = "incr_lp")]
-    fn get_edge_free_weight_cluster(&self, edge_index: EdgeIndex, cluster_index: NodeIndex) -> Rational {
-        let edge = self.edges[edge_index as usize].read_recursive();
+    fn get_edge_free_weight_cluster(&self, edge_ptr: EdgePtr, cluster_index: NodeIndex) -> Rational {
+        let edge = edge_ptr.read_recursive();
         edge.weight.clone()
             - edge
                 .cluster_weights
@@ -877,8 +877,9 @@ where
         absorbing_cluster_index: NodeIndex,
     ) {
         let dual_node = dual_node_ptr.read_recursive();
-        for edge_index in dual_node.invalid_subgraph.hair.iter() {
-            let mut edge = self.edges[*edge_index as usize].write();
+        for edge_weak in dual_node.invalid_subgraph.hair.iter() {
+            let edge_ptr = edge_weak.upgrade_force();
+            let mut edge = edge_ptr.write();
             if let Some(removed) = edge.cluster_weights.remove(&drained_cluster_index) {
                 *edge
                     .cluster_weights
@@ -889,8 +890,8 @@ where
     }
 
     #[cfg(feature = "incr_lp")]
-    fn update_edge_cluster_weights(&self, edge_index: usize, cluster_index: usize, weight: Rational) {
-        match self.edges[edge_index].write().cluster_weights.entry(cluster_index) {
+    fn update_edge_cluster_weights(&self, edge_ptr: EdgePtr, cluster_index: usize, weight: Rational) {
+        match edge_ptr.write().cluster_weights.entry(cluster_index) {
             hashbrown::hash_map::Entry::Occupied(mut o) => {
                 *o.get_mut() += weight;
             }
@@ -900,19 +901,21 @@ where
         }
     }
 
+    /// called invidually for each dual module, so we do not need EdgePtr here.
     fn adjust_weights_for_negative_edges(&mut self) {
-        for edge in self.edges.iter() {
-            let mut edge = edge.write();
+        for edge_ptr in self.edges.iter() {
+            let mut edge = edge_ptr.write();
             if edge.weight.is_negative() {
                 self.negative_edges.insert(edge.edge_index);
                 self.negative_weight_sum += edge.weight.clone();
 
                 for vertex in edge.vertices.iter() {
-                    let vertex = vertex.upgrade_force();
-                    if self.flip_vertices.contains(&vertex.read_recursive().vertex_index) {
-                        self.flip_vertices.remove(&vertex.read_recursive().vertex_index);
+                    let vertex_ptr = vertex.upgrade_force();
+                    let vertex_index = vertex_ptr.read_recursive().vertex_index;
+                    if self.flip_vertices.contains(&vertex_index) {
+                        self.flip_vertices.remove(&vertex_index);
                     } else {
-                        self.flip_vertices.insert(vertex.read_recursive().vertex_index);
+                        self.flip_vertices.insert(vertex_index);
                     }
                 }
 
@@ -935,7 +938,8 @@ where
 
     fn set_weights(&mut self, new_weights: FastIterMap<EdgeIndex, Weight>) {
         for (edge_index, new_weight) in new_weights.into_iter() {
-            let mut edge = self.edges[edge_index].write();
+            let edge_ptr = self.get_edge_ptr(edge_index);
+            let mut edge = edge_ptr.write();
             edge.weight = new_weight;
         }
     }
@@ -950,6 +954,38 @@ where
 
     fn get_flip_vertices(&self) -> HashSet<VertexIndex> {
         self.flip_vertices.clone()
+    }
+
+    fn get_vertex_ptr(&self, vertex_index: VertexIndex) -> VertexPtr {
+        self.vertices[vertex_index as usize].clone()
+    }
+
+    fn get_edge_ptr(&self, edge_index: EdgeIndex) -> EdgePtr {
+        self.edges[edge_index as usize].clone()
+    }
+
+    fn get_vertex_ptr_vec(&self, vertex_indices: &[VertexIndex]) -> Vec<VertexPtr> {
+        vertex_indices
+            .to_vec()
+            .iter()
+            .map(|&i| self.vertices[i as usize].clone())
+            .collect()
+    }
+
+    fn get_edge_ptr_vec(&self, edge_indices: &[EdgeIndex]) -> Vec<EdgePtr> {
+        edge_indices
+            .to_vec()
+            .iter()
+            .map(|&i| self.edges[i as usize].clone())
+            .collect()
+    }
+
+    fn get_vertex_num(&self) -> usize {
+        self.vertices.len()
+    }
+
+    fn get_edge_num(&self) -> usize {
+        self.edges.len()
     }
 }
 
@@ -1005,38 +1041,60 @@ mod tests {
         let mut future_obstacle_queue = _FutureObstacleQueue::<usize>::new();
         assert_eq!(0, future_obstacle_queue.len());
         macro_rules! ref_event {
-            ($index:expr) => {
-                Some((&$index, &Obstacle::Conflict { edge_index: $index }))
+            ($index:expr, $edges:expr) => {
+                Some((&$index, &Obstacle::Conflict { edge_ptr: $edges[$index as usize].clone() }))
             };
         }
         macro_rules! value_event {
-            ($index:expr) => {
-                Some(($index, Obstacle::Conflict { edge_index: $index }))
+            ($index:expr, $edges:expr) => {
+                Some(($index, Obstacle::Conflict { edge_ptr: $edges[$index as usize].clone() }))
             };
         }
+        // initialize edges
+        let edges: Vec<EdgePtr> = vec![0, 1, 2, 3]
+            .into_iter()
+            .map(|edge_index| {
+                EdgePtr::new_value(
+                    Edge {
+                        edge_index,
+                        weight: Rational::zero(),
+                        dual_nodes: vec![],
+                        vertices: vec![],
+                        last_updated_time: Rational::zero(),
+                        growth_at_last_updated_time: Rational::zero(),
+                        grow_rate: Rational::zero(),
+                        // unit_index: None,
+                        // connected_to_boundary_vertex: false,
+                        #[cfg(feature = "incr_lp")]
+                        cluster_weights: hashbrown::HashMap::new(),
+                    },
+                    (0, edge_index),
+                )
+            })
+            .collect();
         // test basic order
-        future_obstacle_queue.will_happen(2, Obstacle::Conflict { edge_index: 2 });
-        future_obstacle_queue.will_happen(1, Obstacle::Conflict { edge_index: 1 });
-        future_obstacle_queue.will_happen(3, Obstacle::Conflict { edge_index: 3 });
-        assert_eq!(future_obstacle_queue.peek_event(), ref_event!(1));
-        assert_eq!(future_obstacle_queue.peek_event(), ref_event!(1));
-        assert_eq!(future_obstacle_queue.pop_event(), value_event!(1));
-        assert_eq!(future_obstacle_queue.peek_event(), ref_event!(2));
-        assert_eq!(future_obstacle_queue.pop_event(), value_event!(2));
-        assert_eq!(future_obstacle_queue.pop_event(), value_event!(3));
+        future_obstacle_queue.will_happen(2, Obstacle::Conflict { edge_ptr: edges[2].clone() });
+        future_obstacle_queue.will_happen(1, Obstacle::Conflict { edge_ptr: edges[1].clone() });
+        future_obstacle_queue.will_happen(3, Obstacle::Conflict { edge_ptr: edges[3].clone() });
+        assert_eq!(future_obstacle_queue.peek_event(), ref_event!(1, edges));
+        assert_eq!(future_obstacle_queue.peek_event(), ref_event!(1, edges));
+        assert_eq!(future_obstacle_queue.pop_event(), value_event!(1, edges));
+        assert_eq!(future_obstacle_queue.peek_event(), ref_event!(2, edges));
+        assert_eq!(future_obstacle_queue.pop_event(), value_event!(2, edges));
+        assert_eq!(future_obstacle_queue.pop_event(), value_event!(3, edges));
         assert_eq!(future_obstacle_queue.peek_event(), None);
         // test duplicate elements, the queue must be able to hold all the duplicate events
-        future_obstacle_queue.will_happen(1, Obstacle::Conflict { edge_index: 1 });
-        future_obstacle_queue.will_happen(1, Obstacle::Conflict { edge_index: 1 });
-        future_obstacle_queue.will_happen(1, Obstacle::Conflict { edge_index: 1 });
-        assert_eq!(future_obstacle_queue.pop_event(), value_event!(1));
-        assert_eq!(future_obstacle_queue.pop_event(), value_event!(1));
-        assert_eq!(future_obstacle_queue.pop_event(), value_event!(1));
+        future_obstacle_queue.will_happen(1, Obstacle::Conflict { edge_ptr: edges[1].clone() });
+        future_obstacle_queue.will_happen(1, Obstacle::Conflict { edge_ptr: edges[1].clone() });
+        future_obstacle_queue.will_happen(1, Obstacle::Conflict { edge_ptr: edges[1].clone() });
+        assert_eq!(future_obstacle_queue.pop_event(), value_event!(1, edges));
+        assert_eq!(future_obstacle_queue.pop_event(), value_event!(1, edges));
+        assert_eq!(future_obstacle_queue.pop_event(), value_event!(1, edges));
         assert_eq!(future_obstacle_queue.peek_event(), None);
         // test order of events at the same time
-        future_obstacle_queue.will_happen(1, Obstacle::Conflict { edge_index: 2 });
-        future_obstacle_queue.will_happen(1, Obstacle::Conflict { edge_index: 1 });
-        future_obstacle_queue.will_happen(1, Obstacle::Conflict { edge_index: 3 });
+        future_obstacle_queue.will_happen(1, Obstacle::Conflict { edge_ptr: edges[2].clone() });
+        future_obstacle_queue.will_happen(1, Obstacle::Conflict { edge_ptr: edges[1].clone() });
+        future_obstacle_queue.will_happen(1, Obstacle::Conflict { edge_ptr: edges[3].clone() });
         let mut events = vec![];
         while let Some((time, event)) = future_obstacle_queue.pop_event() {
             assert_eq!(time, 1);
@@ -1060,10 +1118,10 @@ mod tests {
         .unwrap();
         // create dual module
         let model_graph = code.get_model_graph();
-        let mut dual_module = DualModulePQ::new_empty(&model_graph.initializer);
+        let mut dual_module = DualModulePQ::new_empty(&model_graph.initializer, 0);
         // try to work on a simple syndrome
         let decoding_graph = DecodingHyperGraph::new_defects(model_graph, vec![3, 12]);
-        let interface_ptr = DualModuleInterfacePtr::new_load(decoding_graph, &mut dual_module);
+        let interface_ptr = DualModuleInterfacePtr::new_load(decoding_graph, &mut dual_module, 0);
 
         visualizer
             .snapshot_combined("syndrome".to_string(), vec![&interface_ptr, &dual_module])
@@ -1112,10 +1170,10 @@ mod tests {
         .unwrap();
         // create dual module
         let model_graph = code.get_model_graph();
-        let mut dual_module = DualModulePQ::new_empty(&model_graph.initializer);
+        let mut dual_module = DualModulePQ::new_empty(&model_graph.initializer, 0);
         // try to work on a simple syndrome
         let decoding_graph = DecodingHyperGraph::new_defects(model_graph, vec![23, 24, 29, 30]);
-        let interface_ptr = DualModuleInterfacePtr::new_load(decoding_graph, &mut dual_module);
+        let interface_ptr = DualModuleInterfacePtr::new_load(decoding_graph, &mut dual_module, 0);
         visualizer
             .snapshot_combined("syndrome".to_string(), vec![&interface_ptr, &dual_module])
             .unwrap();
@@ -1157,10 +1215,10 @@ mod tests {
         .unwrap();
         // create dual module
         let model_graph = code.get_model_graph();
-        let mut dual_module = DualModulePQ::new_empty(&model_graph.initializer);
+        let mut dual_module = DualModulePQ::new_empty(&model_graph.initializer, 0);
         // try to work on a simple syndrome
         let decoding_graph = DecodingHyperGraph::new_defects(model_graph, vec![17, 23, 29, 30]);
-        let interface_ptr = DualModuleInterfacePtr::new_load(decoding_graph, &mut dual_module);
+        let interface_ptr = DualModuleInterfacePtr::new_load(decoding_graph, &mut dual_module, 0);
         visualizer
             .snapshot_combined("syndrome".to_string(), vec![&interface_ptr, &dual_module])
             .unwrap();

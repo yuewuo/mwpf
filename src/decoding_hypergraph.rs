@@ -1,4 +1,3 @@
-use crate::matrix::*;
 use crate::model_hypergraph::*;
 use crate::util::*;
 use crate::visualize::*;
@@ -52,52 +51,6 @@ impl DecodingHyperGraph {
 
     pub fn new_defects(model_graph: Arc<ModelHyperGraph>, defect_vertices: Vec<VertexIndex>) -> Self {
         Self::new(model_graph, Arc::new(SyndromePattern::new_vertices(defect_vertices)))
-    }
-
-    pub fn find_valid_subgraph(
-        &self,
-        edges: &FastIterSet<EdgeIndex>,
-        vertices: &FastIterSet<VertexIndex>,
-    ) -> Option<Subgraph> {
-        let mut matrix = Echelon::<CompleteMatrix>::new();
-        for &edge_index in edges.iter() {
-            matrix.add_variable(edge_index);
-        }
-
-        for &vertex_index in vertices.iter() {
-            let incident_edges = self.get_vertex_neighbors(vertex_index);
-            let parity = self.is_vertex_defect(vertex_index);
-            matrix.add_constraint(vertex_index, incident_edges, parity);
-        }
-        matrix.get_solution()
-    }
-
-    pub fn find_valid_subgraph_auto_vertices(&self, edges: &FastIterSet<EdgeIndex>) -> Option<Subgraph> {
-        self.find_valid_subgraph(edges, &self.get_edges_neighbors(edges))
-    }
-
-    pub fn is_valid_cluster(&self, edges: &FastIterSet<EdgeIndex>, vertices: &FastIterSet<VertexIndex>) -> bool {
-        self.find_valid_subgraph(edges, vertices).is_some()
-    }
-
-    pub fn is_valid_cluster_auto_vertices(&self, edges: &FastIterSet<EdgeIndex>) -> bool {
-        self.find_valid_subgraph_auto_vertices(edges).is_some()
-    }
-
-    pub fn is_vertex_defect(&self, vertex_index: VertexIndex) -> bool {
-        self.defect_vertices_hashset.contains(&vertex_index)
-    }
-
-    pub fn get_edge_neighbors(&self, edge_index: EdgeIndex) -> &Vec<VertexIndex> {
-        self.model_graph.get_edge_neighbors(edge_index)
-    }
-
-    pub fn get_vertex_neighbors(&self, vertex_index: VertexIndex) -> &Vec<EdgeIndex> {
-        self.model_graph.get_vertex_neighbors(vertex_index)
-    }
-
-    pub fn get_edges_neighbors(&self, edges: &FastIterSet<EdgeIndex>) -> FastIterSet<VertexIndex> {
-        self.model_graph.get_edges_neighbors(edges)
     }
 }
 

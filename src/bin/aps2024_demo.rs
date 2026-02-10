@@ -24,7 +24,7 @@ fn debug_demo() {
         let mut code = CodeCapacityTailoredCode::new(3, 0., 0.01);
         let initializer = Arc::new(code.get_initializer());
         let model_graph = Arc::new(ModelHyperGraph::new(initializer.clone()));
-        let mut dual_module = DualModulePQ::new_empty(&initializer);
+        let mut dual_module = DualModulePQ::new_empty(&initializer, 0);
         let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone());
         code.set_physical_errors(&[4]);
         let syndrome_pattern = Arc::new(code.get_syndrome());
@@ -56,12 +56,12 @@ fn debug_demo() {
                 .snapshot_combined("begin".to_string(), vec![&interface_ptr, &dual_module])
                 .unwrap();
             let decoding_graph = interface_ptr.read_recursive().decoding_graph.clone();
-            let s0 = Arc::new(InvalidSubgraph::new_complete(
+            let s0 = Arc::new(InvalidSubgraph::new_complete_from_indices(
                 fast_iter_set! {3},
                 fast_iter_set! {},
-                &decoding_graph,
+                &mut dual_module,
             ));
-            let (_, s0_ptr) = interface_ptr.find_or_create_node(&s0, &mut dual_module);
+            let (_, s0_ptr) = interface_ptr.find_or_create_node(&s0, &mut dual_module, 0);
             dual_module.set_grow_rate(&s0_ptr, Rational::from_usize(1).unwrap());
             for _ in 0..3 {
                 dual_module.grow(Rational::new_raw(1.into(), 3.into()));
@@ -70,12 +70,12 @@ fn debug_demo() {
                     .unwrap();
             }
             // create another node
-            let s1 = Arc::new(InvalidSubgraph::new_complete(
+            let s1 = Arc::new(InvalidSubgraph::new_complete_from_indices(
                 fast_iter_set! {6},
                 fast_iter_set! {},
-                &decoding_graph,
+                &mut dual_module,
             ));
-            let (_, s1_ptr) = interface_ptr.find_or_create_node(&s1, &mut dual_module);
+            let (_, s1_ptr) = interface_ptr.find_or_create_node(&s1, &mut dual_module, 0);
             dual_module.set_grow_rate(&s0_ptr, -Rational::from_usize(1).unwrap());
             dual_module.set_grow_rate(&s1_ptr, Rational::from_usize(1).unwrap());
             for _ in 0..3 {
@@ -102,7 +102,7 @@ fn simple_demo() {
         let mut code = CodeCapacityTailoredCode::new(3, 0., 0.01);
         let initializer = Arc::new(code.get_initializer());
         let model_graph = Arc::new(ModelHyperGraph::new(initializer.clone()));
-        let mut dual_module = DualModulePQ::new_empty(&initializer);
+        let mut dual_module = DualModulePQ::new_empty(&initializer, 0);
         let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone());
         code.set_physical_errors(&[4]);
         let syndrome_pattern = Arc::new(code.get_syndrome());
@@ -134,12 +134,12 @@ fn simple_demo() {
                 .snapshot_combined("begin".to_string(), vec![&interface_ptr, &dual_module])
                 .unwrap();
             let decoding_graph = interface_ptr.read_recursive().decoding_graph.clone();
-            let s0 = Arc::new(InvalidSubgraph::new_complete(
+            let s0 = Arc::new(InvalidSubgraph::new_complete_from_indices(
                 fast_iter_set! {3},
                 fast_iter_set! {},
-                &decoding_graph,
+                &mut dual_module,
             ));
-            let (_, s0_ptr) = interface_ptr.find_or_create_node(&s0, &mut dual_module);
+            let (_, s0_ptr) = interface_ptr.find_or_create_node(&s0, &mut dual_module, 0);
             dual_module.set_grow_rate(&s0_ptr, Rational::from_usize(1).unwrap());
             visualizer
                 .snapshot_combined("create s0".to_string(), vec![&interface_ptr, &dual_module])
@@ -168,7 +168,7 @@ fn challenge_demo() {
         let mut code = CodeCapacityTailoredCode::new(5, 0., 0.01);
         let initializer = Arc::new(code.get_initializer());
         let model_graph = Arc::new(ModelHyperGraph::new(initializer.clone()));
-        let mut dual_module = DualModulePQ::new_empty(&initializer);
+        let mut dual_module = DualModulePQ::new_empty(&initializer, 0);
         let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone());
         let syndrome_pattern = Arc::new(SyndromePattern::new_vertices(vec![10, 15, 16]));
         code.set_syndrome(&syndrome_pattern);
@@ -237,11 +237,11 @@ fn challenge_demo() {
                         while index >= s_ptr.len() {
                             let (vertices, edges) = invalid_subgraphs[s_ptr.len()].clone();
                             let s = if vertices.is_empty() {
-                                Arc::new(InvalidSubgraph::new(edges, &decoding_graph))
+                                Arc::new(InvalidSubgraph::new_from_indices(edges, dual_module))
                             } else {
-                                Arc::new(InvalidSubgraph::new_complete(vertices, edges, &decoding_graph))
+                                Arc::new(InvalidSubgraph::new_complete_from_indices(vertices, edges, dual_module))
                             };
-                            let (_, ptr) = interface_ptr.find_or_create_node(&s, dual_module);
+                            let (_, ptr) = interface_ptr.find_or_create_node(&s, dual_module, 0);
                             dual_module.set_grow_rate(&ptr, Rational::zero());
                             s_ptr.push(ptr);
                         }
@@ -324,7 +324,7 @@ fn surface_code_example() {
         let mut code = CodeCapacityTailoredCode::new(9, p / 3., p / 3.);
         let initializer = Arc::new(code.get_initializer());
         let model_graph = Arc::new(ModelHyperGraph::new(initializer.clone()));
-        let mut dual_module = DualModulePQ::new_empty(&initializer);
+        let mut dual_module = DualModulePQ::new_empty(&initializer, 0);
         let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone());
         let mut visualizer = Visualizer::new(
             Some(visualize_data_folder() + visualize_filename.as_str()),
@@ -373,7 +373,7 @@ fn triangle_color_code_example() {
         let mut code = CodeCapacityColorCode::new(9, p);
         let initializer = Arc::new(code.get_initializer());
         let model_graph = Arc::new(ModelHyperGraph::new(initializer.clone()));
-        let mut dual_module = DualModulePQ::new_empty(&initializer);
+        let mut dual_module = DualModulePQ::new_empty(&initializer, 0);
         let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone());
         let mut visualizer = Visualizer::new(
             Some(visualize_data_folder() + visualize_filename.as_str()),
@@ -423,7 +423,7 @@ fn small_color_code_example() {
     let mut code = CodeCapacityColorCode::new(7, p);
     let initializer = Arc::new(code.get_initializer());
     let model_graph = Arc::new(ModelHyperGraph::new(initializer.clone()));
-    let mut dual_module = DualModulePQ::new_empty(&initializer);
+    let mut dual_module = DualModulePQ::new_empty(&initializer, 0);
     let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone());
     let mut visualizer = Visualizer::new(
         Some(visualize_data_folder() + visualize_filename.as_str()),
@@ -483,7 +483,7 @@ fn circuit_level_example() {
         );
         let initializer = Arc::new(code.get_initializer());
         let model_graph = Arc::new(ModelHyperGraph::new(initializer.clone()));
-        let mut dual_module = DualModulePQ::new_empty(&initializer);
+        let mut dual_module = DualModulePQ::new_empty(&initializer, 0);
         let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone());
         let mut visualizer = Visualizer::new(
             Some(visualize_data_folder() + visualize_filename.as_str()),

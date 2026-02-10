@@ -96,7 +96,7 @@ pub fn get_version() -> String {
     let code = CodeCapacityTailoredCode::new(7, 0., 0.01);
     // create dual module
     let model_graph = code.get_model_graph();
-    let mut dual_module = DualModulePQ::new_empty(&model_graph.initializer);
+    let mut dual_module = DualModulePQ::new_empty(&model_graph.initializer, 0);
     // create primal module
     let mut primal_module = PrimalModuleSerial::new_empty(&model_graph.initializer);
     primal_module.plugins = std::sync::Arc::new(vec![]);

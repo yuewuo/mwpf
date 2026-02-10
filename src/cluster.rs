@@ -1,6 +1,7 @@
 use crate::dual_module::*;
 use crate::matrix::*;
 use crate::util::*;
+use crate::dual_module_pq::{EdgePtr, VertexPtr};
 
 use derivative::Derivative;
 
@@ -8,11 +9,11 @@ use derivative::Derivative;
 #[derivative(Debug)]
 pub struct Cluster {
     /// vertices of the cluster
-    pub vertices: FastIterSet<VertexIndex>,
+    pub vertices: FastIterSet<VertexPtr>,
     /// tight edges of the cluster
-    pub edges: FastIterSet<EdgeIndex>,
+    pub edges: FastIterSet<EdgePtr>,
     /// edges incident to the vertices but are not tight
-    pub hair: FastIterSet<EdgeIndex>,
+    pub hair: FastIterSet<EdgePtr>,
     /// dual variables of the cluster
     pub nodes: FastIterSet<OrderedDualNodePtr>,
     /// parity matrix of the cluster
@@ -39,17 +40,17 @@ impl Cluster {
     }
 
     /// Add a vertex to the cluster
-    pub fn add_vertex(&mut self, vertex: VertexIndex) {
+    pub fn add_vertex(&mut self, vertex: VertexPtr) {
         self.vertices.insert(vertex);
     }
 
     /// Add an edge to the cluster
-    pub fn add_edge(&mut self, edge: EdgeIndex) {
+    pub fn add_edge(&mut self, edge: EdgePtr) {
         self.edges.insert(edge);
     }
 
     /// Add a hair to the cluster
-    pub fn add_hair(&mut self, hair: EdgeIndex) {
+    pub fn add_hair(&mut self, hair: EdgePtr) {
         self.hair.insert(hair);
     }
 
@@ -87,6 +88,8 @@ pub mod tests {
         initializer.uniform_weights(Rational::one());
         let mut solver = SolverSerialJointSingleHair::new(&Arc::new(initializer), json!({}));
         solver.solve_visualizer(syndrome, Some(&mut visualizer));
+        let dual_module = solver.get_dual_module();
+        let vertex_ptr = dual_module.get_vertex_ptr(2);
         if cfg!(feature = "embed_visualizer") {
             let html = visualizer.generate_html(json!({}));
             assert!(visualizer_path.ends_with(".json"));
@@ -95,11 +98,11 @@ pub mod tests {
             println!("visualizer path: {}", &html_path);
         }
         // generate the cluster
-        let cluster = solver.get_cluster(2);
+        let cluster = solver.get_cluster(vertex_ptr);
         println!("cluster: {cluster:?}");
-        assert_eq!(cluster.vertices, expected_vertices);
-        assert_eq!(cluster.edges, expected_edges);
-        assert_eq!(cluster.hair, expected_hair);
+        assert_eq!(cluster.vertices.iter().map(|v| v.read_recursive().vertex_index).collect::<FastIterSet<VertexIndex>>(), expected_vertices);
+        assert_eq!(cluster.edges.iter().map(|e| e.read_recursive().edge_index).collect::<FastIterSet<EdgeIndex>>(), expected_edges);
+        assert_eq!(cluster.hair.iter().map(|e| e.read_recursive().edge_index).collect::<FastIterSet<EdgeIndex>>(), expected_hair);
         cluster
     }
 

@@ -9,6 +9,7 @@
 use crate::invalid_subgraph::*;
 use crate::relaxer::*;
 use crate::util::*;
+use crate::dual_module_pq::EdgePtr;
 
 use std::sync::Arc;
 
@@ -219,7 +220,7 @@ impl RelaxerOptimizer {
     pub fn optimize(
         &mut self,
         relaxer: Relaxer,
-        edge_slacks: FastIterMap<EdgeIndex, Rational>,
+        edge_slacks: FastIterMap<EdgePtr, Rational>,
         mut dual_variables: FastIterMap<Arc<InvalidSubgraph>, Rational>,
     ) -> (Relaxer, bool) {
         use highs::{HighsModelStatus, RowProblem, Sense};
@@ -240,8 +241,8 @@ impl RelaxerOptimizer {
         let mut x_vars = vec![];
         let mut y_vars = vec![];
         let mut invalid_subgraphs = Vec::with_capacity(dual_variables.len());
-        let mut edge_contributor: FastIterMap<EdgeIndex, Vec<usize>> =
-            edge_slacks.keys().map(|&edge_index| (edge_index, vec![])).collect();
+        let mut edge_contributor: FastIterMap<EdgePtr, Vec<usize>> =
+            edge_slacks.keys().map(|edge_ptr| (edge_ptr.clone(), vec![])).collect();
 
         for (var_index, (invalid_subgraph, dual_variable)) in dual_variables.iter().enumerate() {
             // constraint of the dual variable >= 0
@@ -257,14 +258,14 @@ impl RelaxerOptimizer {
             );
             invalid_subgraphs.push(invalid_subgraph.clone());
 
-            for &edge_index in invalid_subgraph.hair.iter() {
-                edge_contributor.get_mut(&edge_index).unwrap().push(var_index);
+            for edge_ptr in invalid_subgraph.hair.iter() {
+                edge_contributor.get_mut(edge_ptr).unwrap().push(var_index);
             }
         }
 
-        for (&edge_index, ref slack) in edge_slacks.iter() {
+        for (edge_ptr, ref slack) in edge_slacks.iter() {
             let mut row_entries = vec![];
-            for &var_index in edge_contributor[&edge_index].iter() {
+            for &var_index in edge_contributor[edge_ptr].iter() {
                 row_entries.push((x_vars[var_index], 1.0));
                 row_entries.push((y_vars[var_index], -1.0));
             }

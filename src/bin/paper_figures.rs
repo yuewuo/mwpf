@@ -31,7 +31,7 @@ fn hyperedge_example() {
     // create dual module
     let initializer = Arc::new(code.get_initializer());
     let model_graph = Arc::new(ModelHyperGraph::new(initializer.clone()));
-    let mut dual_module = DualModulePQ::new_empty(&initializer);
+    let mut dual_module = DualModulePQ::new_empty(&initializer, 0);
     let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone());
     // add syndrome
     let syndrome_pattern = Arc::new(SyndromePattern::new_vertices(vec![1, 2, 4, 6]));
@@ -48,8 +48,8 @@ fn hyperedge_example() {
         (fast_iter_set! {1}, 0.5),
     ];
     for (vertices, dual_variable) in dual_variables.into_iter() {
-        let s1 = Arc::new(InvalidSubgraph::new_complete(vertices, fast_iter_set! {}, &decoding_graph));
-        let (_, s1_ptr) = interface_ptr.find_or_create_node(&s1, &mut dual_module);
+        let s1 = Arc::new(InvalidSubgraph::new_complete_from_indices(vertices, fast_iter_set! {}, &mut dual_module));
+        let (_, s1_ptr) = interface_ptr.find_or_create_node(&s1, &mut dual_module, 0);
         dual_module.set_grow_rate(&s1_ptr, Rational::from_f64(dual_variable).unwrap());
     }
     dual_module.grow(Rational::from_f64(1.).unwrap());

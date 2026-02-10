@@ -2,13 +2,14 @@ use super::interface::*;
 use super::visualize::*;
 use crate::util::*;
 use derivative::Derivative;
+use crate::dual_module_pq::{EdgeWeak, VertexWeak};
 
 #[derive(Clone, Derivative)]
 #[derivative(Default(new = "true"))]
 pub struct Tail<M: MatrixView> {
     base: M,
     /// the set of edges that should be placed at the end, if any
-    tail_edges: FastIterSet<EdgeIndex>,
+    tail_edges: FastIterSet<EdgeWeak>,
     /// var indices are outdated on any changes to the underlying matrix
     #[derivative(Default(value = "true"))]
     is_var_indices_outdated: bool,
@@ -36,41 +37,41 @@ impl<M: MatrixView> Tail<M> {
 }
 
 impl<M: MatrixView> MatrixTail for Tail<M> {
-    fn get_tail_edges(&self) -> &FastIterSet<EdgeIndex> {
+    fn get_tail_edges(&self) -> &FastIterSet<EdgeWeak> {
         &self.tail_edges
     }
-    fn get_tail_edges_mut(&mut self) -> &mut FastIterSet<EdgeIndex> {
+    fn get_tail_edges_mut(&mut self) -> &mut FastIterSet<EdgeWeak> {
         self.is_var_indices_outdated = true;
         &mut self.tail_edges
     }
 }
 
 impl<M: MatrixTight> MatrixTight for Tail<M> {
-    fn update_edge_tightness(&mut self, edge_index: EdgeIndex, is_tight: bool) {
+    fn update_edge_tightness(&mut self, edge_weak: EdgeWeak, is_tight: bool) {
         self.is_var_indices_outdated = true;
-        self.base.update_edge_tightness(edge_index, is_tight)
+        self.base.update_edge_tightness(edge_weak, is_tight)
     }
-    fn is_tight(&self, edge_index: usize) -> bool {
-        self.base.is_tight(edge_index)
+    fn is_tight(&self, edge_weak: EdgeWeak) -> bool {
+        self.base.is_tight(edge_weak)
     }
-    fn get_tight_edges(&self) -> &FastIterSet<EdgeIndex> {
+    fn get_tight_edges(&self) -> &FastIterSet<EdgeWeak> {
         self.base.get_tight_edges()
     }
 }
 
 impl<M: MatrixView> MatrixBasic for Tail<M> {
-    fn add_variable(&mut self, edge_index: EdgeIndex) -> Option<VarIndex> {
+    fn add_variable(&mut self, edge_weak: EdgeWeak) -> Option<VarIndex> {
         self.is_var_indices_outdated = true;
-        self.base.add_variable(edge_index)
+        self.base.add_variable(edge_weak.clone())
     }
 
     fn add_constraint(
         &mut self,
-        vertex_index: VertexIndex,
-        incident_edges: &[EdgeIndex],
+        vertex_weak: VertexWeak,
+        incident_edges: &[EdgeWeak],
         parity: bool,
     ) -> Option<Vec<VarIndex>> {
-        self.base.add_constraint(vertex_index, incident_edges, parity)
+        self.base.add_constraint(vertex_weak.clone(), incident_edges, parity)
     }
 
     fn xor_row(&mut self, target: RowIndex, source: RowIndex) {
@@ -85,16 +86,16 @@ impl<M: MatrixView> MatrixBasic for Tail<M> {
     fn get_rhs(&self, row: RowIndex) -> bool {
         self.get_base().get_rhs(row)
     }
-    fn var_to_edge_index(&self, var_index: VarIndex) -> EdgeIndex {
+    fn var_to_edge_index(&self, var_index: VarIndex) -> EdgeWeak {
         self.get_base().var_to_edge_index(var_index)
     }
-    fn edge_to_var_index(&self, edge_index: EdgeIndex) -> Option<VarIndex> {
-        self.get_base().edge_to_var_index(edge_index)
+    fn edge_to_var_index(&self, edge_weak: EdgeWeak) -> Option<VarIndex> {
+        self.get_base().edge_to_var_index(edge_weak)
     }
-    fn get_vertices(&self) -> FastIterSet<VertexIndex> {
+    fn get_vertices(&self) -> FastIterSet<VertexWeak> {
         self.get_base().get_vertices()
     }
-    fn get_edges(&self) -> FastIterSet<EdgeIndex> {
+    fn get_edges(&self) -> FastIterSet<EdgeWeak> {
         self.get_base().get_edges()
     }
 }
@@ -150,6 +151,9 @@ pub mod tests {
     use super::super::basic::*;
     use super::super::tight::*;
     use super::*;
+    use crate::matrix::basic::tests::{initialize_vertex_edges_for_matrix_testing, edge_vec_from_indices};
+    use std::collections::HashSet;
+    use crate::dual_module_pq::{EdgePtr, VertexPtr};
 
     type TailMatrix = Tail<Tight<BasicMatrix>>;
 
@@ -157,10 +161,19 @@ pub mod tests {
     fn tail_matrix_1() {
         // cargo test --features=colorful tail_matrix_1 -- --nocapture
         let mut matrix = TailMatrix::new();
-        matrix.add_constraint(0, &[1, 4, 6], true);
-        matrix.add_constraint(1, &[4, 9], false);
-        matrix.add_constraint(2, &[1, 9], true);
-        assert_eq!(matrix.edge_to_var_index(4), Some(1));
+        let vertex_indices = vec![0, 1, 2];
+        let edge_indices = vec![1, 4, 6, 9];
+        let vertex_incident_edges_vec = vec![
+            vec![0, 1, 2],
+            vec![1, 3],
+            vec![0, 3],
+        ];
+        let (vertices, edges) = initialize_vertex_edges_for_matrix_testing(vertex_indices, edge_indices);
+       
+        matrix.add_constraint(vertices[0].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges), true);
+        matrix.add_constraint(vertices[1].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[1], &edges), false);
+        matrix.add_constraint(vertices[2].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[2], &edges), true);
+        assert_eq!(matrix.edge_to_var_index(edges[1].downgrade()), Some(1));
         matrix.printstd();
         assert_eq!(
             matrix.clone().printstd_str(),
@@ -176,8 +189,8 @@ pub mod tests {
 └─┴───┘
 "
         );
-        for edge_index in [1, 4, 6, 9] {
-            matrix.update_edge_tightness(edge_index, true);
+        for edge_ptr in edges.iter() {
+            matrix.update_edge_tightness(edge_ptr.downgrade(), true);
         }
         matrix.printstd();
         assert_eq!(
@@ -194,7 +207,7 @@ pub mod tests {
 └─┴─┴─┴─┴─┴───┘
 "
         );
-        matrix.set_tail_edges([1, 6].into_iter());
+        matrix.set_tail_edges([edges[0].downgrade(), edges[2].downgrade()].into_iter());
         matrix.printstd();
         assert_eq!(
             matrix.clone().printstd_str(),
@@ -210,8 +223,10 @@ pub mod tests {
 └─┴─┴─┴─┴─┴───┘
 "
         );
-        assert_eq!(matrix.get_tail_edges_vec(), [1, 6]);
-        assert_eq!(matrix.edge_to_var_index(4), Some(1));
+        assert_eq!(
+            matrix.get_tail_edges_vec().iter().map(|e| e.upgrade_force().read_recursive().edge_index).collect::<HashSet<_>>(), 
+            [1, 6].into_iter().collect::<HashSet<_>>());
+        assert_eq!(matrix.edge_to_var_index(edges[1].downgrade()), Some(1));
     }
 
     #[test]
@@ -219,8 +234,15 @@ pub mod tests {
     fn tail_matrix_cannot_call_dirty_column() {
         // cargo test tail_matrix_cannot_call_dirty_column -- --nocapture
         let mut matrix = TailMatrix::new();
-        matrix.add_constraint(0, &[1, 4, 6], true);
-        matrix.update_edge_tightness(1, true);
+        let vertex_indices = vec![0, 1, 2];
+        let edge_indices = vec![1, 4, 6, 9];
+        let vertex_incident_edges_vec = vec![
+            vec![0, 1, 2],
+        ];
+        let (vertices, edges) = initialize_vertex_edges_for_matrix_testing(vertex_indices, edge_indices);
+        matrix.add_constraint(vertices[0].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges), true);
+
+        matrix.update_edge_tightness(edges[0].downgrade(), true);
         // even though there is indeed such a column, we forbid such dangerous calls
         // always call `columns()` before accessing any column
         matrix.column_to_var_index(0);
@@ -230,14 +252,23 @@ pub mod tests {
     fn tail_matrix_basic_trait() {
         // cargo test --features=colorful tail_matrix_basic_trait -- --nocapture
         let mut matrix = TailMatrix::new();
-        matrix.add_variable(3); // untight edges will not show
-        matrix.add_constraint(0, &[1, 4, 6], true);
-        matrix.add_constraint(1, &[4, 9], false);
-        matrix.add_constraint(2, &[1, 9], true);
+        let vertex_indices = vec![0, 1, 2];
+        let edge_indices = vec![1, 4, 6, 9, 3];
+        let vertex_incident_edges_vec = vec![
+            vec![0, 1, 2],
+            vec![1, 3],
+            vec![0, 3],
+        ];
+        let (vertices, edges) = initialize_vertex_edges_for_matrix_testing(vertex_indices, edge_indices);
+       
+        matrix.add_variable(edges[4].downgrade()); // untight edges will not show
+        matrix.add_constraint(vertices[0].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges), true);
+        matrix.add_constraint(vertices[1].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[1], &edges), false);
+        matrix.add_constraint(vertices[2].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[2], &edges), true);
         matrix.swap_row(2, 1);
         matrix.xor_row(0, 1);
-        for edge_index in [1, 4, 6, 9] {
-            matrix.update_edge_tightness(edge_index, true);
+        for edge_index in 0..4 {
+            matrix.update_edge_tightness(edges[edge_index].downgrade(), true);
         }
         matrix.printstd();
         assert_eq!(
@@ -254,7 +285,7 @@ pub mod tests {
 └─┴─┴─┴─┴─┴───┘
 "
         );
-        assert!(matrix.is_tight(1));
-        assert_eq!(matrix.edge_to_var_index(4), Some(2));
+        assert!(matrix.is_tight(edges[0].downgrade()));
+        assert_eq!(matrix.edge_to_var_index(edges[1].downgrade()), Some(2));
     }
 }
