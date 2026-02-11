@@ -25,7 +25,7 @@ fn debug_demo() {
         let initializer = Arc::new(code.get_initializer());
         let model_graph = Arc::new(ModelHyperGraph::new(initializer.clone()));
         let mut dual_module = DualModulePQ::new_empty(&initializer, 0);
-        let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone());
+        let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone(), 0);
         code.set_physical_errors(&[4]);
         let syndrome_pattern = Arc::new(code.get_syndrome());
         let mut visualizer = Visualizer::new(
@@ -103,7 +103,7 @@ fn simple_demo() {
         let initializer = Arc::new(code.get_initializer());
         let model_graph = Arc::new(ModelHyperGraph::new(initializer.clone()));
         let mut dual_module = DualModulePQ::new_empty(&initializer, 0);
-        let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone());
+        let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone(), 0);
         code.set_physical_errors(&[4]);
         let syndrome_pattern = Arc::new(code.get_syndrome());
         let mut visualizer = Visualizer::new(
@@ -169,7 +169,7 @@ fn challenge_demo() {
         let initializer = Arc::new(code.get_initializer());
         let model_graph = Arc::new(ModelHyperGraph::new(initializer.clone()));
         let mut dual_module = DualModulePQ::new_empty(&initializer, 0);
-        let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone());
+        let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone(), 0);
         let syndrome_pattern = Arc::new(SyndromePattern::new_vertices(vec![10, 15, 16]));
         code.set_syndrome(&syndrome_pattern);
         let mut visualizer = Visualizer::new(
@@ -325,7 +325,7 @@ fn surface_code_example() {
         let initializer = Arc::new(code.get_initializer());
         let model_graph = Arc::new(ModelHyperGraph::new(initializer.clone()));
         let mut dual_module = DualModulePQ::new_empty(&initializer, 0);
-        let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone());
+        let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone(), 0);
         let mut visualizer = Visualizer::new(
             Some(visualize_data_folder() + visualize_filename.as_str()),
             code.get_positions(),
@@ -374,7 +374,7 @@ fn triangle_color_code_example() {
         let initializer = Arc::new(code.get_initializer());
         let model_graph = Arc::new(ModelHyperGraph::new(initializer.clone()));
         let mut dual_module = DualModulePQ::new_empty(&initializer, 0);
-        let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone());
+        let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone(), 0);
         let mut visualizer = Visualizer::new(
             Some(visualize_data_folder() + visualize_filename.as_str()),
             code.get_positions(),
@@ -424,7 +424,7 @@ fn small_color_code_example() {
     let initializer = Arc::new(code.get_initializer());
     let model_graph = Arc::new(ModelHyperGraph::new(initializer.clone()));
     let mut dual_module = DualModulePQ::new_empty(&initializer, 0);
-    let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone());
+    let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone(), 0);
     let mut visualizer = Visualizer::new(
         Some(visualize_data_folder() + visualize_filename.as_str()),
         code.get_positions(),
@@ -484,7 +484,7 @@ fn circuit_level_example() {
         let initializer = Arc::new(code.get_initializer());
         let model_graph = Arc::new(ModelHyperGraph::new(initializer.clone()));
         let mut dual_module = DualModulePQ::new_empty(&initializer, 0);
-        let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone());
+        let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone(), 0);
         let mut visualizer = Visualizer::new(
             Some(visualize_data_folder() + visualize_filename.as_str()),
             code.get_positions(),

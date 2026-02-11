@@ -116,7 +116,7 @@ impl PrimalModuleImpl for PrimalModuleUnionFind {
                 node_index: node.index,
             });
             let global_id = PrimalModuleUnionFindNode::get_global_id(&node_ptr);
-            self.node_map.insert(global_id, internal_id);
+            self.node_map.insert(global_id, node.index);
         }
     }
 
@@ -145,13 +145,15 @@ impl PrimalModuleImpl for PrimalModuleUnionFind {
                         let node_global_index = PrimalModuleUnionFindNode::get_global_id(dual_node_ptr);
                         let node_internal_index = self.node_map.get(&node_global_index).expect("all nodes should be in the map");
                         active_clusters.remove(&(self.union_find.find(*cluster_internal_index as usize) as NodeIndex));
+                        active_clusters.remove(&(self.union_find.find(*node_internal_index) as NodeIndex));
                         self.union_find.union(*cluster_internal_index as usize, *node_internal_index as usize);
                     }
+                    let new_root_index = self.union_find.find(*cluster_internal_index);
                     self.union_find
                         .get_mut(*cluster_internal_index as usize)
                         .internal_edges
                         .insert(edge_ptr);
-                    active_clusters.insert(self.union_find.find(*cluster_internal_index as usize) as NodeIndex);
+                    active_clusters.insert(new_root_index as NodeIndex);
                 }
                 _ => {
                     unreachable!()
@@ -171,10 +173,16 @@ impl PrimalModuleImpl for PrimalModuleUnionFind {
                 });
 
                 self.union_find.union(cluster_index as usize, new_cluster_node_index as usize);
+                // Get the final merged edges from the new root (which might be new_cluster_node_index or cluster_index depending on UF weight)
+                let final_root = self.union_find.find(new_cluster_node_index as usize);
                 let invalid_subgraph = InvalidSubgraph::new_ptr(
-                    self.union_find.get(cluster_index as usize).internal_edges.clone(), dual_module
+                    self.union_find.get(final_root).internal_edges.clone(), dual_module
                 );
-                interface_ptr.create_node(invalid_subgraph, dual_module, interface_ptr.get_ord().0);
+                let created_dual_node_ptr = interface_ptr.create_node(invalid_subgraph, dual_module, interface_ptr.get_ord().0);
+                // we should add this new node to the node map
+                let global_id = PrimalModuleUnionFindNode::get_global_id(&created_dual_node_ptr);
+                let internal_id = created_dual_node_ptr.get_ord().0;
+                self.node_map.insert(global_id, internal_id);
             }
         }
         false
@@ -252,7 +260,7 @@ pub mod tests {
         let mut primal_module = PrimalModuleUnionFind::new_empty(&model_graph.initializer);
         // try to work on a simple syndrome
         code.set_defect_vertices(&defect_vertices);
-        let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone());
+        let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone(), 0);
         primal_module.solve_visualizer(
             &interface_ptr,
             Arc::new(code.get_syndrome()),

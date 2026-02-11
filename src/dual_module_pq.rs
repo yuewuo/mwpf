@@ -451,7 +451,7 @@ where
             vertices,
             edges,
             obstacle_queue: Queue::default(),
-            global_time: ArcManualSafeLock::new_value(Rational::zero(), (0, 0)),
+            global_time: ArcManualSafeLock::new_value(Rational::zero(), (partition_id, 0)),
             mode: DualModuleMode::default(),
             tuning_start_time: None,
             total_tuning_time: None,

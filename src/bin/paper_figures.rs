@@ -32,7 +32,7 @@ fn hyperedge_example() {
     let initializer = Arc::new(code.get_initializer());
     let model_graph = Arc::new(ModelHyperGraph::new(initializer.clone()));
     let mut dual_module = DualModulePQ::new_empty(&initializer, 0);
-    let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone());
+    let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone(), 0);
     // add syndrome
     let syndrome_pattern = Arc::new(SyndromePattern::new_vertices(vec![1, 2, 4, 6]));
     interface_ptr.write().decoding_graph.set_syndrome(syndrome_pattern.clone());

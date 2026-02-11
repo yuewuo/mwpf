@@ -270,7 +270,7 @@ pub mod tests {
         let (decoding_graph, ..) = color_code_5_decoding_graph(vec![7, 1], visualize_filename);
         let initializer = decoding_graph.model_graph.initializer.clone();
         let mut dual_module = DualModulePQ::new_empty(&initializer, 0);
-        let interface_ptr = DualModuleInterfacePtr::new(decoding_graph.model_graph.clone());
+        let interface_ptr = DualModuleInterfacePtr::new(decoding_graph.model_graph.clone(), 0);
         interface_ptr.load(decoding_graph.syndrome_pattern.clone(), &mut dual_module, 0); // this is needed to load the defect vertices
         let invalid_subgraph_1 = InvalidSubgraph::new_from_indices(fast_iter_set! {13}, &mut dual_module);
         println!("invalid_subgraph_1: {invalid_subgraph_1:?}");
@@ -325,7 +325,7 @@ pub mod tests {
     #[test]
     fn invalid_subgraph_hash() {
         // cargo test invalid_subgraph_hash -- --nocapture
-        let visualize_filename = "invalid_subgraph_good.json".to_string();
+        let visualize_filename = "invalid_subgraph_hash.json".to_string();
         // we use an arbitrary decoding graph, the defect vertices here are not loaded
         let (decoding_graph, ..) = color_code_5_decoding_graph(vec![7, 1], visualize_filename);
         let initializer = decoding_graph.model_graph.initializer.clone();

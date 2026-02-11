@@ -340,9 +340,9 @@ impl SolverSerialPlugins {
         primal_module.plugins = plugins;
         primal_module.config = config.primal.as_ref().unwrap_or(&config.flatten_primal).clone();
         Self {
-            dual_module: DualModulePQ::new_empty(initializer, 0),
+            dual_module: DualModulePQ::new_empty(initializer, 0), // TODO: double check the partition id here
             primal_module,
-            interface_ptr: DualModuleInterfacePtr::new(model_graph.clone()),
+            interface_ptr: DualModuleInterfacePtr::new(model_graph.clone(), 0), // TODO: double check the partition id here
             model_graph,
             config,
             syndrome_loaded: false,

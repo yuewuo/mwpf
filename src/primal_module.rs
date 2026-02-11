@@ -198,6 +198,7 @@ pub trait PrimalModuleImpl {
     ) where
         F: FnMut(&DualModuleInterfacePtr, &mut D, &mut Self, &DualReport),
     {
+        println!("primal module solve_step_callback_interface_loaded called");
         // do not trigger on Python keyboard interrupt until 100ms later
         PYTHON_SIGNAL_CHECKER.skip_next();
         // Search, this part is unchanged

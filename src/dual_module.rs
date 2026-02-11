@@ -645,17 +645,17 @@ impl DualReport {
 }
 
 impl DualModuleInterfacePtr {
-    pub fn new(model_graph: Arc<ModelHyperGraph>) -> Self {
+    pub fn new(model_graph: Arc<ModelHyperGraph>, partition_id: usize) -> Self {
         Self::new_value(DualModuleInterface {
             nodes: Vec::new(),
             hashmap: HashMap::new(),
             decoding_graph: DecodingHyperGraph::new(model_graph, Arc::new(SyndromePattern::new_empty())),
-        }, (0, 0))
+        }, (partition_id, 0))
     }
 
     /// a dual module interface MUST be created given a concrete implementation of the dual module
     pub fn new_load(decoding_graph: DecodingHyperGraph, dual_module_impl: &mut impl DualModuleImpl, partition_id: usize) -> Self {
-        let interface_ptr = Self::new(decoding_graph.model_graph.clone());
+        let interface_ptr = Self::new(decoding_graph.model_graph.clone(), partition_id);
         interface_ptr.load(decoding_graph.syndrome_pattern, dual_module_impl, partition_id);
         interface_ptr
     }
@@ -773,6 +773,10 @@ impl DualModuleInterfacePtr {
             Some(node_ptr) => Some((true, node_ptr)),
             None => Some((false, self.create_node_tune(invalid_subgraph.clone(), dual_module, partition_id))),
         }
+    }
+
+    pub fn get_nodes_num(&self) -> usize {
+        self.read_recursive().nodes.len()
     }
 
     /// internal function for creating a node, for D.R.Y.

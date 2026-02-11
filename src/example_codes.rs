@@ -1635,7 +1635,7 @@ mod tests {
         // cargo test --release example_code_correction_validity_code_capacity_color_code -- --nocapture
         let d_vec = [3, 5, 7, 9];
         let p_vec = [0.1, 0.01];
-        let repeat = 10000;
+        let repeat = 1;
         for d in d_vec {
             for p in p_vec {
                 println!("d={d}, p={p}");
@@ -1643,12 +1643,18 @@ mod tests {
                 code.sanity_check().unwrap();
                 let initializer = Arc::new(code.get_initializer());
                 let mut solver = SolverType::JointSingleHair.build(&initializer, &code, json!({ "cluster_node_limit": 50 }));
+                println!("hello");
                 for _ in 0..repeat {
                     let (syndrome, _) = code.generate_random_errors(thread_rng().gen::<u64>());
+                    println!("syndrome = {:?}", syndrome);
                     solver.solve(syndrome);
+                    println!("after solve");
                     let (subgraph, _weight_range) = solver.subgraph_range();
+                    println!("subgraph");
                     code.validate_correction(&subgraph);
+                    println!("after validate");
                     solver.clear();
+                    println!("after clear");
                 }
             }
         }

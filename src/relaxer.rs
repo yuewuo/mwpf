@@ -154,7 +154,7 @@ mod tests {
         let (decoding_graph, ..) = color_code_5_decoding_graph(vec![7, 1], visualize_filename);
         let initializer = decoding_graph.model_graph.initializer.clone();
         let mut dual_module = DualModulePQ::new_empty(&initializer, 0); // initialize vertex and edge pointers
-        let interface_ptr = DualModuleInterfacePtr::new(decoding_graph.model_graph.clone());
+        let interface_ptr = DualModuleInterfacePtr::new(decoding_graph.model_graph.clone(), 0);
         interface_ptr.load(decoding_graph.syndrome_pattern.clone(), &mut dual_module, 0); // this is needed to load the defect vertices
 
         let invalid_subgraph = Arc::new(InvalidSubgraph::new_complete_from_indices(
@@ -176,7 +176,7 @@ mod tests {
         let (decoding_graph, ..) = color_code_5_decoding_graph(vec![7, 1], visualize_filename);
         let initializer = decoding_graph.model_graph.initializer.clone();
         let mut dual_module = DualModulePQ::new_empty(&initializer, 0); // initialize vertex and edge pointers
-        let interface_ptr = DualModuleInterfacePtr::new(decoding_graph.model_graph.clone());
+        let interface_ptr = DualModuleInterfacePtr::new(decoding_graph.model_graph.clone(), 0);
         interface_ptr.load(decoding_graph.syndrome_pattern.clone(), &mut dual_module, 0); // this is needed to load the defect vertices
 
         let invalid_subgraph = Arc::new(InvalidSubgraph::new_complete_from_indices(
@@ -195,7 +195,7 @@ mod tests {
         let (decoding_graph, ..) = color_code_5_decoding_graph(vec![7, 1], visualize_filename);
         let initializer = decoding_graph.model_graph.initializer.clone();
         let mut dual_module = DualModulePQ::new_empty(&initializer, 0); // initialize vertex and edge pointers
-        let interface_ptr = DualModuleInterfacePtr::new(decoding_graph.model_graph.clone());
+        let interface_ptr = DualModuleInterfacePtr::new(decoding_graph.model_graph.clone(), 0);
         interface_ptr.load(decoding_graph.syndrome_pattern.clone(), &mut dual_module, 0); // this is needed to load the defect vertices
         let vertices: FastIterSet<VertexIndex> = [1, 2, 3].into();
         let edges: FastIterSet<EdgeIndex> = [4, 5].into();

@@ -1203,7 +1203,7 @@ pub mod tests {
         // primal_module.config = serde_json::from_value(json!({"timeout":1})).unwrap();
         // try to work on a simple syndrome
         let decoding_graph = DecodingHyperGraph::new_defects(model_graph, defect_vertices.clone());
-        let interface_ptr = DualModuleInterfacePtr::new(decoding_graph.model_graph.clone());
+        let interface_ptr = DualModuleInterfacePtr::new(decoding_graph.model_graph.clone(), 0);
         primal_module.solve_visualizer(
             &interface_ptr,
             decoding_graph.syndrome_pattern.clone(),

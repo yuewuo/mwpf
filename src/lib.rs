@@ -102,7 +102,7 @@ pub fn get_version() -> String {
     primal_module.plugins = std::sync::Arc::new(vec![]);
     // try to work on a simple syndrome
     let decoding_graph = DecodingHyperGraph::new_defects(model_graph, defect_vertices.clone());
-    let interface_ptr = DualModuleInterfacePtr::new(decoding_graph.model_graph.clone());
+    let interface_ptr = DualModuleInterfacePtr::new(decoding_graph.model_graph.clone(), 0);
     primal_module.solve_visualizer(
         &interface_ptr,
         decoding_graph.syndrome_pattern.clone(),
