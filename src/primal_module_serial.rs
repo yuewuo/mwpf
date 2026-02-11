@@ -246,6 +246,7 @@ impl PrimalModuleImpl for PrimalModuleSerial {
                 cluster_weak: primal_cluster_ptr.downgrade(),
             },
             (partition_id, node.index as usize));
+            drop(node);
             primal_cluster_ptr.write().nodes.push(primal_node_ptr.clone());
             dual_node_ptr.write().primal_module_serial_node = Some(primal_node_ptr.clone().downgrade());
             // add to self
