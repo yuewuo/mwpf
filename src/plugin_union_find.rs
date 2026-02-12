@@ -13,33 +13,35 @@ use crate::num_traits::One;
 use crate::plugin::*;
 use crate::relaxer::*;
 use crate::util::*;
+use crate::dual_module_pq::EdgePtr;
 
 #[derive(Debug, Clone, Default)]
 pub struct PluginUnionFind {}
 
 impl PluginUnionFind {
     /// check if the cluster is valid (hypergraph union-find decoder)
-    pub fn find_single_relaxer(decoding_graph: &DecodingHyperGraph, matrix: &mut EchelonMatrix) -> Option<Relaxer> {
+    pub fn find_single_relaxer(dual_module: &mut dyn DualModuleImpl, matrix: &mut EchelonMatrix) -> Option<Relaxer> {
         if matrix.get_echelon_info().satisfiable {
             return None; // cannot find any relaxer
         }
+        let local_edges: FastIterSet<EdgePtr> = matrix.get_view_edges().iter().map(|e| e.upgrade_force()).collect::<FastIterSet<_>>();
         let invalid_subgraph = InvalidSubgraph::new_complete_ptr(
-            matrix.get_vertices(),
-            FastIterSet::from_iter(matrix.get_view_edges()),
-            decoding_graph,
+            matrix.get_vertices().iter().map(|e| e.upgrade_force()).collect::<FastIterSet<_>>(),
+            local_edges,
+            dual_module
         );
-        Some(Relaxer::new([(invalid_subgraph, Rational::one())].into()))
+        Some(Relaxer::new([(invalid_subgraph, Rational::one())].into_iter().collect()))
     }
 }
 
 impl PluginImpl for PluginUnionFind {
     fn find_relaxers(
         &self,
-        decoding_graph: &DecodingHyperGraph,
+        dual_module: &mut dyn DualModuleImpl,
         matrix: &mut EchelonMatrix,
         _positive_dual_nodes: &[DualNodePtr],
     ) -> Vec<Relaxer> {
-        if let Some(relaxer) = Self::find_single_relaxer(decoding_graph, matrix) {
+        if let Some(relaxer) = Self::find_single_relaxer(dual_module, matrix) {
             vec![relaxer]
         } else {
             vec![]

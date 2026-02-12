@@ -4,6 +4,7 @@ use crate::util::*;
 use core::panic;
 use derivative::Derivative;
 use prettytable::*;
+use crate::dual_module_pq::{EdgeWeak, VertexWeak};
 
 #[derive(Clone, Derivative)]
 #[derivative(Default(new = "true"))]
@@ -32,42 +33,42 @@ impl<M: MatrixView> Echelon<M> {
 }
 
 impl<M: MatrixTail + MatrixView> MatrixTail for Echelon<M> {
-    fn get_tail_edges(&self) -> &FastIterSet<EdgeIndex> {
+    fn get_tail_edges(&self) -> &FastIterSet<EdgeWeak> {
         self.base.get_tail_edges()
     }
-    fn get_tail_edges_mut(&mut self) -> &mut FastIterSet<EdgeIndex> {
+    fn get_tail_edges_mut(&mut self) -> &mut FastIterSet<EdgeWeak> {
         self.is_info_outdated = true;
         self.base.get_tail_edges_mut()
     }
 }
 
 impl<M: MatrixTight> MatrixTight for Echelon<M> {
-    fn update_edge_tightness(&mut self, edge_index: EdgeIndex, is_tight: bool) {
+    fn update_edge_tightness(&mut self, edge_weak: EdgeWeak, is_tight: bool) {
         self.is_info_outdated = true;
-        self.base.update_edge_tightness(edge_index, is_tight)
+        self.base.update_edge_tightness(edge_weak.clone(), is_tight)
     }
-    fn is_tight(&self, edge_index: usize) -> bool {
-        self.base.is_tight(edge_index)
+    fn is_tight(&self, edge_weak: EdgeWeak) -> bool {
+        self.base.is_tight(edge_weak.clone())
     }
-    fn get_tight_edges(&self) -> &FastIterSet<EdgeIndex> {
+    fn get_tight_edges(&self) -> &FastIterSet<EdgeWeak> {
         self.base.get_tight_edges()
     }
 }
 
 impl<M: MatrixView> MatrixBasic for Echelon<M> {
-    fn add_variable(&mut self, edge_index: EdgeIndex) -> Option<VarIndex> {
+    fn add_variable(&mut self, edge_weak: EdgeWeak) -> Option<VarIndex> {
         self.is_info_outdated = true;
-        self.base.add_variable(edge_index)
+        self.base.add_variable(edge_weak.clone())
     }
 
     fn add_constraint(
         &mut self,
-        vertex_index: VertexIndex,
-        incident_edges: &[EdgeIndex],
+        vertex_weak: VertexWeak,
+        incident_edges: &[EdgeWeak],
         parity: bool,
     ) -> Option<Vec<VarIndex>> {
         self.is_info_outdated = true;
-        self.base.add_constraint(vertex_index, incident_edges, parity)
+        self.base.add_constraint(vertex_weak.clone(), incident_edges, parity)
     }
 
     fn xor_row(&mut self, _target: RowIndex, _source: RowIndex) {
@@ -82,16 +83,16 @@ impl<M: MatrixView> MatrixBasic for Echelon<M> {
     fn get_rhs(&self, row: RowIndex) -> bool {
         self.get_base().get_rhs(row)
     }
-    fn var_to_edge_index(&self, var_index: VarIndex) -> EdgeIndex {
+    fn var_to_edge_index(&self, var_index: VarIndex) -> EdgeWeak {
         self.get_base().var_to_edge_index(var_index)
     }
-    fn edge_to_var_index(&self, edge_index: EdgeIndex) -> Option<VarIndex> {
-        self.get_base().edge_to_var_index(edge_index)
+    fn edge_to_var_index(&self, edge_weak: EdgeWeak) -> Option<VarIndex> {
+        self.get_base().edge_to_var_index(edge_weak.clone())
     }
-    fn get_vertices(&self) -> FastIterSet<VertexIndex> {
+    fn get_vertices(&self) -> FastIterSet<VertexWeak> {
         self.get_base().get_vertices()
     }
-    fn get_edges(&self) -> FastIterSet<EdgeIndex> {
+    fn get_edges(&self) -> FastIterSet<EdgeWeak> {
         self.get_base().get_edges()
     }
 }
@@ -274,7 +275,7 @@ impl<M: MatrixView> VizTrait for Echelon<M> {
         table.title.add_cell(Cell::new("\u{25BC}"));
         for (row, row_info) in info.rows.iter().enumerate() {
             let cell = if row_info.has_leading() {
-                Cell::new(self.column_to_edge_index(row_info.column).to_string().as_str()).style_spec("irFm")
+                Cell::new(self.column_to_edge_index(row_info.column).upgrade_force().read_recursive().edge_index.to_string().as_str()).style_spec("irFm")
             } else {
                 Cell::new("*").style_spec("rFr")
             };
@@ -305,6 +306,9 @@ pub mod tests {
     use super::super::tight::*;
     use super::*;
     use crate::rand::{Rng, SeedableRng};
+    use crate::matrix::basic::tests::{initialize_vertex_edges_for_matrix_testing, edge_vec_from_indices};
+    use std::collections::HashSet;
+    use crate::dual_module_pq::{EdgePtr, VertexPtr};
 
     type EchelonMatrix = Echelon<Tail<Tight<BasicMatrix>>>;
 
@@ -312,12 +316,22 @@ pub mod tests {
     fn echelon_matrix_simple() {
         // cargo test --features=colorful echelon_matrix_simple -- --nocapture
         let mut matrix = EchelonMatrix::new();
-        matrix.add_constraint(0, &[1, 4, 6], true);
-        matrix.add_constraint(1, &[4, 9], false);
-        matrix.add_constraint(2, &[1, 9], true);
-        assert_eq!(matrix.edge_to_var_index(4), Some(1));
-        for edge_index in [1, 4, 6, 9] {
-            matrix.update_edge_tightness(edge_index, true);
+        let vertex_indices = vec![0, 1, 2];
+        let edge_indices = vec![1, 4, 6, 9];
+        let vertex_incident_edges_vec = vec![
+            vec![0, 1, 2],
+            vec![1, 3],
+            vec![0, 3],
+        ];
+        let (vertices, edges) = initialize_vertex_edges_for_matrix_testing(vertex_indices, edge_indices);
+
+        matrix.add_constraint(vertices[0].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges), true);
+        matrix.add_constraint(vertices[1].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[1], &edges), false);
+        matrix.add_constraint(vertices[2].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[2], &edges), true);
+        
+        assert_eq!(matrix.edge_to_var_index(edges[1].downgrade()), Some(1));
+        for edge_index in 0..4 {
+            matrix.update_edge_tightness(edges[edge_index].downgrade(), true);
         }
         matrix.printstd();
         assert_eq!(
@@ -336,8 +350,10 @@ pub mod tests {
 └──┴─┴─┴─┴─┴───┴─┘
 "
         );
-        matrix.set_tail_edges([6, 1].into_iter());
-        assert_eq!(matrix.get_tail_edges_vec(), [1, 6]);
+        matrix.set_tail_edges(edge_vec_from_indices(&vec![2, 0], &edges).into_iter());
+        assert_eq!(
+            matrix.get_tail_edges_vec().iter().map(|e| e.upgrade_force().read_recursive().edge_index).collect::<HashSet<_>>(), 
+            [1, 6].into_iter().collect::<HashSet<_>>());
         matrix.printstd();
         assert_eq!(
             matrix.clone().printstd_str(),
@@ -355,7 +371,7 @@ pub mod tests {
 └──┴─┴─┴─┴─┴───┴─┘
 "
         );
-        matrix.set_tail_edges([4].into_iter());
+        matrix.set_tail_edges(edge_vec_from_indices(&vec![1], &edges).into_iter());
         matrix.printstd();
         assert_eq!(
             matrix.clone().printstd_str(),
@@ -373,7 +389,7 @@ pub mod tests {
 └──┴─┴─┴─┴─┴───┴─┘
 "
         );
-        matrix.update_edge_tightness(6, false);
+        matrix.update_edge_tightness(edges[2].downgrade(), false);
         matrix.printstd();
         assert_eq!(
             matrix.clone().printstd_str(),
@@ -389,8 +405,8 @@ pub mod tests {
 └──┴─┴─┴─┴───┴─┘
 "
         );
-        matrix.update_edge_tightness(1, false);
-        matrix.update_edge_tightness(9, false);
+        matrix.update_edge_tightness(edges[0].downgrade(), false);
+        matrix.update_edge_tightness(edges[3].downgrade(), false);
         matrix.printstd();
     }
 
@@ -399,8 +415,16 @@ pub mod tests {
     fn echelon_matrix_should_not_xor() {
         // cargo test echelon_matrix_should_not_xor -- --nocapture
         let mut matrix = EchelonMatrix::new();
-        matrix.add_constraint(0, &[1, 4, 6], true);
-        matrix.add_constraint(1, &[4, 9], false);
+        let vertex_indices = vec![0, 1, 2];
+        let edge_indices = vec![1, 4, 6, 9];
+        let vertex_incident_edges_vec = vec![
+            vec![0, 1, 2],
+            vec![1, 3],
+        ];
+        let (vertices, edges) = initialize_vertex_edges_for_matrix_testing(vertex_indices, edge_indices);
+
+        matrix.add_constraint(vertices[0].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges), true);
+        matrix.add_constraint(vertices[1].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[1], &edges), false);
         matrix.xor_row(0, 1);
     }
 
@@ -409,8 +433,16 @@ pub mod tests {
     fn echelon_matrix_should_not_swap() {
         // cargo test echelon_matrix_should_not_swap -- --nocapture
         let mut matrix = EchelonMatrix::new();
-        matrix.add_constraint(0, &[1, 4, 6], true);
-        matrix.add_constraint(1, &[4, 9], false);
+        let vertex_indices = vec![0, 1, 2];
+        let edge_indices = vec![1, 4, 6, 9];
+        let vertex_incident_edges_vec = vec![
+            vec![0, 1, 2],
+            vec![1, 3],
+        ];
+        let (vertices, edges) = initialize_vertex_edges_for_matrix_testing(vertex_indices, edge_indices);
+
+        matrix.add_constraint(vertices[0].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges), true);
+        matrix.add_constraint(vertices[1].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[1], &edges), false);
         matrix.swap_row(0, 1);
     }
 
@@ -418,12 +450,22 @@ pub mod tests {
     fn echelon_matrix_basic_trait() {
         // cargo test --features=colorful echelon_matrix_basic_trait -- --nocapture
         let mut matrix = EchelonMatrix::new();
-        matrix.add_variable(3); // un-tight edges will not show
-        matrix.add_constraint(0, &[1, 4, 6], true);
-        matrix.add_constraint(1, &[4, 9], false);
-        matrix.add_constraint(2, &[1, 9], true);
-        for edge_index in [1, 4, 6, 9] {
-            matrix.update_edge_tightness(edge_index, true);
+        let vertex_indices = vec![0, 1, 2];
+        let edge_indices = vec![1, 4, 6, 9, 3];
+        let vertex_incident_edges_vec = vec![
+            vec![0, 1, 2],
+            vec![1, 3],
+            vec![0, 3],
+        ];
+        let (vertices, edges) = initialize_vertex_edges_for_matrix_testing(vertex_indices, edge_indices);
+
+        matrix.add_variable(edges[4].downgrade()); // un-tight edges will not show
+        matrix.add_constraint(vertices[0].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges), true);
+        matrix.add_constraint(vertices[1].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[1], &edges), false);
+        matrix.add_constraint(vertices[2].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[2], &edges), true);
+        
+        for edge_index in 0..4 {
+            matrix.update_edge_tightness(edges[edge_index].downgrade(), true);
         }
         matrix.printstd();
         assert_eq!(
@@ -442,8 +484,8 @@ pub mod tests {
 └──┴─┴─┴─┴─┴───┴─┘
 "
         );
-        assert!(matrix.is_tight(1));
-        assert_eq!(matrix.edge_to_var_index(4), Some(2));
+        assert!(matrix.is_tight(edges[0].downgrade()));
+        assert_eq!(matrix.edge_to_var_index(edges[1].downgrade()), Some(2));
     }
 
     #[test]
@@ -451,8 +493,15 @@ pub mod tests {
     fn echelon_matrix_cannot_call_dirty_column() {
         // cargo test echelon_matrix_cannot_call_dirty_column -- --nocapture
         let mut matrix = EchelonMatrix::new();
-        matrix.add_constraint(0, &[1, 4, 6], true);
-        matrix.update_edge_tightness(1, true);
+        let vertex_indices = vec![0, 1, 2];
+        let edge_indices = vec![1, 4, 6, 9];
+        let vertex_incident_edges_vec = vec![
+            vec![0, 1, 2],
+        ];
+        let (vertices, edges) = initialize_vertex_edges_for_matrix_testing(vertex_indices, edge_indices);
+
+        matrix.add_constraint(vertices[0].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges), true);
+        matrix.update_edge_tightness(edges[0].downgrade(), true);
         // even though there is indeed such a column, we forbid such dangerous calls
         // always call `columns()` before accessing any column
         matrix.column_to_var_index(0);
@@ -463,8 +512,15 @@ pub mod tests {
     fn echelon_matrix_cannot_call_dirty_echelon_info() {
         // cargo test echelon_matrix_cannot_call_dirty_echelon_info -- --nocapture
         let mut matrix = EchelonMatrix::new();
-        matrix.add_constraint(0, &[1, 4, 6], true);
-        matrix.update_edge_tightness(1, true);
+        let vertex_indices = vec![0, 1, 2];
+        let edge_indices = vec![1, 4, 6, 9];
+        let vertex_incident_edges_vec = vec![
+            vec![0, 1, 2],
+        ];
+        let (vertices, edges) = initialize_vertex_edges_for_matrix_testing(vertex_indices, edge_indices);
+
+        matrix.add_constraint(vertices[0].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges), true);
+        matrix.update_edge_tightness(edges[0].downgrade(), true);
         // even though there is indeed such a column, we forbid such dangerous calls
         // always call `columns()` before accessing any column
         matrix.get_echelon_info_immutable();
@@ -496,7 +552,14 @@ pub mod tests {
     fn echelon_matrix_no_variable_satisfiable() {
         // cargo test --features=colorful echelon_matrix_no_variable_satisfiable -- --nocapture
         let mut matrix = EchelonMatrix::new();
-        matrix.add_constraint(0, &[1, 4, 6], false);
+        let vertex_indices = vec![0, 1, 2];
+        let edge_indices = vec![1, 4, 6, 9];
+        let vertex_incident_edges_vec = vec![
+            vec![0, 1, 2],
+        ];
+        let (vertices, edges) = initialize_vertex_edges_for_matrix_testing(vertex_indices, edge_indices);
+
+        matrix.add_constraint(vertices[0].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges), false);
         matrix.printstd();
         assert_eq!(
             matrix.clone().printstd_str(),
@@ -519,7 +582,14 @@ pub mod tests {
     fn echelon_matrix_no_variable_unsatisfiable() {
         // cargo test --features=colorful echelon_matrix_no_variable_unsatisfiable -- --nocapture
         let mut matrix: Echelon<Tail<Tight<BasicMatrix>>> = EchelonMatrix::new();
-        matrix.add_constraint(0, &[1, 4, 6], true);
+        let vertex_indices = vec![0, 1, 2];
+        let edge_indices = vec![1, 4, 6, 9];
+        let vertex_incident_edges_vec = vec![
+            vec![0, 1, 2],
+        ];
+        let (vertices, edges) = initialize_vertex_edges_for_matrix_testing(vertex_indices, edge_indices);
+
+        matrix.add_constraint(vertices[0].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges), true);
         matrix.printstd();
         assert_eq!(
             matrix.clone().printstd_str(),
@@ -544,12 +614,23 @@ pub mod tests {
     fn echelon_matrix_no_more_variable_satisfiable() {
         // cargo test --features=colorful echelon_matrix_no_more_variable_satisfiable -- --nocapture
         let mut matrix: Echelon<Tail<Tight<BasicMatrix>>> = EchelonMatrix::new();
-        matrix.add_constraint(0, &[0, 1], true);
-        matrix.add_constraint(1, &[1, 2], true);
-        matrix.add_constraint(2, &[2, 3], true);
-        matrix.add_constraint(3, &[3, 1], false);
+        let vertex_indices = vec![0, 1, 2, 3];
+        let edge_indices = vec![0, 1, 2, 3];
+        let vertex_incident_edges_vec = vec![
+            vec![0, 1],
+            vec![1, 2],
+            vec![2, 3],
+            vec![3, 1],
+        ];
+        let (vertices, edges) = initialize_vertex_edges_for_matrix_testing(vertex_indices, edge_indices);
+
+        matrix.add_constraint(vertices[0].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges), true);
+        matrix.add_constraint(vertices[1].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[1], &edges), true);
+        matrix.add_constraint(vertices[2].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[2], &edges), true);
+        matrix.add_constraint(vertices[3].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[3], &edges), false);
+
         for edge_index in [0, 1, 2, 3] {
-            matrix.update_edge_tightness(edge_index, true);
+            matrix.update_edge_tightness(edges[edge_index].downgrade(), true);
         }
         matrix.printstd();
         assert_eq!(
@@ -572,14 +653,26 @@ pub mod tests {
 
     #[test]
     fn echelon_matrix_no_more_variable_unsatisfiable() {
-        // cargo test --features=colorful echelon_matrix_no_more_variable_satisfiable -- --nocapture
+        // cargo test --features=colorful echelon_matrix_no_more_variable_unsatisfiable -- --nocapture
         let mut matrix: Echelon<Tail<Tight<BasicMatrix>>> = EchelonMatrix::new();
-        matrix.add_constraint(0, &[0, 1], true);
-        matrix.add_constraint(1, &[1, 2], true);
-        matrix.add_constraint(2, &[2, 3], true);
-        matrix.add_constraint(3, &[3, 1], true);
+        let vertex_indices = vec![0, 1, 2, 3];
+        let edge_indices = vec![0, 1, 2, 3];
+        let vertex_incident_edges_vec = vec![
+            vec![0, 1],
+            vec![1, 2],
+            vec![2, 3],
+            vec![3, 1],
+        ];
+        let (vertices, edges) = initialize_vertex_edges_for_matrix_testing(vertex_indices, edge_indices);
+
+        matrix.add_constraint(vertices[0].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges), true);
+        matrix.add_constraint(vertices[1].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[1], &edges), true);
+        matrix.add_constraint(vertices[2].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[2], &edges), true);
+        matrix.add_constraint(vertices[3].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[3], &edges), true);
+
+       
         for edge_index in [0, 1, 2, 3] {
-            matrix.update_edge_tightness(edge_index, true);
+            matrix.update_edge_tightness(edges[edge_index].downgrade(), true);
         }
         matrix.printstd();
         assert_eq!(
@@ -775,15 +868,28 @@ pub mod tests {
     fn echelon_matrix_another_echelon_simple() {
         // cargo test --features=colorful echelon_matrix_another_echelon_simple -- --nocapture
         let mut echelon = EchelonMatrix::new();
+        let vertex_indices = vec![0, 1, 2, 3, 4, 5];
+        let edge_indices = vec![0, 1, 2, 3, 4, 5, 6];
+        let vertex_incident_edges_vec = vec![
+            vec![0, 1],
+            vec![0, 2],
+            vec![2, 3, 5],
+            vec![1, 3, 4],
+            vec![4, 6],
+            vec![5, 6],
+        ];
+        let (vertices, edges) = initialize_vertex_edges_for_matrix_testing(vertex_indices, edge_indices);
+
         for edge_index in 0..7 {
-            echelon.add_tight_variable(edge_index);
+            echelon.add_tight_variable(edges[edge_index].downgrade());
         }
-        echelon.add_constraint(0, &[0, 1], true);
-        echelon.add_constraint(1, &[0, 2], false);
-        echelon.add_constraint(2, &[2, 3, 5], false);
-        echelon.add_constraint(3, &[1, 3, 4], false);
-        echelon.add_constraint(4, &[4, 6], false);
-        echelon.add_constraint(5, &[5, 6], true);
+
+        echelon.add_constraint(vertices[0].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[0], &edges), true);
+        echelon.add_constraint(vertices[1].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[1], &edges), false);
+        echelon.add_constraint(vertices[2].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[2], &edges), false);
+        echelon.add_constraint(vertices[3].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[3], &edges), false);
+        echelon.add_constraint(vertices[4].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[4], &edges), false);
+        echelon.add_constraint(vertices[5].downgrade(), &edge_vec_from_indices(&vertex_incident_edges_vec[5], &edges), true);
         let mut another = YetAnotherRowEchelon::new(&echelon);
         another.print();
         // both go to echelon form
@@ -803,13 +909,18 @@ pub mod tests {
             for constraint_count in 0..31 {
                 for _ in 0..repeat {
                     let mut echelon = EchelonMatrix::new();
-                    for edge_index in 0..variable_count {
-                        echelon.add_tight_variable(edge_index);
-                    }
                     let parity_checks = generate_random_parity_checks(&mut rng, variable_count, constraint_count);
-                    // println!("variable_count: {variable_count}, parity_checks: {parity_checks:?}");
+                    let vertex_indices: Vec<usize> = (0..parity_checks.len()).collect();
+                    let edge_indices: Vec<usize> = (0..variable_count).collect();
+                    let (vertices, edges) = initialize_vertex_edges_for_matrix_testing(vertex_indices, edge_indices);
+                    for edge_index in 0..variable_count {
+                        echelon.add_tight_variable(edges[edge_index].downgrade());
+                    }
+                    if variable_count == 9 {
+                        println!("variable_count: {variable_count}, parity_checks: {parity_checks:?}");
+                    }
                     for (vertex_index, (incident_edges, parity)) in parity_checks.iter().enumerate() {
-                        echelon.add_constraint(vertex_index, incident_edges, *parity);
+                        echelon.add_constraint(vertices[vertex_index].downgrade(), &edge_vec_from_indices(incident_edges, &edges), *parity);
                     }
                     let mut another = YetAnotherRowEchelon::new(&echelon);
                     // echelon.printstd();
@@ -820,18 +931,20 @@ pub mod tests {
                         // another.print();
                         another.assert_eq(&echelon);
                     }
+                    drop(vertices);
+                    drop(edges);
                 }
             }
         }
     }
 
-    fn debug_echelon_matrix_case(variable_count: usize, parity_checks: Vec<(Vec<usize>, bool)>) -> EchelonMatrix {
+    fn debug_echelon_matrix_case(variable_count: usize, parity_checks: Vec<(Vec<usize>, bool)>, edges: &Vec<EdgePtr>, vertices: &Vec<VertexPtr>) -> EchelonMatrix {
         let mut echelon = EchelonMatrix::new();
         for edge_index in 0..variable_count {
-            echelon.add_tight_variable(edge_index);
+            echelon.add_tight_variable(edges[edge_index].downgrade());
         }
         for (vertex_index, (incident_edges, parity)) in parity_checks.iter().enumerate() {
-            echelon.add_constraint(vertex_index, incident_edges, *parity);
+            echelon.add_constraint(vertices[vertex_index].downgrade(), &edge_vec_from_indices(incident_edges, edges), *parity);
         }
         echelon
     }
@@ -841,7 +954,11 @@ pub mod tests {
     fn echelon_matrix_debug_1() {
         // cargo test --features=colorful echelon_matrix_debug_1 -- --nocapture
         let parity_checks = vec![(vec![0], true), (vec![0, 1], true), (vec![], true)];
-        let mut echelon = debug_echelon_matrix_case(2, parity_checks);
+        let vertex_indices: Vec<usize> = (0..parity_checks.len()).collect();
+        let edge_indices: Vec<usize> = (0..2).collect();
+        let (vertices, edges) = initialize_vertex_edges_for_matrix_testing(vertex_indices, edge_indices);
+
+        let mut echelon = debug_echelon_matrix_case(2, parity_checks, &edges, &vertices);
         echelon.printstd();
         assert_eq!(
             echelon.printstd_str(),
@@ -865,7 +982,11 @@ pub mod tests {
     fn echelon_matrix_debug_2() {
         // cargo test --features=colorful echelon_matrix_debug_2 -- --nocapture
         let parity_checks = vec![];
-        let mut echelon = debug_echelon_matrix_case(1, parity_checks);
+        let vertex_indices: Vec<usize> = (0..parity_checks.len()).collect();
+        let edge_indices: Vec<usize> = (0..1).collect();
+        let (vertices, edges) = initialize_vertex_edges_for_matrix_testing(vertex_indices, edge_indices);
+
+        let mut echelon = debug_echelon_matrix_case(1, parity_checks, &edges, &vertices);
         echelon.printstd();
         assert_eq!(
             echelon.printstd_str(),

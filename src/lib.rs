@@ -96,13 +96,13 @@ pub fn get_version() -> String {
     let code = CodeCapacityTailoredCode::new(7, 0., 0.01);
     // create dual module
     let model_graph = code.get_model_graph();
-    let mut dual_module = DualModulePQ::new_empty(&model_graph.initializer);
+    let mut dual_module = DualModulePQ::new_empty(&model_graph.initializer, 0);
     // create primal module
     let mut primal_module = PrimalModuleSerial::new_empty(&model_graph.initializer);
     primal_module.plugins = std::sync::Arc::new(vec![]);
     // try to work on a simple syndrome
     let decoding_graph = DecodingHyperGraph::new_defects(model_graph, defect_vertices.clone());
-    let interface_ptr = DualModuleInterfacePtr::new(decoding_graph.model_graph.clone());
+    let interface_ptr = DualModuleInterfacePtr::new(decoding_graph.model_graph.clone(), 0);
     primal_module.solve_visualizer(
         &interface_ptr,
         decoding_graph.syndrome_pattern.clone(),

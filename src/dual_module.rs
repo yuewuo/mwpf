@@ -10,11 +10,13 @@ use crate::model_hypergraph::*;
 use crate::num_traits::{FromPrimitive, One, Signed, ToPrimitive, Zero};
 use crate::pointers::*;
 use crate::primal_module::Affinity;
-use crate::primal_module_serial::PrimalClusterPtr;
+use crate::primal_module_serial::{PrimalClusterPtr, PrimalModuleSerialNodeWeak};
 use crate::relaxer_optimizer::OptimizerResult;
 use crate::util::*;
 use crate::visualize::*;
+use crate::dual_module_pq::{EdgePtr, VertexPtr, EdgeWeak};
 use hashbrown::{HashMap, HashSet};
+use crate::matrix::*;
 #[cfg(feature = "python_binding")]
 use pyo3::prelude::*;
 
@@ -77,11 +79,13 @@ pub struct DualNode {
     /// the pointer to the global time
     /// Note: may employ some unsafe features while being sound in performance-critical cases
     ///       and can remove option when removing dual_module_serial
-    global_time: Option<ArcRwLock<Rational>>,
+    global_time: Option<ArcManualSafeLock<Rational>>,
     /// the last time this dual_node is synced/updated with the global time
     pub last_updated_time: Rational,
     /// dual variable's value at the last updated time
     pub dual_variable_at_last_updated_time: Rational,
+    /// the corresponding PrimalModuleSerialNode
+    pub primal_module_serial_node: Option<PrimalModuleSerialNodeWeak>,
 }
 
 impl DualNode {
@@ -110,14 +114,14 @@ impl DualNode {
     }
 
     /// initialize the global time pointer and the last_updated_time
-    pub fn init_time(&mut self, global_time_ptr: ArcRwLock<Rational>) {
+    pub fn init_time(&mut self, global_time_ptr: ArcManualSafeLock<Rational>) {
         self.last_updated_time = global_time_ptr.read_recursive().clone();
         self.global_time = Some(global_time_ptr);
     }
 }
 
-pub type DualNodePtr = ArcRwLock<DualNode>;
-pub type DualNodeWeak = WeakRwLock<DualNode>;
+pub type DualNodePtr = ArcManualSafeLock<DualNode>;
+pub type DualNodeWeak = WeakManualSafeLock<DualNode>;
 
 impl std::fmt::Debug for DualNodePtr {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -126,9 +130,17 @@ impl std::fmt::Debug for DualNodePtr {
             .field("index", &dual_node.index)
             .field("dual_variable", &dual_node.get_dual_variable())
             .field("grow_rate", &dual_node.grow_rate)
-            .field("hair", &dual_node.invalid_subgraph.hair)
+            .field(
+                "hair",
+                &dual_node
+                    .invalid_subgraph
+                    .hair
+                    .iter()
+                    .map(|e| e.read_recursive().edge_index)
+                    .collect::<Vec<_>>(),
+            )
             .finish()
-        // let new = ArcRwLock::new_value(Rational::zero());
+        // let new = ArcManualSafeLock::new_value(Rational::zero());
         // let global_time = dual_node.global_time.as_ref().unwrap_or(&new).read_recursive();
         // write!(
         //     f,
@@ -165,8 +177,8 @@ pub struct DualModuleInterface {
     pub decoding_graph: DecodingHyperGraph,
 }
 
-pub type DualModuleInterfacePtr = ArcRwLock<DualModuleInterface>;
-pub type DualModuleInterfaceWeak = WeakRwLock<DualModuleInterface>;
+pub type DualModuleInterfacePtr = ArcManualSafeLock<DualModuleInterface>;
+pub type DualModuleInterfaceWeak = WeakManualSafeLock<DualModuleInterface>;
 
 impl std::fmt::Debug for DualModuleInterfacePtr {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -258,7 +270,7 @@ pub enum DualReport {
 /// common trait that must be implemented for each implementation of dual module
 pub trait DualModuleImpl {
     /// create a new dual module with empty syndrome
-    fn new_empty(initializer: &Arc<SolverInitializer>) -> Self;
+    fn new_empty(initializer: &Arc<SolverInitializer>, partition_id: usize) -> Self where Self: Sized;
 
     /// clear all growth and existing dual nodes, prepared for the next decoding
     fn clear(&mut self);
@@ -286,13 +298,13 @@ pub trait DualModuleImpl {
     fn grow(&mut self, length: Rational);
 
     /// get all nodes contributing to the edge
-    fn get_edge_nodes(&self, edge_index: EdgeIndex) -> Vec<DualNodePtr>;
+    fn get_edge_nodes(&self, edge_ptr: EdgePtr) -> Vec<DualNodePtr>;
 
     /// get the slack on a specific edge (weight - growth)
-    fn get_edge_slack(&self, edge_index: EdgeIndex) -> Rational;
+    fn get_edge_slack(&self, edge_ptr: EdgePtr) -> Rational;
 
     /// check if the edge is tight
-    fn is_edge_tight(&self, edge_index: EdgeIndex) -> bool;
+    fn is_edge_tight(&self, edge_ptr: EdgePtr) -> bool;
 
     /* New tuning-related methods */
     // mode managements
@@ -340,20 +352,20 @@ pub trait DualModuleImpl {
     }
 
     /// grow a specific edge on the spot
-    fn grow_edge(&self, _edge_index: EdgeIndex, _amount: &Rational) {
+    fn grow_edge(&self, _edge_ptr: EdgePtr, _amount: &Rational) {
         panic!("this dual_module doesn't support edge growth");
     }
 
     /// `is_edge_tight` but in tuning phase
-    fn is_edge_tight_tune(&self, edge_index: EdgeIndex) -> bool {
+    fn is_edge_tight_tune(&self, edge_ptr: EdgePtr) -> bool {
         eprintln!("this dual_module does not implement tuning");
-        self.is_edge_tight(edge_index)
+        self.is_edge_tight(edge_ptr)
     }
 
     /// `get_edge_slack` but in tuning phase
-    fn get_edge_slack_tune(&self, edge_index: EdgeIndex) -> Rational {
+    fn get_edge_slack_tune(&self, edge_ptr: EdgePtr) -> Rational {
         eprintln!("this dual_module does not implement tuning");
-        self.get_edge_slack(edge_index)
+        self.get_edge_slack(edge_ptr)
     }
 
     /* miscs */
@@ -378,7 +390,7 @@ pub trait DualModuleImpl {
     fn get_obstacles_tune(
         &self,
         optimizer_result: OptimizerResult,
-        dual_node_deltas: FastIterMap<OrderedDualNodePtr, (Rational, NodeIndex)>,
+        dual_node_deltas: FastIterMap<OrderedDualNodePtr, (Rational, PrimalClusterPtr)>,
     ) -> FastIterSet<Obstacle> {
         let mut obstacles = FastIterSet::new();
         match optimizer_result {
@@ -391,9 +403,9 @@ pub trait DualModuleImpl {
                             dual_node_ptr: dual_node_ptr.clone(),
                         });
                     }
-                    for edge_index in node_ptr_read.invalid_subgraph.hair.iter() {
-                        if grow_rate.is_positive() && self.is_edge_tight_tune(*edge_index) {
-                            obstacles.insert(Obstacle::Conflict { edge_index: *edge_index });
+                    for edge_ptr in node_ptr_read.invalid_subgraph.hair.iter() {
+                        if grow_rate.is_positive() && self.is_edge_tight_tune(edge_ptr.clone()) {
+                            obstacles.insert(Obstacle::Conflict { edge_ptr: edge_ptr.clone() });
                         }
                     }
                 }
@@ -404,14 +416,14 @@ pub trait DualModuleImpl {
                     // check if the single direction is growable
                     let mut actual_grow_rate = Rational::from_usize(std::usize::MAX).unwrap();
                     let node_ptr_read = dual_node_ptr.ptr.read_recursive();
-                    for edge_index in node_ptr_read.invalid_subgraph.hair.iter() {
-                        actual_grow_rate = std::cmp::min(actual_grow_rate, self.get_edge_slack_tune(*edge_index));
+                    for edge_ptr in node_ptr_read.invalid_subgraph.hair.iter() {
+                        actual_grow_rate = std::cmp::min(actual_grow_rate, self.get_edge_slack_tune(edge_ptr.clone()));
                     }
                     if actual_grow_rate.is_zero() {
                         // if not, return the current obstacles
-                        for edge_index in node_ptr_read.invalid_subgraph.hair.iter() {
-                            if grow_rate.is_positive() && self.is_edge_tight_tune(*edge_index) {
-                                obstacles.insert(Obstacle::Conflict { edge_index: *edge_index });
+                        for edge_ptr in node_ptr_read.invalid_subgraph.hair.iter() {
+                            if grow_rate.is_positive() && self.is_edge_tight_tune(edge_ptr.clone()) {
+                                obstacles.insert(Obstacle::Conflict { edge_ptr: edge_ptr.clone() });
                             }
                         }
                         if grow_rate.is_negative() && node_ptr_read.dual_variable_at_last_updated_time.is_zero() {
@@ -424,12 +436,12 @@ pub trait DualModuleImpl {
                         //      note: can grow directly here because this is guaranteed to only have a single direction
                         drop(node_ptr_read);
                         let mut node_ptr_write = dual_node_ptr.ptr.write();
-                        for edge_index in node_ptr_write.invalid_subgraph.hair.iter() {
-                            self.grow_edge(*edge_index, &actual_grow_rate);
+                        for edge_ptr in node_ptr_write.invalid_subgraph.hair.iter() {
+                            self.grow_edge(edge_ptr.clone(), &actual_grow_rate);
                             #[cfg(feature = "incr_lp")]
-                            self.update_edge_cluster_weights(*edge_index, _cluster_index, actual_grow_rate.clone()); // note: comment out if not using cluster-based
-                            if actual_grow_rate.is_positive() && self.is_edge_tight_tune(*edge_index) {
-                                obstacles.insert(Obstacle::Conflict { edge_index: *edge_index });
+                            self.update_edge_cluster_weights(edge_ptr, _cluster_index, actual_grow_rate.clone()); // note: comment out if not using cluster-based
+                            if actual_grow_rate.is_positive() && self.is_edge_tight_tune(edge_ptr.clone()) {
+                                obstacles.insert(Obstacle::Conflict { edge_ptr: edge_ptr.clone() });
                             }
                         }
                         node_ptr_write.dual_variable_at_last_updated_time += actual_grow_rate.clone();
@@ -457,8 +469,8 @@ pub trait DualModuleImpl {
                     }
 
                     // calculate the total edge deltas
-                    for edge_index in node_ptr_write.invalid_subgraph.hair.iter() {
-                        match edge_deltas.entry(*edge_index) {
+                    for edge_ptr in node_ptr_write.invalid_subgraph.hair.iter() {
+                        match edge_deltas.entry(edge_ptr.clone()) {
                             FastIterEntry::Vacant(v) => {
                                 v.insert(grow_rate.clone());
                             }
@@ -468,19 +480,19 @@ pub trait DualModuleImpl {
                         }
 
                         #[cfg(feature = "incr_lp")]
-                        self.update_edge_cluster_weights(*edge_index, _cluster_index, grow_rate.clone());
+                        self.update_edge_cluster_weights(edge_ptr.clone(), _cluster_index, grow_rate.clone());
                         // note: comment out if not using cluster-based
                     }
                 }
 
                 // apply the edge deltas and check for obstacles
-                for (edge_index, grow_rate) in edge_deltas.into_iter() {
+                for (edge_ptr, grow_rate) in edge_deltas.into_iter() {
                     if grow_rate.is_zero() {
                         continue;
                     }
-                    self.grow_edge(edge_index, &grow_rate);
-                    if grow_rate.is_positive() && self.is_edge_tight_tune(edge_index) {
-                        obstacles.insert(Obstacle::Conflict { edge_index });
+                    self.grow_edge(edge_ptr.clone(), &grow_rate);
+                    if grow_rate.is_positive() && self.is_edge_tight_tune(edge_ptr.clone()) {
+                        obstacles.insert(Obstacle::Conflict { edge_ptr: edge_ptr.clone() });
                     }
                 }
             }
@@ -491,25 +503,25 @@ pub trait DualModuleImpl {
     /// get the edge free weight, for each edge what is the weight that are free to use by the given participating dual variables
     fn get_edge_free_weight(
         &self,
-        edge_index: EdgeIndex,
+        edge_ptr: EdgePtr,
         participating_dual_variables: &hashbrown::HashSet<usize>,
     ) -> Weight;
 
-    fn get_edge_weight(&self, edge_index: EdgeIndex) -> Weight;
+    fn get_edge_weight(&self, edge_weak: EdgeWeak) -> Weight;
 
-    fn get_subgraph_weight(&self, subgraph: &Subgraph) -> Weight {
+    fn get_subgraph_weight(&self, subgraph: &InternalSubgraph) -> Weight {
         let mut weight = Weight::zero();
-        for &edge_index in subgraph {
-            weight += self.get_edge_weight(edge_index);
+        for edge_weak in subgraph {
+            weight += self.get_edge_weight(edge_weak.clone());
         }
         weight
     }
 
     #[cfg(feature = "incr_lp")]
-    fn update_edge_cluster_weights(&self, edge_index: EdgeIndex, cluster_index: NodeIndex, grow_rate: Rational);
+    fn update_edge_cluster_weights(&self, edge_ptr: EdgePtr, cluster_index: NodeIndex, grow_rate: Rational);
 
     #[cfg(feature = "incr_lp")]
-    fn get_edge_free_weight_cluster(&self, edge_index: EdgeIndex, cluster_index: NodeIndex) -> Rational;
+    fn get_edge_free_weight_cluster(&self, edge_ptr: EdgePtr, cluster_index: NodeIndex) -> Rational;
 
     #[cfg(feature = "incr_lp")]
     fn update_edge_cluster_weights_union(
@@ -519,6 +531,19 @@ pub trait DualModuleImpl {
         absorbing_cluster_index: NodeIndex,
     );
 
+    fn get_vertex_ptr(&self, vertex_index: VertexIndex) -> VertexPtr;
+
+    fn get_edge_ptr(&self, edge_index: EdgeIndex) -> EdgePtr;
+
+    fn get_vertex_ptr_vec(&self, vertex_indices: &[VertexIndex]) -> Vec<VertexPtr>;
+
+    fn get_edge_ptr_vec(&self, edge_indices: &[EdgeIndex]) -> Vec<EdgePtr>;
+
+    fn get_vertex_num(&self) -> usize;
+
+    fn get_edge_num(&self) -> usize;
+
+    /// called invidually for each dual module, so we do not need EdgePtr here.
     fn adjust_weights_for_negative_edges(&mut self) {
         unimplemented!()
     }
@@ -549,7 +574,7 @@ pub trait DualModuleImpl {
 
 #[derive(PartialEq, Eq, Debug, Clone, PartialOrd, Ord)]
 pub enum Obstacle {
-    Conflict { edge_index: EdgeIndex },
+    Conflict { edge_ptr: EdgePtr },
     ShrinkToZero { dual_node_ptr: OrderedDualNodePtr },
 }
 
@@ -557,11 +582,11 @@ pub enum Obstacle {
 impl std::hash::Hash for Obstacle {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
-            Obstacle::Conflict { edge_index } => {
-                (0, *edge_index as u64).hash(state);
+            Obstacle::Conflict { edge_ptr } => {
+                (0, edge_ptr).hash(state);
             }
             Obstacle::ShrinkToZero { dual_node_ptr } => {
-                (1, dual_node_ptr.index).hash(state);
+                (1, dual_node_ptr).hash(state);
             }
         }
     }
@@ -620,25 +645,25 @@ impl DualReport {
 }
 
 impl DualModuleInterfacePtr {
-    pub fn new(model_graph: Arc<ModelHyperGraph>) -> Self {
+    pub fn new(model_graph: Arc<ModelHyperGraph>, partition_id: usize) -> Self {
         Self::new_value(DualModuleInterface {
             nodes: Vec::new(),
             hashmap: HashMap::new(),
             decoding_graph: DecodingHyperGraph::new(model_graph, Arc::new(SyndromePattern::new_empty())),
-        })
+        }, (partition_id, 0))
     }
 
     /// a dual module interface MUST be created given a concrete implementation of the dual module
-    pub fn new_load(decoding_graph: DecodingHyperGraph, dual_module_impl: &mut impl DualModuleImpl) -> Self {
-        let interface_ptr = Self::new(decoding_graph.model_graph.clone());
-        interface_ptr.load(decoding_graph.syndrome_pattern, dual_module_impl);
+    pub fn new_load(decoding_graph: DecodingHyperGraph, dual_module_impl: &mut impl DualModuleImpl, partition_id: usize) -> Self {
+        let interface_ptr = Self::new(decoding_graph.model_graph.clone(), partition_id);
+        interface_ptr.load(decoding_graph.syndrome_pattern, dual_module_impl, partition_id);
         interface_ptr
     }
 
-    pub fn load(&self, syndrome_pattern: Arc<SyndromePattern>, dual_module_impl: &mut impl DualModuleImpl) {
+    pub fn load(&self, syndrome_pattern: Arc<SyndromePattern>, dual_module_impl: &mut impl DualModuleImpl, partition_id: usize) {
         self.write().decoding_graph.set_syndrome(syndrome_pattern.clone());
         for vertex_idx in syndrome_pattern.defect_vertices.iter() {
-            self.create_defect_node(*vertex_idx, dual_module_impl);
+            self.create_defect_node(*vertex_idx, dual_module_impl, partition_id);
         }
     }
 
@@ -664,12 +689,16 @@ impl DualModuleInterfacePtr {
     }
 
     /// make it private; use `load` instead
-    fn create_defect_node(&self, vertex_idx: VertexIndex, dual_module: &mut impl DualModuleImpl) -> DualNodePtr {
+    fn create_defect_node(&self, vertex_idx: VertexIndex, dual_module: &mut impl DualModuleImpl, partition_id: usize) -> DualNodePtr {
         let mut interface = self.write();
+        let vertex_ptr = dual_module.get_vertex_ptr(vertex_idx); // this is okay because create_defect_node is only called upon local defect vertices, so we won't access index out of range
+        vertex_ptr.write().is_defect = true;
+        let mut vertices = FastIterSet::new();
+        vertices.insert(vertex_ptr);
         let invalid_subgraph = Arc::new(InvalidSubgraph::new_complete(
-            vec![vertex_idx].into_iter().collect(),
+            vertices,
             FastIterSet::new(),
-            &interface.decoding_graph,
+            dual_module,
         ));
         let node_index = interface.nodes.len() as NodeIndex;
         let node_ptr = DualNodePtr::new_value(DualNode {
@@ -679,7 +708,8 @@ impl DualModuleInterfacePtr {
             dual_variable_at_last_updated_time: Rational::zero(),
             global_time: None,
             last_updated_time: Rational::zero(),
-        });
+            primal_module_serial_node: None,
+        }, (partition_id, node_index));
 
         interface.nodes.push(node_ptr.clone());
         interface.hashmap.insert(invalid_subgraph, node_index);
@@ -699,8 +729,8 @@ impl DualModuleInterfacePtr {
             .map(|index| interface.nodes[*index as usize].clone())
     }
 
-    pub fn create_node(&self, invalid_subgraph: Arc<InvalidSubgraph>, dual_module: &mut impl DualModuleImpl) -> DualNodePtr {
-        self.create_node_internal(invalid_subgraph, dual_module, Rational::one(), DualModuleImpl::add_dual_node)
+    pub fn create_node(&self, invalid_subgraph: Arc<InvalidSubgraph>, dual_module: &mut impl DualModuleImpl, partition_id: usize) -> DualNodePtr {
+        self.create_node_internal(invalid_subgraph, dual_module, Rational::one(), DualModuleImpl::add_dual_node, partition_id)
     }
 
     /// `create_node` for tuning
@@ -708,12 +738,14 @@ impl DualModuleInterfacePtr {
         &self,
         invalid_subgraph: Arc<InvalidSubgraph>,
         dual_module: &mut impl DualModuleImpl,
+        partition_id: usize,
     ) -> DualNodePtr {
         self.create_node_internal(
             invalid_subgraph,
             dual_module,
             Rational::zero(),
             DualModuleImpl::add_dual_node_tune,
+            partition_id,
         )
     }
 
@@ -722,10 +754,11 @@ impl DualModuleInterfacePtr {
         &self,
         invalid_subgraph: &Arc<InvalidSubgraph>,
         dual_module: &mut impl DualModuleImpl,
+        partition_id: usize,
     ) -> (bool, DualNodePtr) {
         match self.find_node(invalid_subgraph) {
             Some(node_ptr) => (true, node_ptr),
-            None => (false, self.create_node(invalid_subgraph.clone(), dual_module)),
+            None => (false, self.create_node(invalid_subgraph.clone(), dual_module, partition_id)),
         }
     }
 
@@ -734,11 +767,16 @@ impl DualModuleInterfacePtr {
         &self,
         invalid_subgraph: &Arc<InvalidSubgraph>,
         dual_module: &mut impl DualModuleImpl,
+        partition_id: usize
     ) -> Option<(bool, DualNodePtr)> {
         match self.find_node(invalid_subgraph) {
             Some(node_ptr) => Some((true, node_ptr)),
-            None => Some((false, self.create_node_tune(invalid_subgraph.clone(), dual_module))),
+            None => Some((false, self.create_node_tune(invalid_subgraph.clone(), dual_module, partition_id))),
         }
+    }
+
+    pub fn get_nodes_num(&self) -> usize {
+        self.read_recursive().nodes.len()
     }
 
     /// internal function for creating a node, for D.R.Y.
@@ -748,6 +786,7 @@ impl DualModuleInterfacePtr {
         dual_module: &mut D,
         grow_rate: Rational,
         add_dual_node_fn: fn(&mut D, &DualNodePtr),
+        partition_id: usize,
     ) -> DualNodePtr {
         debug_assert!(
             self.find_node(&invalid_subgraph).is_none(),
@@ -765,7 +804,8 @@ impl DualModuleInterfacePtr {
             dual_variable_at_last_updated_time: Rational::zero(),
             global_time: None,
             last_updated_time: Rational::zero(),
-        });
+            primal_module_serial_node: None,
+        }, (partition_id, node_index));
 
         interface.nodes.push(node_ptr.clone());
         drop(interface);
@@ -774,29 +814,64 @@ impl DualModuleInterfacePtr {
 
         node_ptr
     }
+
+    pub fn is_valid_cluster_auto_vertices(&self, edges: &FastIterSet<EdgePtr>) -> bool {
+        self.find_valid_subgraph_auto_vertices(edges).is_some()
+    }
+
+    pub fn find_valid_subgraph_auto_vertices(&self, edges: &FastIterSet<EdgePtr>) -> Option<Vec<EdgeWeak>> {
+        let mut vertices: FastIterSet<VertexPtr> = FastIterSet::new();
+        for edge_ptr in edges.iter() {
+            let local_vertices = &edge_ptr.read_recursive().vertices;
+            for vertex in local_vertices {
+                vertices.insert(vertex.upgrade_force());
+            }
+        }
+
+        self.find_valid_subgraph(edges, &vertices)
+    }
+
+    pub fn find_valid_subgraph(&self, edges: &FastIterSet<EdgePtr>, vertices: &FastIterSet<VertexPtr>) -> Option<Vec<EdgeWeak>> {
+        let mut matrix = Echelon::<CompleteMatrix>::new();
+        for edge_ptr in edges.iter() {
+            matrix.add_variable(edge_ptr.downgrade());
+        }
+
+        for vertex_ptr in vertices.iter() {
+            let vertex_weak = vertex_ptr.downgrade();
+            let vertex = vertex_ptr.read_recursive();
+            let incident_edges = &vertex.edges;
+            let parity = vertex.is_defect;
+            matrix.add_constraint(vertex_weak, incident_edges, parity);
+        }
+        matrix.get_solution()
+    }
 }
 
 // shortcuts for easier code writing at debugging
 impl DualModuleInterfacePtr {
     pub fn create_node_vec(&self, edges: &[EdgeIndex], dual_module: &mut impl DualModuleImpl) -> DualNodePtr {
-        let invalid_subgraph = Arc::new(InvalidSubgraph::new(
-            edges.iter().cloned().collect(),
-            &self.read_recursive().decoding_graph,
-        ));
-        self.create_node(invalid_subgraph, dual_module)
+        let edges_ptr = edges
+            .iter()
+            .map(|&idx| dual_module.get_edge_ptr(idx))
+            .collect::<FastIterSet<_>>();
+        let invalid_subgraph = Arc::new(InvalidSubgraph::new(edges_ptr, dual_module));
+        self.create_node(invalid_subgraph, dual_module, 0) // since this function is only for debugging, we can just set the partition_id to 0
     }
+
+    // TODO: check if this function is needed
     pub fn create_node_complete_vec(
         &self,
         vertices: &[VertexIndex],
         edges: &[EdgeIndex],
         dual_module: &mut impl DualModuleImpl,
     ) -> DualNodePtr {
-        let invalid_subgraph = Arc::new(InvalidSubgraph::new_complete(
-            vertices.iter().cloned().collect(),
-            edges.iter().cloned().collect(),
-            &self.read_recursive().decoding_graph,
-        ));
-        self.create_node(invalid_subgraph, dual_module)
+        unimplemented!()
+        // let invalid_subgraph = Arc::new(InvalidSubgraph::new_complete(
+        //     vertices.iter().cloned().collect(),
+        //     edges.iter().cloned().collect(),
+        // ));
+        // self.create_node(invalid_subgraph, dual_module, 0) // since this function is only for debugging, we can just set the partition_id to 0
     }
 }
 
@@ -806,11 +881,29 @@ impl MWPSVisualizer for DualModuleInterfacePtr {
         let mut dual_nodes = Vec::<serde_json::Value>::new();
         for dual_node_ptr in interface.nodes.iter() {
             let dual_node = dual_node_ptr.read_recursive();
+            let edges: Vec<usize> = dual_node
+                .invalid_subgraph
+                .edges
+                .iter()
+                .map(|e| e.read_recursive().edge_index)
+                .collect();
+            let vertices: Vec<usize> = dual_node
+                .invalid_subgraph
+                .vertices
+                .iter()
+                .map(|e| e.read_recursive().vertex_index)
+                .collect();
+            let hair: Vec<usize> = dual_node
+                .invalid_subgraph
+                .hair
+                .iter()
+                .map(|e| e.read_recursive().edge_index)
+                .collect();
             #[cfg(feature = "fast_ds")]
             dual_nodes.push(json!({
-                if abbrev { "e" } else { "edges" }: dual_node.invalid_subgraph.edges.iter().copied().collect::<Vec<_>>(),
-                if abbrev { "v" } else { "vertices" }: dual_node.invalid_subgraph.vertices.iter().copied().collect::<Vec<_>>(),
-                if abbrev { "h" } else { "hair" }: dual_node.invalid_subgraph.hair.iter().copied().collect::<Vec<_>>(),
+                if abbrev { "e" } else { "edges" }: edges,
+                if abbrev { "v" } else { "vertices" }: vertices,
+                if abbrev { "h" } else { "hair" }: hair,
                 if abbrev { "d" } else { "dual_variable" }: dual_node.get_dual_variable().to_f64(),
                 if abbrev { "dn" } else { "dual_variable_numerator" }: numer_of(&dual_node.get_dual_variable()),
                 if abbrev { "dd" } else { "dual_variable_denominator" }: denom_of(&dual_node.get_dual_variable()),
@@ -820,9 +913,9 @@ impl MWPSVisualizer for DualModuleInterfacePtr {
             }));
             #[cfg(not(feature = "fast_ds"))]
             dual_nodes.push(json!({
-                if abbrev { "e" } else { "edges" }: dual_node.invalid_subgraph.edges,
-                if abbrev { "v" } else { "vertices" }: dual_node.invalid_subgraph.vertices,
-                if abbrev { "h" } else { "hair" }: dual_node.invalid_subgraph.hair,
+                if abbrev { "e" } else { "edges" }: edges,
+                if abbrev { "v" } else { "vertices" }: vertices,
+                if abbrev { "h" } else { "hair" }: hair,
                 if abbrev { "d" } else { "dual_variable" }: dual_node.get_dual_variable().to_f64(),
                 if abbrev { "dn" } else { "dual_variable_numerator" }: numer_of(&dual_node.get_dual_variable()),
                 if abbrev { "dd" } else { "dual_variable_denominator" }: denom_of(&dual_node.get_dual_variable()),

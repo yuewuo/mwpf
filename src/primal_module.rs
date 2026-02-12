@@ -9,7 +9,7 @@ use std::sync::Arc;
 use crate::dual_module::*;
 use crate::itertools::Itertools;
 use crate::ordered_float::OrderedFloat;
-use crate::primal_module_serial::ClusterAffinity;
+use crate::primal_module_serial::{ClusterAffinity, PrimalClusterPtr, PrimalClusterWeak};
 use crate::relaxer_optimizer::OptimizerResult;
 use crate::util::*;
 use crate::visualize::*;
@@ -28,7 +28,7 @@ pub trait PrimalModuleImpl {
     fn clear(&mut self);
 
     /// load a new decoding problem given dual interface: note that all nodes MUST be defect node
-    fn load<D: DualModuleImpl>(&mut self, interface_ptr: &DualModuleInterfacePtr, dual_module: &mut D);
+    fn load<D: DualModuleImpl>(&mut self, interface_ptr: &DualModuleInterfacePtr, dual_module: &mut D, partition_id: usize);
 
     /// analyze the reason why dual module cannot further grow, update primal data structure (alternating tree, temporary matches, etc)
     /// and then tell dual module what to do to resolve these conflicts;
@@ -69,8 +69,8 @@ pub trait PrimalModuleImpl {
         syndrome_pattern: Arc<SyndromePattern>,
         dual_module: &mut impl DualModuleImpl,
     ) {
-        interface.load(syndrome_pattern, dual_module);
-        self.load(interface, dual_module);
+        interface.load(syndrome_pattern, dual_module, 0); // TODO: double check the partition id here
+        self.load(interface, dual_module, 0); // TODO: double check the partition id here
         self.solve_step_callback_interface_loaded(interface, dual_module, |_, _, _, _| {})
     }
 
@@ -161,7 +161,7 @@ pub trait PrimalModuleImpl {
             if moved_out_set.contains(to_flip) {
                 moved_out_set.remove(to_flip);
             } else {
-                moved_out_set.insert(*to_flip);
+                moved_out_set.insert(to_flip.clone());
             }
         }
         Arc::new(SyndromePattern::new_vertices(moved_out_set.into_iter().collect()))
@@ -179,8 +179,8 @@ pub trait PrimalModuleImpl {
         // then call the solver to
         if let Some(visualizer) = visualizer {
             let callback = Self::visualizer_callback(visualizer);
-            interface.load(syndrome_pattern, dual_module);
-            self.load(interface, dual_module);
+            interface.load(syndrome_pattern, dual_module, 0); // TODO: double check the partition id here
+            self.load(interface, dual_module, 0); // TODO: double check the partition id here
             self.solve_step_callback_interface_loaded(interface, dual_module, callback);
             visualizer
                 .snapshot_combined("solved".to_string(), vec![interface, dual_module, self])
@@ -230,10 +230,10 @@ pub trait PrimalModuleImpl {
             let cluster_affs = self.get_sorted_clusters_aff();
 
             for cluster_affinity in cluster_affs.into_iter().sorted() {
-                let cluster_index = cluster_affinity.cluster_index;
+                let cluster_ptr = cluster_affinity.cluster_ptr;
                 let mut dual_node_deltas = FastIterMap::new();
                 let (mut resolved, optimizer_result) =
-                    self.resolve_cluster_tune(cluster_index, interface, dual_module, &mut dual_node_deltas);
+                    self.resolve_cluster_tune(cluster_ptr, interface, dual_module, &mut dual_node_deltas);
 
                 let mut obstacles = dual_module.get_obstacles_tune(optimizer_result, dual_node_deltas);
 
@@ -322,9 +322,10 @@ pub trait PrimalModuleImpl {
         dual_module: &mut impl DualModuleImpl,
     ) -> (OutputSubgraph, WeightRange) {
         let output_subgraph = self.subgraph(interface, dual_module);
+        let internal_subgraph = OutputSubgraph::get_internal_subgraph(&output_subgraph);
         let weight_range = WeightRange::new(
             interface.sum_dual_variables() + dual_module.get_negative_weight_sum(),
-            dual_module.get_subgraph_weight(&output_subgraph.subgraph) + dual_module.get_negative_weight_sum(),
+            dual_module.get_subgraph_weight(internal_subgraph) + dual_module.get_negative_weight_sum(),
         );
         (output_subgraph, weight_range)
     }
@@ -341,14 +342,14 @@ pub trait PrimalModuleImpl {
     }
 
     /// in "tune" mode, return the list of clusters that need to be resolved
-    fn pending_clusters(&mut self) -> Vec<usize> {
+    fn pending_clusters(&mut self) -> Vec<PrimalClusterWeak> {
         panic!("not implemented `pending_clusters`");
     }
 
     /// check if a cluster has been solved, if not then resolve it
     fn resolve_cluster(
         &mut self,
-        _cluster_index: NodeIndex,
+        _cluster_ptr: PrimalClusterPtr,
         _interface_ptr: &DualModuleInterfacePtr,
         _dual_module: &mut impl DualModuleImpl,
     ) -> bool {
@@ -358,11 +359,11 @@ pub trait PrimalModuleImpl {
     /// `resolve_cluster` but in tuning mode, optimizer result denotes what the optimizer has accomplished
     fn resolve_cluster_tune(
         &mut self,
-        _cluster_index: NodeIndex,
+        _cluster_ptr: PrimalClusterPtr,
         _interface_ptr: &DualModuleInterfacePtr,
         _dual_module: &mut impl DualModuleImpl,
         // _dual_node_deltas: &mut FastIterMap<OrderedDualNodePtr, Rational>,
-        _dual_node_deltas: &mut FastIterMap<OrderedDualNodePtr, (Rational, NodeIndex)>,
+        _dual_node_deltas: &mut FastIterMap<OrderedDualNodePtr, (Rational, PrimalClusterPtr)>,
     ) -> (bool, OptimizerResult) {
         panic!("not implemented `resolve_cluster_tune`");
     }

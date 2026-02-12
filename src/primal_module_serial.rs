@@ -14,6 +14,7 @@ use crate::primal_module::*;
 use crate::relaxer_optimizer::*;
 use crate::util::*;
 use crate::visualize::*;
+use crate::dual_module_pq::{EdgePtr, VertexPtr, EdgeWeak};
 
 use std::collections::VecDeque;
 use std::fmt::Debug;
@@ -38,7 +39,7 @@ pub struct PrimalModuleSerial {
     pub plugins: Arc<PluginVec>,
     /// how many plugins are actually executed for every cluster
     pub plugin_count: Arc<RwLock<usize>>,
-    pub plugin_pending_clusters: Vec<usize>,
+    pub plugin_pending_clusters: Vec<PrimalClusterWeak>,
     /// configuration
     pub config: PrimalModuleSerialConfig,
     /// the time spent on resolving the obstacles
@@ -50,22 +51,28 @@ pub struct PrimalModuleSerial {
     pub cluster_weights_initialized: bool,
 }
 
-#[derive(Eq, Debug, Clone, Default)]
+#[derive(Eq, Clone)]
 pub struct ClusterAffinity {
-    pub cluster_index: NodeIndex,
+    pub cluster_ptr: PrimalClusterPtr,
     pub affinity: Affinity,
 }
 
-impl std::hash::Hash for ClusterAffinity {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.cluster_index.hash(state);
-        self.affinity.hash(state);
+impl std::fmt::Debug for ClusterAffinity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Assuming your generic pointer has a way to get the index (like .1 or .index)
+        // If PrimalClusterPtr is OrdArcRwLock<T, (usize, usize)>, the index is usually in the second tuple element.
+        let cluster_index = self.cluster_ptr.read_recursive().cluster_index; // Or however you access the index in your lock wrapper
+        
+        f.debug_struct("ClusterAffinity")
+         .field("cluster_ptr", &cluster_index) // Only print the ID, not the whole object
+         // .field("other_field", &self.other_field)
+         .finish()
     }
 }
 
 impl PartialEq for ClusterAffinity {
     fn eq(&self, other: &Self) -> bool {
-        self.affinity == other.affinity && self.cluster_index == other.cluster_index
+        self.affinity == other.affinity && self.cluster_ptr.eq(&other.cluster_ptr) 
     }
 }
 
@@ -76,9 +83,9 @@ impl Ord for ClusterAffinity {
         match other.affinity.cmp(&self.affinity) {
             std::cmp::Ordering::Equal => {
                 // If affinities are equal, compare cluster_index in ascending order
-                self.cluster_index.cmp(&other.cluster_index)
+                self.cluster_ptr.read_recursive().cluster_index.cmp(&other.cluster_ptr.read_recursive().cluster_index)
             }
-            other => other.reverse(),
+            other => other,
         }
     }
 }
@@ -86,6 +93,12 @@ impl Ord for ClusterAffinity {
 impl PartialOrd for ClusterAffinity {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
+    }
+}
+
+impl std::hash::Hash for ClusterAffinity {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        (self.cluster_ptr.clone(), self.affinity.clone()).hash(state);
     }
 }
 
@@ -131,8 +144,8 @@ pub struct PrimalModuleSerialNode {
     pub cluster_weak: PrimalClusterWeak,
 }
 
-pub type PrimalModuleSerialNodePtr = ArcRwLock<PrimalModuleSerialNode>;
-pub type PrimalModuleSerialNodeWeak = WeakRwLock<PrimalModuleSerialNode>;
+pub type PrimalModuleSerialNodePtr = ArcManualSafeLock<PrimalModuleSerialNode>;
+pub type PrimalModuleSerialNodeWeak = WeakManualSafeLock<PrimalModuleSerialNode>;
 
 pub struct PrimalCluster {
     /// the index in the cluster
@@ -140,13 +153,13 @@ pub struct PrimalCluster {
     /// the nodes that belongs to this cluster
     pub nodes: Vec<PrimalModuleSerialNodePtr>,
     /// all the edges ever exists in any hair
-    pub edges: FastIterSet<EdgeIndex>,
+    pub edges: FastIterSet<EdgePtr>,
     /// all the vertices ever touched by any tight edge
-    pub vertices: FastIterSet<VertexIndex>,
+    pub vertices: FastIterSet<VertexPtr>,
     /// the parity matrix to determine whether it's a valid cluster and also find new ways to increase the dual
     pub matrix: EchelonMatrix,
     /// the parity subgraph result, only valid when it's solved
-    pub subgraph: Option<Subgraph>,
+    pub subgraph: Option<InternalSubgraph>,
     /// plugin manager helps to execute the plugin and find an executable relaxer
     pub plugin_manager: PluginManager,
     /// optimizing the direction of relaxers
@@ -154,10 +167,12 @@ pub struct PrimalCluster {
     /// HIHGS solution stored for incrmental lp
     #[cfg(feature = "incr_lp")] //note: really depends where we want the error to manifest
     pub incr_solution: Option<Arc<Mutex<IncrLPSolution>>>,
+    /// the partition id of the cluster
+    pub partition_id: usize,
 }
 
-pub type PrimalClusterPtr = ArcRwLock<PrimalCluster>;
-pub type PrimalClusterWeak = WeakRwLock<PrimalCluster>;
+pub type PrimalClusterPtr = ArcManualSafeLock<PrimalCluster>;
+pub type PrimalClusterWeak = WeakManualSafeLock<PrimalCluster>;
 
 impl PrimalModuleImpl for PrimalModuleSerial {
     fn new_empty(_initializer: &Arc<SolverInitializer>) -> Self {
@@ -189,7 +204,7 @@ impl PrimalModuleImpl for PrimalModuleSerial {
     }
 
     #[allow(clippy::unnecessary_cast)]
-    fn load<D: DualModuleImpl>(&mut self, interface_ptr: &DualModuleInterfacePtr, _dual_module: &mut D) {
+    fn load<D: DualModuleImpl>(&mut self, interface_ptr: &DualModuleInterfacePtr, _dual_module: &mut D, partition_id: usize) {
         let interface = interface_ptr.read_recursive();
         for index in 0..interface.nodes.len() as NodeIndex {
             let dual_node_ptr = &interface.nodes[index as usize];
@@ -217,19 +232,23 @@ impl PrimalModuleImpl for PrimalModuleSerial {
                 nodes: vec![],
                 edges: node.invalid_subgraph.hair.clone(),
                 vertices: node.invalid_subgraph.vertices.clone(),
-                matrix: node.invalid_subgraph.generate_matrix(&interface.decoding_graph),
+                matrix: node.invalid_subgraph.generate_matrix(),
                 subgraph: None,
                 plugin_manager: PluginManager::new(self.plugins.clone(), self.plugin_count.clone()),
                 relaxer_optimizer: RelaxerOptimizer::new(),
                 #[cfg(all(feature = "incr_lp", feature = "highs"))]
                 incr_solution: None,
-            });
+                partition_id,
+            }, (partition_id, self.clusters.len() as NodeIndex));
             // create the primal node of this defect node and insert into cluster
             let primal_node_ptr = PrimalModuleSerialNodePtr::new_value(PrimalModuleSerialNode {
                 dual_node_ptr: dual_node_ptr.clone(),
                 cluster_weak: primal_cluster_ptr.downgrade(),
-            });
+            },
+            (partition_id, node.index as usize));
+            drop(node);
             primal_cluster_ptr.write().nodes.push(primal_node_ptr.clone());
+            dual_node_ptr.write().primal_module_serial_node = Some(primal_node_ptr.clone().downgrade());
             // add to self
             self.nodes.push(primal_node_ptr);
             self.clusters.push(primal_cluster_ptr);
@@ -289,10 +308,15 @@ impl PrimalModuleImpl for PrimalModuleSerial {
                             cluster.cluster_index, cluster.vertices, cluster.edges
                         )
                     })
-                    .iter(),
+                    ,
             );
         }
-        OutputSubgraph::new(subgraph, _dual_module.get_negative_edges())
+        let subgraph_index: Vec<usize> = subgraph
+            .clone()
+            .into_iter()
+            .map(|edge_weak| edge_weak.upgrade_force().read_recursive().edge_index)
+            .collect();
+        OutputSubgraph::new(subgraph_index, _dual_module.get_negative_edges(), subgraph)
     }
 
     /// check if there are more plugins to be applied
@@ -304,7 +328,7 @@ impl PrimalModuleImpl for PrimalModuleSerial {
         return if *self.plugin_count.read_recursive() < self.plugins.len() {
             // increment the plugin count
             *self.plugin_count.write() += 1;
-            self.plugin_pending_clusters = (0..self.clusters.len()).collect();
+            self.plugin_pending_clusters = self.clusters.iter().map(|c| c.downgrade()).collect::<Vec<_>>();
             true
         } else {
             false
@@ -312,7 +336,7 @@ impl PrimalModuleImpl for PrimalModuleSerial {
     }
 
     /// get the pending clusters
-    fn pending_clusters(&mut self) -> Vec<usize> {
+    fn pending_clusters(&mut self) -> Vec<PrimalClusterWeak> {
         self.plugin_pending_clusters.clone()
     }
 
@@ -322,11 +346,10 @@ impl PrimalModuleImpl for PrimalModuleSerial {
     #[allow(clippy::unnecessary_cast)]
     fn resolve_cluster(
         &mut self,
-        cluster_index: NodeIndex,
+        cluster_ptr: PrimalClusterPtr,
         interface_ptr: &DualModuleInterfacePtr,
         dual_module: &mut impl DualModuleImpl,
     ) -> bool {
-        let cluster_ptr = self.clusters[cluster_index as usize].clone();
         let mut cluster = cluster_ptr.write();
         if cluster.nodes.is_empty() {
             return true; // no longer a cluster, no need to handle
@@ -338,10 +361,10 @@ impl PrimalModuleImpl for PrimalModuleSerial {
         }
         // update the matrix with new tight edges
         let cluster = &mut *cluster;
-        for &edge_index in cluster.edges.iter() {
+        for edge_ptr in cluster.edges.iter() {
             cluster
                 .matrix
-                .update_edge_tightness(edge_index, dual_module.is_edge_tight(edge_index));
+                .update_edge_tightness(edge_ptr.downgrade(), dual_module.is_edge_tight(edge_ptr.clone()));
         }
 
         // find an executable relaxer from the plugin manager
@@ -356,21 +379,22 @@ impl PrimalModuleImpl for PrimalModuleSerial {
             let cluster_mut = &mut *cluster; // must first get mutable reference
             let plugin_manager = &mut cluster_mut.plugin_manager;
             let matrix = &mut cluster_mut.matrix;
-            plugin_manager.find_relaxer(decoding_graph, matrix, &positive_dual_variables)
+            plugin_manager.find_relaxer(dual_module, matrix, &positive_dual_variables)
         };
 
         // if a relaxer is found, execute it and return
         if let Some(relaxer) = relaxer {
             for (invalid_subgraph, grow_rate) in relaxer.get_direction().iter() {
-                let (existing, dual_node_ptr) = interface_ptr.find_or_create_node(invalid_subgraph, dual_module);
+                let (existing, dual_node_ptr) = interface_ptr.find_or_create_node(invalid_subgraph, dual_module, cluster.partition_id);
                 if !existing {
                     // create the corresponding primal node and add it to cluster
                     let primal_node_ptr = PrimalModuleSerialNodePtr::new_value(PrimalModuleSerialNode {
                         dual_node_ptr: dual_node_ptr.clone(),
                         cluster_weak: cluster_ptr.downgrade(),
-                    });
+                    }, (cluster.partition_id, dual_node_ptr.read_recursive().index as usize));
                     cluster.nodes.push(primal_node_ptr.clone());
-                    self.nodes.push(primal_node_ptr);
+                    self.nodes.push(primal_node_ptr.clone());
+                    dual_node_ptr.write().primal_module_serial_node = Some(primal_node_ptr.downgrade());
                 }
 
                 dual_module.set_grow_rate(&dual_node_ptr, grow_rate.clone());
@@ -383,7 +407,7 @@ impl PrimalModuleImpl for PrimalModuleSerial {
         // subgraph with minimum weight from all plugins as the starting point to do local minimum
 
         // find a local minimum (hopefully a global minimum)
-        let weight_of = |edge_index: EdgeIndex| dual_module.get_edge_weight(edge_index);
+        let weight_of = |edge_weak: EdgeWeak| dual_module.get_edge_weight(edge_weak);
         cluster.subgraph = Some(cluster.matrix.get_solution_local_minimum(weight_of).expect("satisfiable"));
         true
     }
@@ -392,17 +416,16 @@ impl PrimalModuleImpl for PrimalModuleSerial {
     #[allow(clippy::unnecessary_cast)]
     fn resolve_cluster_tune(
         &mut self,
-        cluster_index: NodeIndex,
+        cluster_ptr: PrimalClusterPtr,
         interface_ptr: &DualModuleInterfacePtr,
         dual_module: &mut impl DualModuleImpl,
         // dual_node_deltas: &mut FastIterMap<OrderedDualNodePtr, Rational>,
-        dual_node_deltas: &mut FastIterMap<OrderedDualNodePtr, (Rational, NodeIndex)>,
+        dual_node_deltas: &mut FastIterMap<OrderedDualNodePtr, (Rational, PrimalClusterPtr)>,
     ) -> (bool, OptimizerResult) {
         let mut optimizer_result = OptimizerResult::default();
         #[cfg(feature = "incr_lp")]
-        let mut cluster_ptr = self.clusters[cluster_index as usize].clone();
+        let mut cluster_ptr = cluster_ptr.clone();
         #[cfg(not(feature = "incr_lp"))]
-        let cluster_ptr = self.clusters[cluster_index as usize].clone();
         let mut cluster_temp = cluster_ptr.write();
         if cluster_temp.nodes.is_empty() {
             return (true, optimizer_result); // no longer a cluster, no need to handle
@@ -416,10 +439,10 @@ impl PrimalModuleImpl for PrimalModuleSerial {
         #[cfg(not(feature = "incr_lp"))]
         let cluster = &mut *cluster_temp;
 
-        for &edge_index in cluster.edges.iter() {
+        for edge_ptr in cluster.edges.iter() {
             cluster
                 .matrix
-                .update_edge_tightness(edge_index, dual_module.is_edge_tight_tune(edge_index));
+                .update_edge_tightness(edge_ptr.downgrade(), dual_module.is_edge_tight_tune(edge_ptr.clone()));
         }
 
         // find an executable relaxer from the plugin manager
@@ -430,11 +453,10 @@ impl PrimalModuleImpl for PrimalModuleSerial {
                 .map(|p| p.read_recursive().dual_node_ptr.clone())
                 .filter(|dual_node_ptr| !dual_node_ptr.read_recursive().dual_variable_at_last_updated_time.is_zero())
                 .collect();
-            let decoding_graph = &interface_ptr.read_recursive().decoding_graph;
             let cluster_mut = &mut *cluster; // must first get mutable reference
             let plugin_manager = &mut cluster_mut.plugin_manager;
             let matrix = &mut cluster_mut.matrix;
-            plugin_manager.find_relaxer(decoding_graph, matrix, &positive_dual_variables)
+            plugin_manager.find_relaxer(dual_module, matrix, &positive_dual_variables)
         };
 
         // Yue added 2025.1.31: also check for local minimum during the algorithm; otherwise when we increase
@@ -442,7 +464,7 @@ impl PrimalModuleImpl for PrimalModuleSerial {
         // more complicated dual solution does not necessarily mean better logical error rate. Rather, if we
         // keep looking for smaller weighted solutions in the middle, the result is hopefully better.
         if !self.config.only_solve_primal_once {
-            let weight_of = |edge_index: EdgeIndex| dual_module.get_edge_weight(edge_index);
+            let weight_of = |edge_weak: EdgeWeak| edge_weak.upgrade_force().read_recursive().weight.clone();
             if let Some(subgraph) = cluster.matrix.get_solution_local_minimum(weight_of) {
                 if let Some(original_subgraph) = &cluster.subgraph {
                     let original_weight = dual_module.get_subgraph_weight(original_subgraph);
@@ -475,7 +497,7 @@ impl PrimalModuleImpl for PrimalModuleSerial {
                             )
                         })
                         .collect();
-                    let edge_slacks: FastIterMap<EdgeIndex, Rational> = dual_variables
+                    let edge_slacks: FastIterMap<EdgePtr, Rational> = dual_variables
                         .keys()
                         .flat_map(|invalid_subgraph: &Arc<InvalidSubgraph>| invalid_subgraph.hair.iter().cloned())
                         .chain(
@@ -485,7 +507,7 @@ impl PrimalModuleImpl for PrimalModuleSerial {
                                 .flat_map(|invalid_subgraph| invalid_subgraph.hair.iter().cloned()),
                         )
                         .unique()
-                        .map(|edge_index| (edge_index, dual_module.get_edge_slack_tune(edge_index)))
+                        .map(|edge_ptr| (edge_ptr.clone(), dual_module.get_edge_slack_tune(edge_ptr.clone())))
                         .collect();
                     let (new_relaxer, early_returned) =
                         cluster.relaxer_optimizer.optimize(relaxer, edge_slacks, dual_variables);
@@ -627,23 +649,24 @@ impl PrimalModuleImpl for PrimalModuleSerial {
 
             for (invalid_subgraph, grow_rate) in relaxer.get_direction().iter() {
                 if let Some((existing, dual_node_ptr)) =
-                    interface_ptr.find_or_create_node_tune(invalid_subgraph, dual_module)
+                    interface_ptr.find_or_create_node_tune(invalid_subgraph, dual_module, cluster.partition_id)
                 {
                     if !existing {
                         // create the corresponding primal node and add it to cluster
                         let primal_node_ptr = PrimalModuleSerialNodePtr::new_value(PrimalModuleSerialNode {
                             dual_node_ptr: dual_node_ptr.clone(),
                             cluster_weak: cluster_ptr.downgrade(),
-                        });
+                        }, (cluster.partition_id, dual_node_ptr.read_recursive().index as usize));
                         cluster.nodes.push(primal_node_ptr.clone());
-                        self.nodes.push(primal_node_ptr);
+                        self.nodes.push(primal_node_ptr.clone());
+                        dual_node_ptr.write().primal_module_serial_node = Some(primal_node_ptr.downgrade());
                     }
 
                     // Document the desired deltas
                     let index = dual_node_ptr.read_recursive().index;
                     dual_node_deltas.insert(
                         OrderedDualNodePtr::new(index, dual_node_ptr),
-                        (grow_rate.clone(), cluster_index),
+                        (grow_rate.clone(), cluster_ptr.clone()),
                     );
                 }
             }
@@ -654,7 +677,7 @@ impl PrimalModuleImpl for PrimalModuleSerial {
 
         // find a local minimum (hopefully a global minimum)
         if self.config.only_solve_primal_once {
-            let weight_of = |edge_index: EdgeIndex| dual_module.get_edge_weight(edge_index);
+            let weight_of = |edge_weak: EdgeWeak| dual_module.get_edge_weight(edge_weak);
             cluster.subgraph = Some(cluster.matrix.get_solution_local_minimum(weight_of).expect("satisfiable"));
         }
 
@@ -666,12 +689,12 @@ impl PrimalModuleImpl for PrimalModuleSerial {
         let pending_clusters = self.pending_clusters();
         let mut sorted_clusters_aff = FastIterSet::default();
 
-        for cluster_index in pending_clusters.iter() {
-            let cluster_ptr = self.clusters[*cluster_index].clone();
-            let affinity = dual_module.calculate_cluster_affinity(cluster_ptr);
+        for cluster_weak in pending_clusters.iter() {
+            let cluster_ptr = cluster_weak.upgrade_force();
+            let affinity = dual_module.calculate_cluster_affinity(cluster_ptr.clone());
             if let Some(affinity) = affinity {
                 sorted_clusters_aff.insert(ClusterAffinity {
-                    cluster_index: *cluster_index,
+                    cluster_ptr: cluster_ptr.clone(),
                     affinity,
                 });
             }
@@ -721,21 +744,24 @@ impl PrimalModuleSerial {
         &self,
         dual_node_ptr_1: &DualNodePtr,
         dual_node_ptr_2: &DualNodePtr,
-        decoding_graph: &DecodingHyperGraph,
         _dual_module: &mut impl DualModuleImpl, // note: remove if not for cluster-based
     ) {
         // cluster_1 will become the union of cluster_1 and cluster_2
         // and cluster_2 will be outdated
-        let node_index_1 = dual_node_ptr_1.read_recursive().index;
-        let node_index_2 = dual_node_ptr_2.read_recursive().index;
-        if node_index_1 == node_index_2 {
+        if dual_node_ptr_1.eq(dual_node_ptr_2) {
             return; // already the same node
         }
-        let primal_node_1 = self.nodes[node_index_1 as usize].read_recursive();
-        let primal_node_2 = self.nodes[node_index_2 as usize].read_recursive();
-        if primal_node_1.cluster_weak.ptr_eq(&primal_node_2.cluster_weak) {
+        let primal_node_1_weak = dual_node_ptr_1.read_recursive().primal_module_serial_node.clone().unwrap();
+        let primal_node_2_weak = dual_node_ptr_2.read_recursive().primal_module_serial_node.clone().unwrap();
+        let primal_node_1_ptr = primal_node_1_weak.upgrade_force();
+        let primal_node_2_ptr = primal_node_2_weak.upgrade_force();
+        let primal_node_1 = primal_node_1_ptr.read_recursive();
+        let primal_node_2 = primal_node_2_ptr.read_recursive();
+
+        if primal_node_1.cluster_weak.eq(&primal_node_2.cluster_weak) {
             return; // already in the same cluster
         }
+
         let cluster_ptr_1 = primal_node_1.cluster_weak.upgrade_force();
         let cluster_ptr_2 = primal_node_2.cluster_weak.upgrade_force();
         drop(primal_node_1);
@@ -844,12 +870,13 @@ impl PrimalModuleSerial {
             // cluster_1.subgraph = None; // mark as no subgraph
         }
 
-        for &vertex_index in cluster_2.vertices.iter() {
-            if !cluster_1.vertices.contains(&vertex_index) {
-                cluster_1.vertices.insert(vertex_index);
-                let incident_edges = decoding_graph.get_vertex_neighbors(vertex_index);
-                let parity = decoding_graph.is_vertex_defect(vertex_index);
-                cluster_1.matrix.add_constraint(vertex_index, incident_edges, parity);
+        for vertex_ptr in cluster_2.vertices.iter() {
+            if !cluster_1.vertices.contains(&vertex_ptr) {
+                cluster_1.vertices.insert(vertex_ptr.clone());
+                let vertex = vertex_ptr.read_recursive();
+                let incident_edges = &vertex.edges;
+                let parity = vertex.is_defect;
+                cluster_1.matrix.add_constraint(vertex_ptr.downgrade().clone(), incident_edges, parity);
             }
         }
         cluster_1.relaxer_optimizer.append(&mut cluster_2.relaxer_optimizer);
@@ -864,14 +891,13 @@ impl PrimalModuleSerial {
         dual_module: &mut impl DualModuleImpl,
     ) -> bool {
         debug_assert!(!dual_report.is_unbounded() && dual_report.get_valid_growth().is_none());
-        let mut active_clusters = FastIterSet::<NodeIndex>::new();
+        let mut active_clusters = FastIterSet::<PrimalClusterPtr>::new();
         let interface = interface_ptr.read_recursive();
-        let decoding_graph = &interface.decoding_graph;
         while let Some(obstacle) = dual_report.pop() {
             match obstacle {
-                Obstacle::Conflict { edge_index } => {
+                Obstacle::Conflict { edge_ptr } => {
                     // union all the dual nodes in the edge index and create new dual node by adding this edge to `internal_edges`
-                    let dual_nodes = dual_module.get_edge_nodes(edge_index);
+                    let dual_nodes = dual_module.get_edge_nodes(edge_ptr.clone());
                     debug_assert!(
                         !dual_nodes.is_empty(),
                         "should not conflict if no dual nodes are contributing"
@@ -880,34 +906,30 @@ impl PrimalModuleSerial {
                     // first union all the dual nodes
                     for dual_node_ptr in dual_nodes.iter().skip(1) {
                         // self.union(dual_node_ptr_0, dual_node_ptr, &interface.decoding_graph);
-                        self.union(dual_node_ptr_0, dual_node_ptr, &interface.decoding_graph, dual_module);
+                        self.union(dual_node_ptr_0, dual_node_ptr, dual_module);
                     }
-                    let cluster_ptr = self.nodes[dual_node_ptr_0.read_recursive().index as usize]
-                        .read_recursive()
-                        .cluster_weak
-                        .upgrade_force();
+                    let primal_node_weak = dual_node_ptr_0.read_recursive().primal_module_serial_node.clone().unwrap();
+                    let cluster_ptr = primal_node_weak.upgrade_force().read_recursive().cluster_weak.upgrade_force();
                     let mut cluster = cluster_ptr.write();
                     // then add new constraints because these edges may touch new vertices
-                    let incident_vertices = decoding_graph.get_edge_neighbors(edge_index);
-                    for &vertex_index in incident_vertices.iter() {
-                        if !cluster.vertices.contains(&vertex_index) {
-                            cluster.vertices.insert(vertex_index);
-                            let incident_edges = decoding_graph.get_vertex_neighbors(vertex_index);
-                            let parity = decoding_graph.is_vertex_defect(vertex_index);
-                            cluster.matrix.add_constraint(vertex_index, incident_edges, parity);
+                    let incident_vertices = &edge_ptr.read_recursive().vertices;
+                    for vertex_weak in incident_vertices.iter() {
+                        let vertex_ptr = vertex_weak.upgrade_force();
+                        if !cluster.vertices.contains(&vertex_ptr) {
+                            cluster.vertices.insert(vertex_ptr.clone());
+                            let incident_edges = &vertex_ptr.read_recursive().edges;
+                            let parity = vertex_ptr.read_recursive().is_defect;
+                            cluster.matrix.add_constraint(vertex_ptr.downgrade().clone(), incident_edges, parity);
                         }
                     }
-                    cluster.edges.insert(edge_index);
+                    cluster.edges.insert(edge_ptr.clone());
                     // add to active cluster so that it's processed later
-                    active_clusters.insert(cluster.cluster_index);
+                    active_clusters.insert(cluster_ptr.clone());
                 }
                 Obstacle::ShrinkToZero { dual_node_ptr } => {
-                    let cluster_ptr = self.nodes[dual_node_ptr.index as usize]
-                        .read_recursive()
-                        .cluster_weak
-                        .upgrade_force();
-                    let cluster_index = cluster_ptr.read_recursive().cluster_index;
-                    active_clusters.insert(cluster_index);
+                    let primal_node_weak = dual_node_ptr.ptr.read_recursive().primal_module_serial_node.clone().unwrap();
+                    let cluster_ptr = primal_node_weak.upgrade_force().read_recursive().cluster_weak.upgrade_force();
+                    active_clusters.insert(cluster_ptr.clone());
                 }
             }
         }
@@ -916,8 +938,8 @@ impl PrimalModuleSerial {
             *self.plugin_count.write() = 0; // force only the first plugin
         }
         let mut all_solved = true;
-        for &cluster_index in active_clusters.iter() {
-            let solved = self.resolve_cluster(cluster_index, interface_ptr, dual_module);
+        for cluster_ptr in active_clusters.iter() {
+            let solved = self.resolve_cluster(cluster_ptr.clone(), interface_ptr, dual_module);
             all_solved &= solved;
         }
         if !all_solved {
@@ -936,14 +958,13 @@ impl PrimalModuleSerial {
         dual_module: &mut impl DualModuleImpl,
     ) -> bool {
         debug_assert!(!dual_report.is_unbounded() && dual_report.get_valid_growth().is_none());
-        let mut active_clusters = FastIterSet::<NodeIndex>::new();
+        let mut active_clusters = FastIterSet::<PrimalClusterPtr>::new();
         let interface = interface_ptr.read_recursive();
-        let decoding_graph = &interface.decoding_graph;
         while let Some(obstacle) = dual_report.pop() {
             match obstacle {
-                Obstacle::Conflict { edge_index } => {
+                Obstacle::Conflict { edge_ptr } => {
                     // union all the dual nodes in the edge index and create new dual node by adding this edge to `internal_edges`
-                    let dual_nodes = dual_module.get_edge_nodes(edge_index);
+                    let dual_nodes = dual_module.get_edge_nodes(edge_ptr.clone());
                     debug_assert!(
                         !dual_nodes.is_empty(),
                         "should not conflict if no dual nodes are contributing"
@@ -952,34 +973,31 @@ impl PrimalModuleSerial {
                     // first union all the dual nodes
                     for dual_node_ptr in dual_nodes.iter().skip(1) {
                         // self.union(dual_node_ptr_0, dual_node_ptr, &interface.decoding_graph);
-                        self.union(dual_node_ptr_0, dual_node_ptr, &interface.decoding_graph, dual_module);
+                        self.union(dual_node_ptr_0, dual_node_ptr, dual_module);
                     }
-                    let cluster_ptr = self.nodes[dual_node_ptr_0.read_recursive().index as usize]
-                        .read_recursive()
-                        .cluster_weak
-                        .upgrade_force();
+                    let primal_node_weak = dual_node_ptr_0.read_recursive().primal_module_serial_node.clone().unwrap();
+                    let cluster_ptr = primal_node_weak.upgrade_force().read_recursive().cluster_weak.upgrade_force();
                     let mut cluster = cluster_ptr.write();
                     // then add new constraints because these edges may touch new vertices
-                    let incident_vertices = decoding_graph.get_edge_neighbors(edge_index);
-                    for &vertex_index in incident_vertices.iter() {
-                        if !cluster.vertices.contains(&vertex_index) {
-                            cluster.vertices.insert(vertex_index);
-                            let incident_edges = decoding_graph.get_vertex_neighbors(vertex_index);
-                            let parity = decoding_graph.is_vertex_defect(vertex_index);
-                            cluster.matrix.add_constraint(vertex_index, incident_edges, parity);
+                    let incident_vertices = &edge_ptr.read_recursive().vertices;
+                    for vertex_weak in incident_vertices.iter() {
+                        let vertex_ptr = vertex_weak.upgrade_force();
+                        if !cluster.vertices.contains(&vertex_ptr) {
+                            let vertex = vertex_ptr.read_recursive();
+                            cluster.vertices.insert(vertex_ptr.clone());
+                            let incident_edges = &vertex.edges;
+                            let parity = vertex.is_defect;
+                            cluster.matrix.add_constraint(vertex_weak.clone(), incident_edges, parity);
                         }
                     }
-                    cluster.edges.insert(edge_index);
+                    cluster.edges.insert(edge_ptr.clone());
                     // add to active cluster so that it's processed later
-                    active_clusters.insert(cluster.cluster_index);
+                    active_clusters.insert(cluster_ptr.clone());
                 }
                 Obstacle::ShrinkToZero { dual_node_ptr } => {
-                    let cluster_ptr = self.nodes[dual_node_ptr.index as usize]
-                        .read_recursive()
-                        .cluster_weak
-                        .upgrade_force();
-                    let cluster_index = cluster_ptr.read_recursive().cluster_index;
-                    active_clusters.insert(cluster_index);
+                    let primal_node_weak = dual_node_ptr.ptr.read_recursive().primal_module_serial_node.clone().unwrap();
+                    let cluster_ptr = primal_node_weak.upgrade_force().read_recursive().cluster_weak.upgrade_force();
+                    active_clusters.insert(cluster_ptr.clone());
                 }
             }
         }
@@ -988,8 +1006,8 @@ impl PrimalModuleSerial {
             *self.plugin_count.write() = 0; // force only the first plugin
         }
         let mut all_solved = true;
-        for &cluster_index in active_clusters.iter() {
-            let solved = self.resolve_cluster(cluster_index, interface_ptr, dual_module);
+        for cluster_ptr in active_clusters.iter() {
+            let solved = self.resolve_cluster(cluster_ptr.clone(), interface_ptr, dual_module);
             all_solved &= solved;
         }
         if !all_solved {
@@ -1010,8 +1028,8 @@ impl PrimalModuleSerial {
         }
         // check that all clusters have passed the plugins
         loop {
-            while let Some(cluster_index) = self.plugin_pending_clusters.pop() {
-                let solved = self.resolve_cluster(cluster_index, interface_ptr, dual_module);
+            while let Some(cluster_weak) = self.plugin_pending_clusters.pop() {
+                let solved = self.resolve_cluster(cluster_weak.upgrade_force(), interface_ptr, dual_module);
                 if !solved {
                     return false; // let the dual module to handle one
                 }
@@ -1019,7 +1037,7 @@ impl PrimalModuleSerial {
             if *self.plugin_count.read_recursive() < self.plugins.len() {
                 // increment the plugin count
                 *self.plugin_count.write() += 1;
-                self.plugin_pending_clusters = (0..self.clusters.len()).collect();
+                self.plugin_pending_clusters = self.clusters.iter().map(|c| c.downgrade()).collect::<Vec<_>>();
             } else {
                 break; // nothing more to check
             }
@@ -1035,15 +1053,14 @@ impl PrimalModuleSerial {
         interface_ptr: &DualModuleInterfacePtr,
         dual_module: &mut impl DualModuleImpl,
     ) -> (FastIterSet<Obstacle>, bool) {
-        let mut active_clusters = FastIterSet::<NodeIndex>::new();
+        let mut active_clusters = FastIterSet::<PrimalClusterPtr>::new();
         let interface = interface_ptr.read_recursive();
-        let decoding_graph = &interface.decoding_graph;
 
         for obstacle in dual_report.into_iter() {
             match obstacle {
-                Obstacle::Conflict { edge_index } => {
+                Obstacle::Conflict { edge_ptr } => {
                     // union all the dual nodes in the edge index and create new dual node by adding this edge to `internal_edges`
-                    let dual_nodes = dual_module.get_edge_nodes(edge_index);
+                    let dual_nodes = dual_module.get_edge_nodes(edge_ptr.clone());
                     debug_assert!(
                         !dual_nodes.is_empty(),
                         "should not conflict if no dual nodes are contributing"
@@ -1053,34 +1070,31 @@ impl PrimalModuleSerial {
                     // first union all the dual nodes
                     for dual_node_ptr in dual_nodes.iter().skip(1) {
                         // self.union(dual_node_ptr_0, dual_node_ptr, &interface.decoding_graph);
-                        self.union(dual_node_ptr_0, dual_node_ptr, &interface.decoding_graph, dual_module);
+                        self.union(dual_node_ptr_0, dual_node_ptr, dual_module);
                     }
-                    let cluster_ptr = self.nodes[dual_node_ptr_0.read_recursive().index as usize]
-                        .read_recursive()
-                        .cluster_weak
-                        .upgrade_force();
+                    // TODO: Double check this
+                    let primal_node_weak = dual_node_ptr_0.read_recursive().primal_module_serial_node.clone().unwrap();
+                    let cluster_ptr = primal_node_weak.upgrade_force().read_recursive().cluster_weak.upgrade_force();
                     let mut cluster = cluster_ptr.write();
                     // then add new constraints because these edges may touch new vertices
-                    let incident_vertices = decoding_graph.get_edge_neighbors(edge_index);
-                    for &vertex_index in incident_vertices.iter() {
-                        if !cluster.vertices.contains(&vertex_index) {
-                            cluster.vertices.insert(vertex_index);
-                            let incident_edges = decoding_graph.get_vertex_neighbors(vertex_index);
-                            let parity = decoding_graph.is_vertex_defect(vertex_index);
-                            cluster.matrix.add_constraint(vertex_index, incident_edges, parity);
+                    let incident_vertices = &edge_ptr.read_recursive().vertices;
+                    for vertex_weak in incident_vertices.iter() {
+                        let vertex_ptr = vertex_weak.upgrade_force();
+                        if !cluster.vertices.contains(&vertex_ptr) {
+                            cluster.vertices.insert(vertex_ptr.clone());
+                            let incident_edges = &vertex_ptr.read_recursive().edges;
+                            let parity = vertex_ptr.read_recursive().is_defect;
+                            cluster.matrix.add_constraint(vertex_weak.clone(), incident_edges, parity);
                         }
                     }
-                    cluster.edges.insert(edge_index);
+                    cluster.edges.insert(edge_ptr.clone());
                     // add to active cluster so that it's processed later
-                    active_clusters.insert(cluster.cluster_index);
+                    active_clusters.insert(cluster_ptr.clone());
                 }
                 Obstacle::ShrinkToZero { dual_node_ptr } => {
-                    let cluster_ptr = self.nodes[dual_node_ptr.index as usize]
-                        .read_recursive()
-                        .cluster_weak
-                        .upgrade_force();
-                    let cluster_index = cluster_ptr.read_recursive().cluster_index;
-                    active_clusters.insert(cluster_index);
+                    let primal_node_weak = dual_node_ptr.ptr.read_recursive().primal_module_serial_node.clone().unwrap();
+                    let cluster_ptr = primal_node_weak.upgrade_force().read_recursive().cluster_weak.upgrade_force();
+                    active_clusters.insert(cluster_ptr.clone());
                 }
             }
         }
@@ -1092,9 +1106,9 @@ impl PrimalModuleSerial {
         let mut all_solved = true;
         let mut dual_node_deltas = FastIterMap::new();
         let mut optimizer_result = OptimizerResult::default();
-        for &cluster_index in active_clusters.iter() {
+        for cluster_ptr in active_clusters.iter() {
             let (solved, other) =
-                self.resolve_cluster_tune(cluster_index, interface_ptr, dual_module, &mut dual_node_deltas);
+                self.resolve_cluster_tune(cluster_ptr.clone(), interface_ptr, dual_module, &mut dual_node_deltas);
             if !solved {
                 // todo: investigate more
                 return (dual_module.get_obstacles_tune(other, dual_node_deltas), false);
@@ -1190,7 +1204,7 @@ pub mod tests {
         // primal_module.config = serde_json::from_value(json!({"timeout":1})).unwrap();
         // try to work on a simple syndrome
         let decoding_graph = DecodingHyperGraph::new_defects(model_graph, defect_vertices.clone());
-        let interface_ptr = DualModuleInterfacePtr::new(decoding_graph.model_graph.clone());
+        let interface_ptr = DualModuleInterfacePtr::new(decoding_graph.model_graph.clone(), 0);
         primal_module.solve_visualizer(
             &interface_ptr,
             decoding_graph.syndrome_pattern.clone(),
@@ -1251,7 +1265,7 @@ pub mod tests {
             defect_vertices,
             final_dual,
             plugins,
-            DualModulePQ::new_empty(&model_graph.initializer),
+            DualModulePQ::new_empty(&model_graph.initializer, 0),
             model_graph,
             Some(visualizer),
         )

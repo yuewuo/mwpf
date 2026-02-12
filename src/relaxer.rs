@@ -6,6 +6,7 @@ use std::cmp::Ordering;
 // use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
+use crate::dual_module_pq::{EdgePtr};
 
 #[derive(Clone, Eq, Derivative, Default)]
 #[derivative(Debug)]
@@ -17,9 +18,9 @@ pub struct Relaxer {
     direction: FastIterMap<Arc<InvalidSubgraph>, Rational>,
     /// the edges that will be untightened after growing along `direction`;
     /// basically all the edges that have negative `overall_growing_rate`
-    untighten_edges: FastIterMap<EdgeIndex, Rational>,
+    untighten_edges: FastIterMap<EdgePtr, Rational>,
     /// the edges that will grow
-    growing_edges: FastIterMap<EdgeIndex, Rational>,
+    growing_edges: FastIterMap<EdgePtr, Rational>,
 }
 
 impl Hash for Relaxer {
@@ -70,21 +71,21 @@ impl Relaxer {
     pub fn new_raw(direction: FastIterMap<Arc<InvalidSubgraph>, Rational>) -> Self {
         let mut edges = FastIterMap::new();
         for (invalid_subgraph, speed) in direction.iter() {
-            for &edge_index in invalid_subgraph.hair.iter() {
-                if let Some(mut edge) = edges.get_mut(&edge_index) {
+            for edge_ptr in invalid_subgraph.hair.iter() {
+                if let Some(mut edge) = edges.get_mut(edge_ptr) {
                     *edge += speed;
                     continue;
                 }
-                edges.insert(edge_index, speed.clone());
+                edges.insert(edge_ptr.clone(), speed.clone());
             }
         }
         let mut untighten_edges = FastIterMap::new();
         let mut growing_edges = FastIterMap::new();
-        for (edge_index, speed) in edges {
+        for (edge_ptr, speed) in edges {
             if speed.is_negative() {
-                untighten_edges.insert(edge_index, speed);
+                untighten_edges.insert(edge_ptr, speed);
             } else if speed.is_positive() {
-                growing_edges.insert(edge_index, speed);
+                growing_edges.insert(edge_ptr, speed);
             }
         }
         let mut relaxer = Self {
@@ -128,11 +129,11 @@ impl Relaxer {
         &self.direction
     }
 
-    pub fn get_growing_edges(&self) -> &FastIterMap<EdgeIndex, Rational> {
+    pub fn get_growing_edges(&self) -> &FastIterMap<EdgePtr, Rational> {
         &self.growing_edges
     }
 
-    pub fn get_untighten_edges(&self) -> &FastIterMap<EdgeIndex, Rational> {
+    pub fn get_untighten_edges(&self) -> &FastIterMap<EdgePtr, Rational> {
         &self.untighten_edges
     }
 }
@@ -142,6 +143,8 @@ mod tests {
     use super::*;
     use crate::decoding_hypergraph::tests::*;
     use crate::invalid_subgraph::tests::*;
+    use crate::dual_module_pq::DualModulePQ;
+    use crate::dual_module::{DualModuleInterfacePtr, DualModuleImpl};
     use num_traits::One;
 
     #[test]
@@ -149,13 +152,18 @@ mod tests {
         // cargo test relaxer_good -- --nocapture
         let visualize_filename = "relaxer_good.json".to_string();
         let (decoding_graph, ..) = color_code_5_decoding_graph(vec![7, 1], visualize_filename);
-        let invalid_subgraph = Arc::new(InvalidSubgraph::new_complete(
+        let initializer = decoding_graph.model_graph.initializer.clone();
+        let mut dual_module = DualModulePQ::new_empty(&initializer, 0); // initialize vertex and edge pointers
+        let interface_ptr = DualModuleInterfacePtr::new(decoding_graph.model_graph.clone(), 0);
+        interface_ptr.load(decoding_graph.syndrome_pattern.clone(), &mut dual_module, 0); // this is needed to load the defect vertices
+
+        let invalid_subgraph = Arc::new(InvalidSubgraph::new_complete_from_indices(
             vec![7].into_iter().collect(),
             FastIterSet::new(),
-            decoding_graph.as_ref(),
+            &mut dual_module
         ));
         use num_traits::One;
-        let relaxer = Relaxer::new([(invalid_subgraph, Rational::one())].into());
+        let relaxer = Relaxer::new([(invalid_subgraph, Rational::one())].into_iter().collect());
         println!("relaxer: {relaxer:?}");
         assert!(relaxer.untighten_edges.is_empty());
     }
@@ -166,24 +174,36 @@ mod tests {
         // cargo test relaxer_bad -- --nocapture
         let visualize_filename = "relaxer_bad.json".to_string();
         let (decoding_graph, ..) = color_code_5_decoding_graph(vec![7, 1], visualize_filename);
-        let invalid_subgraph = Arc::new(InvalidSubgraph::new_complete(
+        let initializer = decoding_graph.model_graph.initializer.clone();
+        let mut dual_module = DualModulePQ::new_empty(&initializer, 0); // initialize vertex and edge pointers
+        let interface_ptr = DualModuleInterfacePtr::new(decoding_graph.model_graph.clone(), 0);
+        interface_ptr.load(decoding_graph.syndrome_pattern.clone(), &mut dual_module, 0); // this is needed to load the defect vertices
+
+        let invalid_subgraph = Arc::new(InvalidSubgraph::new_complete_from_indices(
             vec![7].into_iter().collect(),
             FastIterSet::new(),
-            decoding_graph.as_ref(),
+            &mut dual_module
         ));
-        let relaxer: Relaxer = Relaxer::new([(invalid_subgraph, Rational::zero())].into());
+        let relaxer: Relaxer = Relaxer::new([(invalid_subgraph, Rational::zero())].into_iter().collect());
         println!("relaxer: {relaxer:?}"); // should not print because it panics
     }
 
     #[test]
     fn relaxer_hash() {
         // cargo test relaxer_hash -- --nocapture
+        let visualize_filename = "relaxer_hash.json".to_string();
+        let (decoding_graph, ..) = color_code_5_decoding_graph(vec![7, 1], visualize_filename);
+        let initializer = decoding_graph.model_graph.initializer.clone();
+        let mut dual_module = DualModulePQ::new_empty(&initializer, 0); // initialize vertex and edge pointers
+        let interface_ptr = DualModuleInterfacePtr::new(decoding_graph.model_graph.clone(), 0);
+        interface_ptr.load(decoding_graph.syndrome_pattern.clone(), &mut dual_module, 0); // this is needed to load the defect vertices
         let vertices: FastIterSet<VertexIndex> = [1, 2, 3].into();
         let edges: FastIterSet<EdgeIndex> = [4, 5].into();
         let hair: FastIterSet<EdgeIndex> = [6, 7, 8].into();
-        let invalid_subgraph = InvalidSubgraph::new_raw(vertices.clone(), edges.clone(), hair.clone());
-        let relaxer_1 = Relaxer::new([(Arc::new(invalid_subgraph.clone()), Rational::one())].into());
-        let relaxer_2 = Relaxer::new([(Arc::new(invalid_subgraph), Rational::one())].into());
+        let invalid_subgraph =
+            InvalidSubgraph::new_raw_from_indices(vertices.clone(), edges.clone(), hair.clone(), &mut dual_module);
+        let relaxer_1 = Relaxer::new([(Arc::new(invalid_subgraph.clone()), Rational::one())].into_iter().collect());
+        let relaxer_2 = Relaxer::new([(Arc::new(invalid_subgraph), Rational::one())].into_iter().collect());
         assert_eq!(relaxer_1, relaxer_2);
         // they should have the same hash value
         assert_eq!(

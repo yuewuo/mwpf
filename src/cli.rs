@@ -18,6 +18,8 @@ use serde::Serialize;
 use serde_variant::to_variant_name;
 use std::env;
 use std::sync::Arc;
+use crate::num_traits::Zero;
+use crate::dual_module_pq::{EdgePtr, EdgeWeak, VertexPtr, VertexWeak, Edge, Vertex};
 
 const TEST_EACH_ROUNDS: usize = 100;
 
@@ -271,41 +273,99 @@ impl TypedValueParser for SerdeJsonParser {
 
 impl MatrixSpeedClass {
     pub fn run(&self, parameters: MatrixSpeedParameters, samples: Vec<Vec<(Vec<usize>, bool)>>) {
+        let (vertices, edges) = Self::initialize_vertex_edges_for_matrix_testing(
+            (0..parameters.height).collect(),
+            (0..parameters.width).collect(),
+        );
+        let vertices_weak: Vec<_> = vertices.into_iter().map(|v| v.downgrade()).collect();
+        let edges_weak: Vec<_> = edges.into_iter().map(|e| e.downgrade()).collect();
+
         match *self {
             MatrixSpeedClass::EchelonTailTight => {
                 let mut matrix = Echelon::<Tail<Tight<BasicMatrix>>>::new();
-                for edge_index in 0..parameters.width {
-                    matrix.add_tight_variable(edge_index);
+                for edge_weak in edges_weak.iter() {
+                    matrix.add_tight_variable(edge_weak.clone());
                 }
-                Self::run_on_matrix_interface(&matrix, samples)
+                Self::run_on_matrix_interface(&matrix, samples, &vertices_weak, &edges_weak);
             }
             MatrixSpeedClass::EchelonTight => {
                 let mut matrix = Echelon::<Tight<BasicMatrix>>::new();
-                for edge_index in 0..parameters.width {
-                    matrix.add_tight_variable(edge_index);
+                for edge_weak in edges_weak.iter() {
+                    matrix.add_tight_variable(edge_weak.clone());
                 }
-                Self::run_on_matrix_interface(&matrix, samples)
+                Self::run_on_matrix_interface(&matrix, samples, &vertices_weak, &edges_weak)
             }
             MatrixSpeedClass::Echelon => {
                 let mut matrix = Echelon::<BasicMatrix>::new();
-                for edge_index in 0..parameters.width {
-                    matrix.add_variable(edge_index);
+                for edge_weak in edges_weak.iter() {
+                    matrix.add_variable(edge_weak.clone());
                 }
-                Self::run_on_matrix_interface(&matrix, samples)
+                Self::run_on_matrix_interface(&matrix, samples, &vertices_weak, &edges_weak)
             }
         }
     }
 
-    pub fn run_on_matrix_interface<M: MatrixView + Clone>(matrix: &M, samples: Vec<Vec<(Vec<usize>, bool)>>) {
+    pub fn run_on_matrix_interface<M: MatrixView + Clone>(
+        matrix: &M,
+        samples: Vec<Vec<(Vec<usize>, bool)>>,
+        vertices: &Vec<VertexWeak>,
+        edges: &Vec<EdgeWeak>,
+    ) {
         for parity_checks in samples.iter() {
             let mut matrix = matrix.clone();
             for (vertex_index, (incident_edges, parity)) in parity_checks.iter().enumerate() {
-                matrix.add_constraint(vertex_index, incident_edges, *parity);
+                let incident_edges_weak: Vec<EdgeWeak> = incident_edges.iter().map(|&i| edges[i].clone()).collect();
+                matrix.add_constraint(vertices[vertex_index].clone(), &incident_edges_weak, *parity);
             }
             // for a MatrixView, visiting the columns and rows is sufficient to update its internal state
             matrix.columns();
             matrix.rows();
         }
+    }
+
+    fn initialize_vertex_edges_for_matrix_testing(
+        vertex_indices: Vec<VertexIndex>,
+        edge_indices: Vec<EdgeIndex>,
+    ) -> (Vec<VertexPtr>, Vec<EdgePtr>) {
+        // create edges
+        let edges: Vec<EdgePtr> = edge_indices
+            .into_iter()
+            .map(|edge_index| {
+                EdgePtr::new_value(
+                    Edge {
+                        edge_index,
+                        weight: Rational::zero(),
+                        dual_nodes: vec![],
+                        vertices: vec![],
+                        last_updated_time: Rational::zero(),
+                        growth_at_last_updated_time: Rational::zero(),
+                        grow_rate: Rational::zero(),
+                        // unit_index: Some(0),                 // dummy value
+                        // connected_to_boundary_vertex: false, // dummy value
+                        #[cfg(feature = "incr_lp")]
+                        cluster_weights: hashbrown::HashMap::new(),
+                    },
+                    (edge_index, edge_index),
+                )
+            })
+            .collect();
+
+        // create vertices
+        let vertices: Vec<VertexPtr> = vertex_indices
+            .into_iter()
+            .map(|vertex_index| {
+                VertexPtr::new_value(
+                    Vertex {
+                        vertex_index,
+                        is_defect: false,
+                        edges: vec![],
+                    },
+                    (vertex_index, vertex_index),
+                )
+            })
+            .collect();
+
+        (vertices, edges)
     }
 }
 
@@ -930,7 +990,7 @@ impl ResultVerifier for VerifierActualError {
         } else {
             Rational::from(
                 self.initializer
-                    .get_subgraph_total_weight(&OutputSubgraph::new(error_pattern.clone(), Default::default())),
+                    .get_subgraph_total_weight(&OutputSubgraph::new(error_pattern.clone(), Default::default(), vec![])),
             )
         };
         let (subgraph, weight_range) = solver.subgraph_range_visualizer(visualizer);

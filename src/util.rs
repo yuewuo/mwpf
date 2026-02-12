@@ -21,6 +21,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::io::{BufReader, BufWriter};
 use std::time::Instant;
+use crate::dual_module_pq::{EdgeWeak, EdgePtr};
 
 cfg_if::cfg_if! {
     if #[cfg(feature="f64_weight")] {
@@ -70,6 +71,7 @@ pub type Weight = Rational;
 pub type EdgeIndex = usize;
 pub type VertexIndex = usize;
 pub type HeraldIndex = usize;
+pub type HeraldPtr = EdgePtr;
 pub type KnownSafeRefCell<T> = std::cell::RefCell<T>;
 
 pub type NodeIndex = VertexIndex;
@@ -378,19 +380,32 @@ impl SolverInitializer {
 
     #[allow(clippy::unnecessary_cast)]
     pub fn get_subgraph_total_weight(&self, subgraph: &OutputSubgraph) -> Weight {
-        let mut weight = Weight::zero();
-        for &edge_index in subgraph.iter() {
-            weight += self.weighted_edges[edge_index as usize].weight.clone();
+        let internal_subgraph = OutputSubgraph::get_internal_subgraph(&subgraph);
+        if internal_subgraph.is_empty() {
+            let mut weight = Weight::zero();
+            for &edge_index in subgraph.iter() {
+                weight += self.weighted_edges[edge_index as usize].weight.clone();
+            }
+            return weight;
+        } else {
+            let mut weight = Weight::zero();
+            for edge_weak in internal_subgraph.iter() {
+                weight += edge_weak.upgrade_force().read_recursive().weight.clone();
+            }
+            return weight;
         }
-        weight
     }
 
     #[allow(clippy::unnecessary_cast)]
     pub fn get_subgraph_syndrome(&self, subgraph: &OutputSubgraph) -> FastIterSet<VertexIndex> {
+        let internal_subgraph = OutputSubgraph::get_internal_subgraph(&subgraph);
         let mut defect_vertices = FastIterSet::new();
-        for &edge_index in subgraph.iter() {
-            let HyperEdge { vertices, .. } = &self.weighted_edges[edge_index as usize];
-            for &vertex_index in vertices.iter() {
+        for edge_weak in internal_subgraph.iter() {
+            let edge_ptr = edge_weak.upgrade_force();
+            let edge = edge_ptr.read_recursive();
+            let vertices = &edge.vertices;
+            let unique_vertices = vertices.into_iter().map(|v| v.upgrade_force().read_recursive().vertex_index).collect::<Vec<_>>();
+            for &vertex_index in unique_vertices.iter() {
                 if defect_vertices.contains(&vertex_index) {
                     defect_vertices.remove(&vertex_index);
                     // println!("duplicate defect vertex: {}", vertex_index);
@@ -647,17 +662,20 @@ impl F64Rng for DeterministicRng {
 /// the result of MWPF algorithm: a parity subgraph (defined by some edges that,
 /// if are selected, will generate the parity result in the syndrome)
 pub type Subgraph = Vec<EdgeIndex>;
+pub type InternalSubgraph = Vec<EdgeWeak>;
 
 pub struct OutputSubgraph {
     pub subgraph: Subgraph,
     pub flip_edge_indices: hashbrown::HashSet<EdgeIndex>,
+    internal_subgraph: InternalSubgraph, // for internal use only, not exposed to users
 }
 
 impl OutputSubgraph {
-    pub fn new(subgraph: Subgraph, flip_edge_indices: hashbrown::HashSet<EdgeIndex>) -> Self {
+    pub fn new(subgraph: Subgraph, flip_edge_indices: hashbrown::HashSet<EdgeIndex>, internal_subgraph: InternalSubgraph) -> Self {
         Self {
             subgraph,
             flip_edge_indices,
+            internal_subgraph,
         }
     }
 
@@ -677,13 +695,18 @@ impl OutputSubgraph {
             flip_edge_indices: &mut self.flip_edge_indices,
         }
     }
-}
 
-impl From<Subgraph> for OutputSubgraph {
-    fn from(value: Subgraph) -> Self {
-        Self::new(value, hashbrown::HashSet::new())
+    pub fn get_internal_subgraph(&self) -> &InternalSubgraph {
+        &self.internal_subgraph
     }
 }
+
+// TODO: double check if we should comment this out
+// impl From<Subgraph> for OutputSubgraph {
+//     fn from(value: Subgraph) -> Self {
+//         Self::new(value, hashbrown::HashSet::new())
+//     }
+// }
 
 // consuming iterators
 // Implementing `IntoIterator` for `&OutputSubgraph` (for `iter`)
@@ -1373,7 +1396,7 @@ pub mod tests {
         flip_edge_indices.insert(2);
         flip_edge_indices.insert(5);
 
-        let output_subgraph = OutputSubgraph::new(subgraph, flip_edge_indices);
+        let output_subgraph = OutputSubgraph::new(subgraph, flip_edge_indices, vec![]);
 
         // Expected behavior: `2` is skipped, and `5` is added at the end.
         let result: Vec<_> = output_subgraph.iter().cloned().collect();
@@ -1385,7 +1408,7 @@ pub mod tests {
         let subgraph = vec![1, 2, 3];
         let flip_edge_indices = HashSet::new();
 
-        let output_subgraph = OutputSubgraph::new(subgraph.clone(), flip_edge_indices);
+        let output_subgraph = OutputSubgraph::new(subgraph.clone(), flip_edge_indices, vec![]);
 
         // With empty `flip_edge_indices`, should just return all elements in `subgraph`.
         let result: Vec<_> = output_subgraph.iter().cloned().collect();
@@ -1401,7 +1424,7 @@ pub mod tests {
         flip_edge_indices.insert(3);
         flip_edge_indices.insert(4);
 
-        let output_subgraph = OutputSubgraph::new(subgraph, flip_edge_indices);
+        let output_subgraph = OutputSubgraph::new(subgraph, flip_edge_indices, vec![]);
 
         // Expected behavior: all elements in `subgraph` are skipped, and `4` is added at the end.
         let result: Vec<_> = output_subgraph.iter().cloned().collect();
@@ -1415,7 +1438,7 @@ pub mod tests {
         flip_edge_indices.insert(2);
         flip_edge_indices.insert(5);
 
-        let mut output_subgraph = OutputSubgraph::new(subgraph, flip_edge_indices);
+        let mut output_subgraph = OutputSubgraph::new(subgraph, flip_edge_indices, vec![]);
 
         // Modify elements during mutable iteration
         for elem in output_subgraph.iter_mut() {
@@ -1432,7 +1455,7 @@ pub mod tests {
         let subgraph = vec![10, 20, 30];
         let flip_edge_indices = HashSet::new(); // Empty flip edge indices
 
-        let mut output_subgraph = OutputSubgraph::new(subgraph.clone(), flip_edge_indices);
+        let mut output_subgraph = OutputSubgraph::new(subgraph.clone(), flip_edge_indices, vec![]);
 
         // Expected to iterate through all without any modifications to flip_edge_indices
         for elem in output_subgraph.iter_mut() {
@@ -1451,7 +1474,7 @@ pub mod tests {
         flip_edge_indices.insert(2);
         flip_edge_indices.insert(5);
 
-        let output_subgraph = OutputSubgraph::new(subgraph, flip_edge_indices);
+        let output_subgraph = OutputSubgraph::new(subgraph, flip_edge_indices, vec![]);
 
         // Consuming iterator, so `output_subgraph` cannot be used afterward
         let result: Vec<_> = output_subgraph.into_iter().collect();
@@ -1469,7 +1492,7 @@ pub mod tests {
         flip_edge_indices.insert(3);
         flip_edge_indices.insert(4);
 
-        let output_subgraph = OutputSubgraph::new(subgraph, flip_edge_indices);
+        let output_subgraph = OutputSubgraph::new(subgraph, flip_edge_indices, vec![]);
 
         // Consuming iterator, expected to yield only `4` at the end since all `subgraph` elements are flipped.
         let result: Vec<_> = output_subgraph.into_iter().collect();
@@ -1483,7 +1506,7 @@ pub mod tests {
         flip_edge_indices.insert(1);
         flip_edge_indices.insert(2);
 
-        let output_subgraph = OutputSubgraph::new(subgraph, flip_edge_indices);
+        let output_subgraph = OutputSubgraph::new(subgraph, flip_edge_indices, vec![]);
 
         // With empty `subgraph`, should only yield elements in `flip_edge_indices`
         let mut result: Vec<_> = output_subgraph.iter().cloned().collect();
@@ -1498,7 +1521,7 @@ pub mod tests {
         flip_edge_indices.insert(2);
         flip_edge_indices.insert(5);
 
-        let mut output_subgraph = OutputSubgraph::new(subgraph, flip_edge_indices);
+        let mut output_subgraph = OutputSubgraph::new(subgraph, flip_edge_indices, vec![]);
 
         // Expected behavior: `2` is skipped, and `5` is added at the end.
         let result: Vec<_> = output_subgraph.iter_mut().map(|x| *x).collect();

@@ -5,7 +5,6 @@
 //! A plugin must implement Clone trait, because it will be cloned multiple times for each cluster
 //!
 
-use crate::decoding_hypergraph::*;
 use crate::dual_module::*;
 use crate::invalid_subgraph::InvalidSubgraph;
 use crate::matrix::*;
@@ -13,7 +12,9 @@ use crate::plugin::*;
 use crate::plugin_union_find::*;
 use crate::relaxer::*;
 use crate::util::*;
+use crate::pointers::*;
 use num_traits::One;
+use crate::dual_module_pq::{EdgePtr, VertexPtr};
 
 use std::sync::Arc;
 
@@ -23,19 +24,19 @@ pub struct PluginSingleHair {}
 impl PluginImpl for PluginSingleHair {
     fn find_relaxers(
         &self,
-        decoding_graph: &DecodingHyperGraph,
+        dual_module: &mut dyn DualModuleImpl,
         matrix: &mut EchelonMatrix,
         positive_dual_nodes: &[DualNodePtr],
     ) -> Vec<Relaxer> {
         // single hair requires the matrix to have at least one feasible solution
-        if let Some(relaxer) = PluginUnionFind::find_single_relaxer(decoding_graph, matrix) {
-            return vec![relaxer];
+        if let Some(relaxer) = PluginUnionFind::find_single_relaxer(dual_module, matrix) {
+            return vec![relaxer]
         }
         // then try to find more relaxers
         let mut relaxers = vec![];
         for dual_node_ptr in positive_dual_nodes.iter() {
             let dual_node = dual_node_ptr.read_recursive();
-            let mut hair_view = HairView::new(matrix, dual_node.invalid_subgraph.hair.iter().cloned());
+            let mut hair_view = HairView::new(matrix, dual_node.invalid_subgraph.hair.iter().map(|e| e.downgrade()));
             debug_assert!(hair_view.get_echelon_satisfiable());
             // hair_view.printstd();
             // optimization: check if there exists a single-hair solution, if not, clear the previous relaxers
@@ -65,22 +66,25 @@ impl PluginImpl for PluginSingleHair {
                 if !unnecessary_edges.is_empty() {
                     // we can construct a relaxer here, by growing a new invalid subgraph that
                     // removes those unnecessary edges and shrinking the existing one
-                    let mut vertices: FastIterSet<VertexIndex> = hair_view.get_vertices();
-                    let mut edges: FastIterSet<EdgeIndex> = FastIterSet::from_iter(hair_view.get_base_view_edges());
-                    for &edge_index in dual_node.invalid_subgraph.hair.iter() {
-                        edges.remove(&edge_index);
+                    let mut vertices: FastIterSet<VertexPtr> = hair_view.get_vertices().iter().map(|v| v.upgrade_force()).collect::<FastIterSet<_>>();
+                    let mut edges: FastIterSet<EdgePtr> = hair_view.get_base_view_edges().iter().map(|e| e.upgrade_force()).collect::<FastIterSet<_>>();
+                    for edge_ptr in dual_node.invalid_subgraph.hair.iter() {
+                        edges.remove(&edge_ptr);
                     }
-                    for &edge_index in unnecessary_edges.iter() {
-                        edges.insert(edge_index);
-                        vertices.extend(decoding_graph.get_edge_neighbors(edge_index));
+                    for edge_weak in unnecessary_edges.iter() {
+                        let edge_ptr = edge_weak.upgrade_force();
+                        edges.insert(edge_ptr.clone());
+                        for vertex_weak in edge_ptr.read_recursive().vertices.iter() {
+                            vertices.insert(vertex_weak.upgrade_force());
+                        }
                     }
-                    let invalid_subgraph = Arc::new(InvalidSubgraph::new_complete(vertices, edges, decoding_graph));
+                    let invalid_subgraph = Arc::new(InvalidSubgraph::new_complete(vertices, edges, dual_module));
                     let relaxer = Relaxer::new(
                         [
                             (invalid_subgraph, Rational::one()),
                             (dual_node.invalid_subgraph.clone(), -Rational::one()),
                         ]
-                        .into(),
+                        .into_iter().collect(),
                     );
                     relaxers.push(relaxer);
                 }

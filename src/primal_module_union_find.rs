@@ -12,6 +12,8 @@ use crate::invalid_subgraph::*;
 use crate::num_traits::Zero;
 use crate::pointers::*;
 use crate::primal_module::*;
+use crate::dual_module::{DualNodePtr};
+use crate::dual_module_pq::EdgePtr;
 use crate::union_find::*;
 use crate::util::*;
 use crate::visualize::*;
@@ -23,17 +25,21 @@ use std::sync::Arc;
 pub struct PrimalModuleUnionFind {
     /// union find data structure
     union_find: UnionFind,
+    /// Maps your calculated Global ID -> Internal UnionFind Index
+    node_map: FastIterMap<usize, usize>,
 }
 
 type UnionFind = UnionFindGeneric<PrimalModuleUnionFindNode>;
-
+const PARTITION_STRIDE: usize = 1_000_000; // Large enough to never overlap
 /// define your own union-find node data structure like this
 #[derive(Debug, Clone)]
 pub struct PrimalModuleUnionFindNode {
     /// all the internal edges
-    pub internal_edges: FastIterSet<EdgeIndex>,
+    pub internal_edges: FastIterSet<EdgePtr>,
     /// the corresponding node index with these internal edges
     pub node_index: NodeIndex,
+    // /// the dual node pointer
+    // pub node_ptr: DualNodePtr,
 }
 
 /// example trait implementation
@@ -63,10 +69,18 @@ impl UnionNodeTrait for PrimalModuleUnionFindNode {
     }
 }
 
+impl PrimalModuleUnionFindNode {
+    fn get_global_id(node: &DualNodePtr) -> usize {
+        let (partition_id, local_index) = node.get_ord(); // Assuming you store (part, idx)
+        (partition_id * PARTITION_STRIDE) + local_index
+    }
+}
+
 impl PrimalModuleImpl for PrimalModuleUnionFind {
     fn new_empty(_initializer: &Arc<SolverInitializer>) -> Self {
         Self {
             union_find: UnionFind::new(0),
+            node_map: FastIterMap::new(),
         }
     }
 
@@ -75,10 +89,10 @@ impl PrimalModuleImpl for PrimalModuleUnionFind {
     }
 
     #[allow(clippy::unnecessary_cast)]
-    fn load<D: DualModuleImpl>(&mut self, interface_ptr: &DualModuleInterfacePtr, _dual_module: &mut D) {
+    fn load<D: DualModuleImpl>(&mut self, interface_ptr: &DualModuleInterfacePtr, _dual_module: &mut D, partition_id: usize) {
         let interface = interface_ptr.read_recursive();
-        for index in 0..interface.nodes.len() as NodeIndex {
-            let node_ptr = &interface.nodes[index as usize];
+        for index in 0..interface.nodes.len() {
+            let node_ptr = &interface.nodes[index];
             let node = node_ptr.read_recursive();
             debug_assert!(
                 node.invalid_subgraph.edges.is_empty(),
@@ -97,10 +111,12 @@ impl PrimalModuleImpl for PrimalModuleUnionFind {
                 self.union_find.size(),
                 "must load defect nodes in order, did you forget to call solver.clear()?"
             );
-            self.union_find.insert(PrimalModuleUnionFindNode {
+            let internal_id = self.union_find.insert(PrimalModuleUnionFindNode {
                 internal_edges: FastIterSet::new(),
                 node_index: node.index,
             });
+            let global_id = PrimalModuleUnionFindNode::get_global_id(&node_ptr);
+            self.node_map.insert(global_id, node.index);
         }
     }
 
@@ -112,28 +128,32 @@ impl PrimalModuleImpl for PrimalModuleUnionFind {
         dual_module: &mut impl DualModuleImpl,
     ) -> bool {
         debug_assert!(!dual_report.is_unbounded() && dual_report.get_valid_growth().is_none());
-        let mut active_clusters = FastIterSet::<NodeIndex>::new();
+        let mut active_clusters = FastIterSet::<NodeIndex>::new(); // set of internal cluster indices instead of global indices
         while let Some(obstacle) = dual_report.pop() {
             match obstacle {
-                Obstacle::Conflict { edge_index } => {
+                Obstacle::Conflict { edge_ptr } => {
                     // union all the dual nodes in the edge index and create new dual node by adding this edge to `internal_edges`
-                    let dual_nodes = dual_module.get_edge_nodes(edge_index);
+                    let dual_nodes = dual_module.get_edge_nodes(edge_ptr.clone());
                     debug_assert!(
                         !dual_nodes.is_empty(),
                         "should not conflict if no dual nodes are contributing"
                     );
-                    let cluster_index = dual_nodes[0].read_recursive().index;
+                    let cluster_global_index = PrimalModuleUnionFindNode::get_global_id(&dual_nodes[0]);
+                    let cluster_internal_index = self.node_map.get(&cluster_global_index).expect("all nodes should be in the map");
                     for dual_node_ptr in dual_nodes.iter() {
                         dual_module.set_grow_rate(dual_node_ptr, Rational::zero());
-                        let node_index = dual_node_ptr.read_recursive().index;
-                        active_clusters.remove(&(self.union_find.find(node_index as usize) as NodeIndex));
-                        self.union_find.union(cluster_index as usize, node_index as usize);
+                        let node_global_index = PrimalModuleUnionFindNode::get_global_id(dual_node_ptr);
+                        let node_internal_index = self.node_map.get(&node_global_index).expect("all nodes should be in the map");
+                        active_clusters.remove(&(self.union_find.find(*cluster_internal_index as usize) as NodeIndex));
+                        active_clusters.remove(&(self.union_find.find(*node_internal_index) as NodeIndex));
+                        self.union_find.union(*cluster_internal_index as usize, *node_internal_index as usize);
                     }
+                    let new_root_index = self.union_find.find(*cluster_internal_index);
                     self.union_find
-                        .get_mut(cluster_index as usize)
+                        .get_mut(*cluster_internal_index as usize)
                         .internal_edges
-                        .insert(edge_index);
-                    active_clusters.insert(self.union_find.find(cluster_index as usize) as NodeIndex);
+                        .insert(edge_ptr);
+                    active_clusters.insert(new_root_index as NodeIndex);
                 }
                 _ => {
                     unreachable!()
@@ -142,23 +162,27 @@ impl PrimalModuleImpl for PrimalModuleUnionFind {
         }
         for &cluster_index in active_clusters.iter() {
             if interface_ptr
-                .read_recursive()
-                .decoding_graph
                 .is_valid_cluster_auto_vertices(&self.union_find.get(cluster_index as usize).internal_edges)
             {
                 // do nothing
             } else {
-                let new_cluster_node_index = self.union_find.size() as NodeIndex;
+                let new_cluster_node_index = self.union_find.size() as NodeIndex; // it is an internal index
                 self.union_find.insert(PrimalModuleUnionFindNode {
                     internal_edges: FastIterSet::new(),
                     node_index: new_cluster_node_index,
                 });
+
                 self.union_find.union(cluster_index as usize, new_cluster_node_index as usize);
+                // Get the final merged edges from the new root (which might be new_cluster_node_index or cluster_index depending on UF weight)
+                let final_root = self.union_find.find(new_cluster_node_index as usize);
                 let invalid_subgraph = InvalidSubgraph::new_ptr(
-                    self.union_find.get(cluster_index as usize).internal_edges.clone(),
-                    &interface_ptr.read_recursive().decoding_graph,
+                    self.union_find.get(final_root).internal_edges.clone(), dual_module
                 );
-                interface_ptr.create_node(invalid_subgraph, dual_module);
+                let created_dual_node_ptr = interface_ptr.create_node(invalid_subgraph, dual_module, interface_ptr.get_ord().0);
+                // we should add this new node to the node map
+                let global_id = PrimalModuleUnionFindNode::get_global_id(&created_dual_node_ptr);
+                let internal_id = created_dual_node_ptr.get_ord().0;
+                self.node_map.insert(global_id, internal_id);
             }
         }
         false
@@ -176,13 +200,16 @@ impl PrimalModuleImpl for PrimalModuleUnionFind {
             if !valid_clusters.contains(&root_index) {
                 valid_clusters.insert(root_index);
                 let cluster_subgraph = interface_ptr
-                    .read_recursive()
-                    .decoding_graph
                     .find_valid_subgraph_auto_vertices(&self.union_find.get(root_index).internal_edges)
                     .expect("must be valid cluster");
-                subgraph.extend(cluster_subgraph.iter());
+                subgraph.extend(cluster_subgraph.into_iter());
             }
         }
+        let subgraph_index = subgraph
+            .clone()
+            .into_iter()
+            .map(|e| e.upgrade_force().read_recursive().edge_index)
+            .collect::<Vec<_>>();
 
         // let mut subgraph_set = subgraph.into_iter().collect::<hashbrown::HashSet<EdgeIndex>>();
         // for to_flip in _dual_module.get_negative_edges().iter() {
@@ -195,7 +222,7 @@ impl PrimalModuleImpl for PrimalModuleUnionFind {
         // OutputSubgraph::new(subgraph_set.into_iter().collect(), Default::default())
 
         // note: note implmented to handle negative weights yet
-        OutputSubgraph::new(subgraph, _dual_module.get_negative_edges())
+        OutputSubgraph::new(subgraph_index, _dual_module.get_negative_edges(), subgraph)
     }
 }
 
@@ -233,7 +260,7 @@ pub mod tests {
         let mut primal_module = PrimalModuleUnionFind::new_empty(&model_graph.initializer);
         // try to work on a simple syndrome
         code.set_defect_vertices(&defect_vertices);
-        let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone());
+        let interface_ptr = DualModuleInterfacePtr::new(model_graph.clone(), 0);
         primal_module.solve_visualizer(
             &interface_ptr,
             Arc::new(code.get_syndrome()),
@@ -301,7 +328,7 @@ pub mod tests {
             code,
             defect_vertices,
             final_dual,
-            DualModulePQ::new_empty(&model_graph.initializer),
+            DualModulePQ::new_empty(&model_graph.initializer, 0),
             model_graph,
             Some(visualizer),
         )
