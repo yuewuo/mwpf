@@ -12,7 +12,7 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
   build_wheels:
     name: Build wheels on ${{ matrix.os }} (${{ matrix.build-feature }})
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         os:
           - ubuntu
@@ -151,7 +151,7 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
   rust_tests:
     name: Run Rust tests on ${{ matrix.os }} (Rust ${{ matrix.toolchain }})
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         toolchain: ["1.82", "1.95.0", "stable"]
         os:
