@@ -153,7 +153,7 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
     strategy:
       fail-fast: true
       matrix:
-        toolchain: ["1.82", "stable"]
+        toolchain: ["1.82", "1.95.0", "stable"]
         os:
           - ubuntu
           - macos
@@ -185,6 +185,11 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
         env:
           SKIP_FRONTEND_BUILD: "1"
 
+      - name: Verify crates.io package without publishing
+        if: matrix.os == 'ubuntu' && matrix.toolchain != '1.82'
+        run: cargo publish --dry-run --locked
+        env:
+          SKIP_FRONTEND_BUILD: "1"
 
   publish-to-pypi:
     name: >-

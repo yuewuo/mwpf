@@ -3,6 +3,7 @@ name = "mwpf"
 version = "0.2.13"
 authors = ["Yue Wu <wuyue16pku@gmail.com>"]
 edition = "2021"
+rust-version = "1.82"
 license = "MIT"
 description = "Hypergraph Minimum-Weight Parity Factor (MWPF) Solver for Quantum LDPC Codes"
 readme = "README.md"
@@ -22,7 +23,6 @@ include = [
     "/README.md",
     "/LICENSE",
     "/Cargo.lock",
-    "/rust-toolchain.toml",
     "/pyproject.toml",
     "/pyproject-patch.py",
     "/visualize/dist/standalone.html",
