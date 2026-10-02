@@ -26,6 +26,8 @@ include = [
     "/pyproject.toml",
     "/pyproject-patch.py",
     "/visualize/dist/standalone.html",
+    # Explicit includes override .gitignore, including for nested build output.
+    "!/src/**/target/**",
 ]
 default-run = "mwpf"
 
