@@ -75,8 +75,10 @@ pub mod tests {
         .unwrap();
         visualizer.snapshot_combined("code".to_string(), vec![&code]).unwrap();
         let model_graph = code.get_model_graph();
-        visualizer.save_html_along_json();
-        println!("open visualizer at {}", visualizer.html_along_json_path());
+        if cfg!(feature = "embed_visualizer") {
+            visualizer.save_html_along_json();
+            println!("open visualizer at {}", visualizer.html_along_json_path());
+        }
         (model_graph, visualizer)
     }
 

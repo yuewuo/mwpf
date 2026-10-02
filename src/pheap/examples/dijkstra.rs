@@ -4,9 +4,9 @@ use std::{
     io::{BufRead, BufReader},
 };
 
-use clap::{App, Arg};
+use clap_2::{App, Arg};
+use mwpf::pheap::graph::SimpleGraph;
 use pathfinding::prelude::dijkstra_all;
-use pheap::graph::SimpleGraph;
 
 fn main() {
     let matches = App::new("Single source shortest path benchmark")
@@ -39,12 +39,7 @@ fn main() {
         None => std::process::exit(1),
     };
 
-    let runs = matches
-        .value_of("runs")
-        .unwrap()
-        .to_string()
-        .parse::<usize>()
-        .unwrap();
+    let runs = matches.value_of("runs").unwrap().to_string().parse::<usize>().unwrap();
 
     match matches.value_of("lib") {
         Some(lib) => match lib {
@@ -120,12 +115,7 @@ fn pathfinding(filepath: &str, runs: usize) {
         reader.read_line(&mut line).unwrap();
     }
 
-    fn insert_weight(
-        hm: &mut HashMap<usize, Vec<(usize, u32)>>,
-        node1: usize,
-        node2: usize,
-        weight: u32,
-    ) {
+    fn insert_weight(hm: &mut HashMap<usize, Vec<(usize, u32)>>, node1: usize, node2: usize, weight: u32) {
         match hm.get_mut(&node1) {
             Some(v) => {
                 v.push((node2, weight));

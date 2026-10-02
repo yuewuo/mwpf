@@ -1,4 +1,4 @@
-use crate::utils::math::log;
+use crate::heapz::utils::math::log;
 
 pub struct Bucket<V: Clone> {
     store: Vec<Vec<V>>,

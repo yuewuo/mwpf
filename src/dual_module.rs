@@ -611,7 +611,7 @@ impl DualReport {
         }
     }
 
-    pub fn iter(&self) -> Option<std::slice::Iter<Obstacle>> {
+    pub fn iter(&self) -> Option<std::slice::Iter<'_, Obstacle>> {
         match self {
             Self::Unbounded | Self::ValidGrow(_) => None,
             Self::Obstacles(obstacles) => Some(obstacles.iter()),

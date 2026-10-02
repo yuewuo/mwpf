@@ -1,6 +1,6 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use keyed_priority_queue::KeyedPriorityQueue;
-use pheap::PairingHeap;
+use mwpf::pheap::PairingHeap;
 use priority_queue::PriorityQueue;
 
 enum Queue {
@@ -81,16 +81,10 @@ impl QueueKind {
     fn create(&self) -> Queue {
         match self {
             QueueKind::PairingHeap => Queue::PairingHeap(PairingHeap::<i32, i32>::new()),
-            QueueKind::AdPairingHeap => {
-                Queue::AdPairingHeap(addressable_pairing_heap::PairingHeap::<i32, i32>::new())
-            }
+            QueueKind::AdPairingHeap => Queue::AdPairingHeap(addressable_pairing_heap::PairingHeap::<i32, i32>::new()),
             QueueKind::PriorityQueue => Queue::PriorityQueue(PriorityQueue::<i32, i32>::new()),
-            QueueKind::A422PairingHeap => {
-                Queue::A422PairingHeap(pairing_heap::PairingHeap::<i32>::new())
-            }
-            QueueKind::KeyedPriorityQueue => {
-                Queue::KeyedPriorityQueue(KeyedPriorityQueue::<i32, i32>::new())
-            }
+            QueueKind::A422PairingHeap => Queue::A422PairingHeap(pairing_heap::PairingHeap::<i32>::new()),
+            QueueKind::KeyedPriorityQueue => Queue::KeyedPriorityQueue(KeyedPriorityQueue::<i32, i32>::new()),
         }
     }
 

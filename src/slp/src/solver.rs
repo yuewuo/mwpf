@@ -1,6 +1,6 @@
-use crate::lp::*;
-use crate::parser::{LpProblem, ObjectiveType};
-use crate::{Number, Solution, SolverOptions, SolverSettings};
+use crate::slp::lp::*;
+use crate::slp::parser::{LpProblem, ObjectiveType};
+use crate::slp::{Number, Solution, SolverOptions, SolverSettings};
 
 /// Linear Programming Solver.
 pub struct Solver<N> {
@@ -16,7 +16,7 @@ impl<N: Number> Solver<N> {
     where
         N::Err: std::fmt::Debug,
     {
-        crate::parser::parse_lp_problem(input).unwrap().into()
+        crate::slp::parser::parse_lp_problem(input).unwrap().into()
     }
 
     /// Creates a new Solver instance with integer constraints.

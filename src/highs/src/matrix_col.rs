@@ -4,7 +4,7 @@ use std::convert::TryInto;
 use std::ops::RangeBounds;
 use std::os::raw::c_int;
 
-use crate::Problem;
+use crate::highs::Problem;
 
 /// Represents a constraint
 #[derive(Debug, Clone, Copy)]
@@ -34,7 +34,7 @@ impl Problem<ColMatrix> {
     ///  - `row_factors` defines how much this variable weights in each constraint.
     ///
     /// ```
-    /// use highs::{ColProblem, Sense};
+    /// use mwpf::highs::{ColProblem, Sense};
     /// let mut pb = ColProblem::new();
     /// let constraint = pb.add_row(..=5); // adds a constraint that cannot take a value over 5
     /// // add a variable that has a coefficient 2 in the objective function, is >=0, and has a coefficient
@@ -58,7 +58,7 @@ impl Problem<ColMatrix> {
     /// Same as add_column, but forces the solution to contain an integer value for this variable.
     /// 
     /// ```
-    /// use highs::{ColProblem, Sense};
+    /// use mwpf::highs::{ColProblem, Sense};
     /// let mut pb = ColProblem::new();
     /// let constraint = pb.add_row(..=5); // adds a constraint that cannot take a value over 5
     /// // add an integer variable that has a coefficient 2 in the objective function, is >=0, and has a coefficient

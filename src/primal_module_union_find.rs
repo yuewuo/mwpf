@@ -250,9 +250,12 @@ pub mod tests {
                 .unwrap();
         }
 
-        let v = visualizer.as_mut().unwrap();
-        v.save_html_along_json();
-        println!("open visualizer at {}", v.html_along_json_path());
+        if cfg!(feature = "embed_visualizer") {
+            if let Some(v) = visualizer.as_mut() {
+                v.save_html_along_json();
+                println!("open visualizer at {}", v.html_along_json_path());
+            }
+        }
 
         assert!(
             model_graph.initializer.matches_subgraph_syndrome(&subgraph, &defect_vertices),

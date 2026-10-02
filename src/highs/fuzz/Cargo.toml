@@ -11,8 +11,10 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = {version="0.4", features=["arbitrary-derive"]}
 
-[dependencies.highs]
-path = ".."
+[dependencies.mwpf]
+path = "../../.."
+default-features = false
+features = ["f64_weight"]
 
 # Prevent this from interfering with workspaces
 [workspace]

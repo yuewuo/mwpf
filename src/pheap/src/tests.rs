@@ -1,7 +1,7 @@
 #![cfg(test)]
 use super::PairingHeap;
-use crate::graph::{mst_prim, SimpleGraph};
-use crate::ph::HeapElmt;
+use crate::pheap::graph::{mst_prim, SimpleGraph};
+use crate::pheap::ph::HeapElmt;
 
 #[cfg(test)]
 fn create_heap(start: i32, end: i32) -> (PairingHeap<i32, i32>, Vec<HeapElmt<i32, i32>>) {

@@ -2,7 +2,7 @@
 //!
 //! This module contains functions to generate parity check matrices for various binary codes.
 
-use crate::gf2sparse::{GF2Entry, GF2Sparse};
+use crate::bp::gf2sparse::{GF2Entry, GF2Sparse};
 
 /// Creates the parity check matrix of a repetition code of length `n`.
 ///

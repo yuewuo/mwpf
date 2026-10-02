@@ -1,4 +1,4 @@
-use crate::{Number, Solution};
+use crate::slp::{Number, Solution};
 use rayon::prelude::*;
 
 /// Represents an LP instance.

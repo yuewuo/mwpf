@@ -2,7 +2,7 @@
 //!
 //! gf2 implementation of the base matrix
 
-use crate::sparse_matrix_base::SparseMatrixBase;
+use crate::bp::sparse_matrix_base::SparseMatrixBase;
 use std::collections::HashSet;
 use std::ptr;
 

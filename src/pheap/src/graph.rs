@@ -9,7 +9,7 @@ use std::ops::AddAssign;
 
 use num_traits::{Bounded, Num, Zero};
 
-use crate::{ph::HeapElmt, PairingHeap};
+use crate::pheap::{ph::HeapElmt, PairingHeap};
 
 /// A simple and undirected graph.
 ///
@@ -23,7 +23,7 @@ use crate::{ph::HeapElmt, PairingHeap};
 ///
 /// Here, the numbering is adjusted so that the node indexing starts from ```0```.
 /// ```
-/// use pheap::graph::SimpleGraph;
+/// use mwpf::pheap::graph::SimpleGraph;
 ///
 /// let mut g = SimpleGraph::<u32>::with_capacity(6);
 ///
@@ -426,7 +426,7 @@ where
 ///
 /// # Examples
 /// ```rust
-/// use pheap::graph::{mst_prim, SimpleGraph};
+/// use mwpf::pheap::graph::{mst_prim, SimpleGraph};
 ///
 /// let mut g = SimpleGraph::<u32>::new();
 ///

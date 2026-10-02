@@ -652,14 +652,14 @@ impl<T: Clone + Default> SparseMatrixBase<T> {
     }
 
     /// Returns an iterator that iterates over the given row of the sparse matrix in a forward direction.
-    pub fn iterate_row_mut(&mut self, i: usize) -> RowIterator<T> {
+    pub fn iterate_row_mut(&mut self, i: usize) -> RowIterator<'_, T> {
         if i >= self.m {
             panic!("Iterator index out of bounds");
         }
         RowIterator::new(self, i)
     }
 
-    pub fn iterate_row(&self, i: usize) -> RowIterator<T> {
+    pub fn iterate_row(&self, i: usize) -> RowIterator<'_, T> {
         if i >= self.m {
             panic!("Iterator index out of bounds");
         }
@@ -667,14 +667,14 @@ impl<T: Clone + Default> SparseMatrixBase<T> {
     }
 
     /// Returns an iterator that iterates over the given row of the sparse matrix in a reverse direction.
-    pub fn reverse_iterate_row_mut(&mut self, i: usize) -> ReverseRowIterator<T> {
+    pub fn reverse_iterate_row_mut(&mut self, i: usize) -> ReverseRowIterator<'_, T> {
         if i >= self.m {
             panic!("Iterator index out of bounds");
         }
         ReverseRowIterator::new(self, i)
     }
 
-    pub fn reverse_iterate_row(&self, i: usize) -> ReverseRowIterator<T> {
+    pub fn reverse_iterate_row(&self, i: usize) -> ReverseRowIterator<'_, T> {
         if i >= self.m {
             panic!("Iterator index out of bounds");
         }
@@ -682,14 +682,14 @@ impl<T: Clone + Default> SparseMatrixBase<T> {
     }
 
     /// Returns an iterator that iterates over the given column of the sparse matrix in a forward direction.
-    pub fn iterate_column_mut(&mut self, i: usize) -> ColumnIterator<T> {
+    pub fn iterate_column_mut(&mut self, i: usize) -> ColumnIterator<'_, T> {
         if i >= self.n {
             panic!("Iterator index out of bounds");
         }
         ColumnIterator::new(self, i)
     }
 
-    pub fn iterate_column(&self, i: usize) -> ColumnIterator<T> {
+    pub fn iterate_column(&self, i: usize) -> ColumnIterator<'_, T> {
         if i >= self.n {
             panic!("Iterator index out of bounds");
         }
@@ -697,14 +697,14 @@ impl<T: Clone + Default> SparseMatrixBase<T> {
     }
 
     /// Returns an iterator that iterates over the given column of the sparse matrix in a reverse direction.
-    pub fn reverse_iterate_column_mut(&mut self, i: usize) -> ReverseColumnIterator<T> {
+    pub fn reverse_iterate_column_mut(&mut self, i: usize) -> ReverseColumnIterator<'_, T> {
         if i >= self.n {
             panic!("Iterator index out of bounds");
         }
         ReverseColumnIterator::new(self, i)
     }
 
-    pub fn reverse_iterate_column(&self, i: usize) -> ReverseColumnIterator<T> {
+    pub fn reverse_iterate_column(&self, i: usize) -> ReverseColumnIterator<'_, T> {
         if i >= self.n {
             panic!("Iterator index out of bounds");
         }

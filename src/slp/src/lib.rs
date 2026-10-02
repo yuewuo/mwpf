@@ -6,9 +6,9 @@
 //!
 //! ```rust
 //! fn main() {
-//!     use slp::*;
-//!     use slp::Rational64;
-//!     use slp::Solution;
+//!     use mwpf::slp::*;
+//!     use mwpf::slp::Rational64;
+//!     use mwpf::slp::Solution;
 //!     let input = "
 //!         vars x1>=0, x2>=0
 //!         max 2x1+3x2
@@ -39,9 +39,6 @@
 //! ```
 
 #![deny(missing_docs)]
-
-#[macro_use]
-extern crate pest_derive;
 
 mod common;
 pub use common::*;

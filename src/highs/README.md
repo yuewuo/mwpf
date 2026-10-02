@@ -1,5 +1,9 @@
 # highs
 
+This modified copy is built as `mwpf::highs`, not as a separate crate. Original
+package metadata and the MIT notice are retained in `Cargo.toml.orig` and `LICENSE`.
+Run its tests from the repository root with `cargo test --lib highs::`.
+
 [![highs docs badge](https://docs.rs/highs/badge.svg)](https://docs.rs/highs)
 
 Safe rust bindings to the Highs MILP Solver. Best used from the [**good_lp**](https://crates.io/crates/good_lp) linear
@@ -10,7 +14,7 @@ programming modeler.
 #### Building a problem variable by variable
 
 ```rust
-use highs::{ColProblem, Sense};
+use mwpf::highs::{ColProblem, Sense};
 
 fn main() {
     let mut pb = ColProblem::new();
@@ -32,7 +36,7 @@ fn main() {
 #### Building a problem constraint by constraint
 
 ```rust
-use highs::*;
+use mwpf::highs::*;
 
 fn main() {
     let mut pb = RowProblem::new();

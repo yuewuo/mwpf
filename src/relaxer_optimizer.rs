@@ -25,9 +25,9 @@ use std::ops::Index;
 #[cfg(all(feature = "incr_lp", feature = "highs"))]
 pub struct IncrLPSolution {
     pub edge_constraints: FastIterMap<EdgeIndex, (Rational, FastIterSet<NodeIndex>)>,
-    pub edge_row_map: FastIterMap<EdgeIndex, highs::Row>,
-    pub dv_col_map: FastIterMap<NodeIndex, highs::Col>,
-    pub solution: Option<highs::SolvedModel>,
+    pub edge_row_map: FastIterMap<EdgeIndex, crate::highs::Row>,
+    pub dv_col_map: FastIterMap<NodeIndex, crate::highs::Col>,
+    pub solution: Option<crate::highs::SolvedModel>,
 }
 
 #[cfg(all(feature = "incr_lp", feature = "highs"))]
@@ -192,11 +192,11 @@ impl RelaxerOptimizer {
 
         // println!("\n input:\n {}\n", input);
 
-        let mut solver = slp::Solver::<slp::Ratio<slp::BigInt>>::new(&input);
+        let mut solver = crate::slp::Solver::<crate::slp::Ratio<crate::slp::BigInt>>::new(&input);
         let solution = solver.solve();
         let mut direction: FastIterMap<Arc<InvalidSubgraph>, Rational> = FastIterMap::new();
         match solution {
-            slp::Solution::Optimal(optimal_objective, model) => {
+            crate::slp::Solution::Optimal(optimal_objective, model) => {
                 if !optimal_objective.is_positive() {
                     return (relaxer, true);
                 }
@@ -222,7 +222,7 @@ impl RelaxerOptimizer {
         edge_slacks: FastIterMap<EdgeIndex, Rational>,
         mut dual_variables: FastIterMap<Arc<InvalidSubgraph>, Rational>,
     ) -> (Relaxer, bool) {
-        use highs::{HighsModelStatus, RowProblem, Sense};
+        use crate::highs::{HighsModelStatus, RowProblem, Sense};
         use num_traits::ToPrimitive;
 
         use crate::ordered_float::OrderedFloat;
@@ -315,7 +315,7 @@ impl RelaxerOptimizer {
         dual_nodes: FastIterMap<NodeIndex, (Arc<InvalidSubgraph>, Rational)>,
         option_incr_lp_solution: &mut Option<Arc<Mutex<IncrLPSolution>>>,
     ) -> (Relaxer, bool) {
-        use highs::{HighsModelStatus, RowProblem, Sense};
+        use crate::highs::{HighsModelStatus, RowProblem, Sense};
         use num_traits::ToPrimitive;
 
         use crate::ordered_float::OrderedFloat;
@@ -323,7 +323,7 @@ impl RelaxerOptimizer {
         return match option_incr_lp_solution {
             Some(incr_lp_solution) => {
                 let mut incr_lp_solution_ptr = incr_lp_solution.lock();
-                let mut model: highs::Model = incr_lp_solution_ptr.solution.take().unwrap().into();
+                let mut model: crate::highs::Model = incr_lp_solution_ptr.solution.take().unwrap().into();
 
                 let mut edge_contributor: FastIterMap<EdgeIndex, (Rational, FastIterSet<NodeIndex>)> = edge_free_weights
                     .iter()
@@ -434,8 +434,8 @@ impl RelaxerOptimizer {
                 model.set_option("parallel", "off");
                 model.set_option("threads", 1);
 
-                let mut edge_row_map: FastIterMap<EdgeIndex, highs::Row> = FastIterMap::new();
-                let mut dv_col_map: FastIterMap<NodeIndex, highs::Col> = FastIterMap::new();
+                let mut edge_row_map: FastIterMap<EdgeIndex, crate::highs::Row> = FastIterMap::new();
+                let mut dv_col_map: FastIterMap<NodeIndex, crate::highs::Col> = FastIterMap::new();
 
                 let mut edge_contributor: FastIterMap<EdgeIndex, (Rational, FastIterSet<NodeIndex>)> = edge_free_weights
                     .iter()
@@ -523,8 +523,8 @@ pub mod tests {
     #[cfg(feature = "slp")]
     #[test]
     fn lp_solver_simple() {
+        use crate::slp::BigInt;
         use crate::util::Rational;
-        use slp::BigInt;
 
         // cargo test lp_solver_simple -- --nocapture
         // https://docs.rs/slp/latest/slp/
@@ -536,11 +536,11 @@ pub mod tests {
             6x1 + 5y2 <= 60,
             2x1 + 5y2 <= 40
         ";
-        let mut solver = slp::Solver::<Rational>::new(input);
+        let mut solver = crate::slp::Solver::<Rational>::new(input);
         let solution = solver.solve();
         assert_eq!(
             solution,
-            slp::Solution::Optimal(
+            crate::slp::Solution::Optimal(
                 Rational::from_integer(BigInt::from(28)),
                 vec![
                     Rational::from_integer(BigInt::from(5)),
@@ -549,9 +549,9 @@ pub mod tests {
             )
         );
         match solution {
-            slp::Solution::Infeasible => println!("INFEASIBLE"),
-            slp::Solution::Unbounded => println!("UNBOUNDED"),
-            slp::Solution::Optimal(obj, model) => {
+            crate::slp::Solution::Infeasible => println!("INFEASIBLE"),
+            crate::slp::Solution::Unbounded => println!("UNBOUNDED"),
+            crate::slp::Solution::Optimal(obj, model) => {
                 println!("OPTIMAL {}", obj);
                 print!("SOLUTION");
                 for v in model {
@@ -565,7 +565,7 @@ pub mod tests {
     #[cfg(feature = "highs")]
     #[test]
     fn highs_simple() {
-        use highs::{ColProblem, HighsModelStatus, Model, Sense};
+        use crate::highs::{ColProblem, HighsModelStatus, Model, Sense};
 
         let mut model = ColProblem::default().optimise(Sense::Maximise);
         let row1 = model.add_row(..=6., []); // x*3 + y*1 <= 6
@@ -608,7 +608,7 @@ pub mod tests {
     #[cfg(feature = "highs")]
     #[test]
     fn highs_change_incr() {
-        use highs::{ColProblem, HighsModelStatus, Model, Sense};
+        use crate::highs::{ColProblem, HighsModelStatus, Model, Sense};
         // max: x + 2y + z
         // under constraints:
         // c1: 3x +  y      <= 6
@@ -659,7 +659,7 @@ pub mod tests {
     #[cfg(feature = "highs")]
     #[test]
     fn highs_change_incr_coeff() {
-        use highs::{HighsModelStatus, Model, RowProblem, Sense};
+        use crate::highs::{HighsModelStatus, Model, RowProblem, Sense};
         // max: x + 2y + z
         // under constraints:
         // c1: 3x +  y      <= 6
@@ -714,7 +714,7 @@ pub mod tests {
     #[cfg(feature = "highs")]
     #[test]
     fn highs_change_matrix_coefficient() {
-        use highs::{ColProblem, HighsModelStatus, Model, Sense};
+        use crate::highs::{ColProblem, HighsModelStatus, Model, Sense};
 
         // Create initial problem
         let mut model = ColProblem::default().optimise(Sense::Maximise);
@@ -760,7 +760,7 @@ pub mod tests {
     #[cfg(feature = "highs")]
     #[test]
     fn highs_change_matrix_coefficient_with_infeasibility() {
-        use highs::{ColProblem, HighsModelStatus, Model, Sense};
+        use crate::highs::{ColProblem, HighsModelStatus, Model, Sense};
 
         // Create initial problem
         let mut model = ColProblem::default().optimise(Sense::Maximise);

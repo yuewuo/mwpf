@@ -3,9 +3,9 @@ use std::{
     io::{BufRead, BufReader},
 };
 
-use clap::{App, Arg};
+use clap_2::{App, Arg};
+use mwpf::pheap::graph::{mst_prim, SimpleGraph};
 use pathfinding::prelude::kruskal;
-use pheap::graph::{mst_prim, SimpleGraph};
 
 macro_rules! run_exp {
     ($runs:expr, $exe:stmt) => {
@@ -59,12 +59,7 @@ fn main() {
         None => std::process::exit(1),
     };
 
-    let runs = matches
-        .value_of("runs")
-        .unwrap()
-        .to_string()
-        .parse::<usize>()
-        .unwrap();
+    let runs = matches.value_of("runs").unwrap().to_string().parse::<usize>().unwrap();
 
     match matches.value_of("lib") {
         Some(lib) => match lib {

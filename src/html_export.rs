@@ -20,7 +20,9 @@ lazy_static! {
     static ref HYPERION_VISUAL_JUPYTER_LOADED: Mutex<bool> = Mutex::new(false);
 }
 
+#[cfg(any(feature = "embed_visualizer", feature = "python_binding"))]
 const WINDOW_HYPERION_VISUAL: &str = concat!("window.hyperion_visual_", env!("MWPF_BUILD_RS_TIMESTAMP"));
+#[cfg(any(feature = "embed_visualizer", feature = "python_binding"))]
 const HYPERION_VISUAL_ID: &str = concat!("hyperion_visual_compressed_js_caller_", env!("MWPF_BUILD_RS_TIMESTAMP"));
 
 #[cfg(feature = "embed_visualizer")]

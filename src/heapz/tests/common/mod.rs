@@ -1,6 +1,4 @@
-extern crate heapz;
-
-use heapz::{DecreaseKey, Heap};
+use mwpf::heapz::{DecreaseKey, Heap};
 use rand;
 use rand::Rng;
 
@@ -72,9 +70,7 @@ pub mod pop {
         assert_eq!(heap.pop(), None);
     }
 
-    pub fn returns_all_elements_from_smallest_to_largest_in_a_min_heap<T: Heap<i32, i32>>(
-        mut heap: T,
-    ) {
+    pub fn returns_all_elements_from_smallest_to_largest_in_a_min_heap<T: Heap<i32, i32>>(mut heap: T) {
         let numbers = generate_numbers();
         let mut cloned = numbers.clone();
         numbers.into_iter().for_each(|n| {
@@ -87,9 +83,7 @@ pub mod pop {
         assert_eq!(heap.pop(), None);
     }
 
-    pub fn returns_all_elements_from_largest_to_smallest_in_a_max_heap<T: Heap<i32, i32>>(
-        mut heap: T,
-    ) {
+    pub fn returns_all_elements_from_largest_to_smallest_in_a_max_heap<T: Heap<i32, i32>>(mut heap: T) {
         let numbers = generate_numbers();
         let mut cloned = numbers.clone();
         numbers.into_iter().for_each(|n| {
@@ -113,9 +107,7 @@ pub mod push {
         assert_eq!(heap.top(), Some(&key));
     }
 
-    pub fn adds_a_higher_item_to_the_heap_behind_a_lower_in_a_min_heap<T: Heap<Element, i32>>(
-        mut heap: T,
-    ) {
+    pub fn adds_a_higher_item_to_the_heap_behind_a_lower_in_a_min_heap<T: Heap<Element, i32>>(mut heap: T) {
         let lower = 1;
         let higher = 2;
         heap.push(Element::Target, lower);
@@ -123,9 +115,7 @@ pub mod push {
         assert_eq!(heap.top(), Some(&Element::Target));
     }
 
-    pub fn adds_a_higher_item_to_the_heap_before_a_lower_in_a_max_heap<T: Heap<Element, i32>>(
-        mut heap: T,
-    ) {
+    pub fn adds_a_higher_item_to_the_heap_before_a_lower_in_a_max_heap<T: Heap<Element, i32>>(mut heap: T) {
         let lower = 1;
         let higher = 2;
         heap.push(Element::Node, lower);
@@ -133,9 +123,7 @@ pub mod push {
         assert_eq!(heap.top(), Some(&Element::Target));
     }
 
-    pub fn adds_a_lower_item_to_the_heap_before_a_higher_in_a_min_heap<T: Heap<Element, i32>>(
-        mut heap: T,
-    ) {
+    pub fn adds_a_lower_item_to_the_heap_before_a_higher_in_a_min_heap<T: Heap<Element, i32>>(mut heap: T) {
         let lower = 1;
         let higher = 2;
         heap.push(Element::Node, higher);
@@ -143,9 +131,7 @@ pub mod push {
         assert_eq!(heap.top(), Some(&Element::Target));
     }
 
-    pub fn adds_a_lower_item_to_the_heap_behind_a_higher_in_a_max_heap<T: Heap<Element, i32>>(
-        mut heap: T,
-    ) {
+    pub fn adds_a_lower_item_to_the_heap_behind_a_higher_in_a_max_heap<T: Heap<Element, i32>>(mut heap: T) {
         let lower = 1;
         let higher = 2;
         heap.push(Element::Target, higher);
@@ -189,9 +175,7 @@ pub mod top {
 pub mod size {
     use super::{generate_numbers, Heap};
 
-    pub fn returns_the_correct_size_of_a_heap_after_adding_elements<T: Heap<i32, i32>>(
-        mut heap: T,
-    ) {
+    pub fn returns_the_correct_size_of_a_heap_after_adding_elements<T: Heap<i32, i32>>(mut heap: T) {
         let numbers = generate_numbers();
         let len = numbers.len();
         numbers.into_iter().for_each(|n| {
@@ -200,9 +184,7 @@ pub mod size {
         assert_eq!(heap.size(), len);
     }
 
-    pub fn returns_the_correct_size_of_a_heap_after_removing_an_element<T: Heap<i32, i32>>(
-        mut heap: T,
-    ) {
+    pub fn returns_the_correct_size_of_a_heap_after_removing_an_element<T: Heap<i32, i32>>(mut heap: T) {
         let numbers = generate_numbers();
         let len = numbers.len();
         numbers.into_iter().for_each(|n| {
@@ -218,9 +200,7 @@ pub mod update {
     use super::{generate_numbers, DecreaseKey};
     use std::cmp::min;
 
-    pub fn will_update_a_specific_element_by_key_in_a_min_heap<T: DecreaseKey<i32, i32>>(
-        mut heap: T,
-    ) {
+    pub fn will_update_a_specific_element_by_key_in_a_min_heap<T: DecreaseKey<i32, i32>>(mut heap: T) {
         let mut numbers = generate_numbers();
         let target = numbers.pop().unwrap();
         let mut cloned = numbers.clone();
@@ -238,11 +218,7 @@ pub mod update {
         }
     }
 
-    pub fn will_update_a_specific_element_by_key_in_a_min_heap_after_pop<
-        T: DecreaseKey<i32, i32>,
-    >(
-        mut heap: T,
-    ) {
+    pub fn will_update_a_specific_element_by_key_in_a_min_heap_after_pop<T: DecreaseKey<i32, i32>>(mut heap: T) {
         let mut numbers = generate_numbers();
         let mut cloned = numbers.clone();
         cloned.sort_by(|a, b| b.cmp(a));
@@ -264,9 +240,7 @@ pub mod update {
         }
     }
 
-    pub fn will_update_a_specific_element_by_key_in_a_max_heap<T: DecreaseKey<i32, i32>>(
-        mut heap: T,
-    ) {
+    pub fn will_update_a_specific_element_by_key_in_a_max_heap<T: DecreaseKey<i32, i32>>(mut heap: T) {
         let mut numbers = generate_numbers();
         let target = numbers.pop().unwrap();
         let mut cloned = numbers.clone();
@@ -284,11 +258,7 @@ pub mod update {
         }
     }
 
-    pub fn will_update_a_specific_element_by_key_in_a_max_heap_after_pop<
-        T: DecreaseKey<i32, i32>,
-    >(
-        mut heap: T,
-    ) {
+    pub fn will_update_a_specific_element_by_key_in_a_max_heap_after_pop<T: DecreaseKey<i32, i32>>(mut heap: T) {
         let mut numbers = generate_numbers();
         let mut cloned = numbers.clone();
         cloned.sort_by(|a, b| a.cmp(b));
@@ -313,9 +283,7 @@ pub mod update {
 pub mod delete {
     use super::{generate_numbers, DecreaseKey};
 
-    pub fn will_delete_a_specific_element_by_key_from_min_heap<T: DecreaseKey<i32, i32>>(
-        mut heap: T,
-    ) {
+    pub fn will_delete_a_specific_element_by_key_from_min_heap<T: DecreaseKey<i32, i32>>(mut heap: T) {
         let numbers = generate_numbers();
         let mut cloned = numbers.clone();
         cloned.sort_by(|a, b| b.cmp(a));
@@ -330,11 +298,7 @@ pub mod delete {
         }
     }
 
-    pub fn will_delete_a_specific_element_by_key_from_min_heap_after_pop<
-        T: DecreaseKey<i32, i32>,
-    >(
-        mut heap: T,
-    ) {
+    pub fn will_delete_a_specific_element_by_key_from_min_heap_after_pop<T: DecreaseKey<i32, i32>>(mut heap: T) {
         let numbers = generate_numbers();
         let mut cloned = numbers.clone();
         cloned.sort_by(|a, b| b.cmp(a));
@@ -350,9 +314,7 @@ pub mod delete {
         }
     }
 
-    pub fn will_delete_a_specific_element_by_key_from_max_heap<T: DecreaseKey<i32, i32>>(
-        mut heap: T,
-    ) {
+    pub fn will_delete_a_specific_element_by_key_from_max_heap<T: DecreaseKey<i32, i32>>(mut heap: T) {
         let numbers = generate_numbers();
         let mut cloned = numbers.clone();
         cloned.sort_by(|a, b| a.cmp(b));
@@ -367,11 +329,7 @@ pub mod delete {
         }
     }
 
-    pub fn will_delete_a_specific_element_by_key_from_max_heap_after_pop<
-        T: DecreaseKey<i32, i32>,
-    >(
-        mut heap: T,
-    ) {
+    pub fn will_delete_a_specific_element_by_key_from_max_heap_after_pop<T: DecreaseKey<i32, i32>>(mut heap: T) {
         let numbers = generate_numbers();
         let mut cloned = numbers.clone();
         cloned.sort_by(|a, b| a.cmp(b));

@@ -1,5 +1,5 @@
-use crate::utils::Bucket;
-use crate::{DecreaseKey, Heap, HeapType};
+use crate::heapz::utils::Bucket;
+use crate::heapz::{DecreaseKey, Heap, HeapType};
 use std::{
     cmp::{max, Eq},
     collections::HashMap,
@@ -122,7 +122,7 @@ impl<K: Hash + Eq + Clone + std::fmt::Debug, V: PartialOrd + Clone + std::fmt::D
     /// Initializes a max ([`HeapType::Max`]) heap using [`HeapRank::One`] and [`HeapPasses::Single`]
     ///
     /// ```rust
-    /// use heapz::RankPairingHeap;
+    /// use mwpf::heapz::RankPairingHeap;
     ///
     /// let heap: RankPairingHeap<(usize, usize), i32> = RankPairingHeap::single_pass_max();
     /// ```
@@ -133,7 +133,7 @@ impl<K: Hash + Eq + Clone + std::fmt::Debug, V: PartialOrd + Clone + std::fmt::D
     /// Initializes a max ([`HeapType::Max`]) heap using [`HeapRank::Two`] and [`HeapPasses::Single`]
     ///
     /// ```rust
-    /// use heapz::RankPairingHeap;
+    /// use mwpf::heapz::RankPairingHeap;
     ///
     /// let heap: RankPairingHeap<(usize, usize), i32> = RankPairingHeap::single_pass_max2();
     /// ```
@@ -144,7 +144,7 @@ impl<K: Hash + Eq + Clone + std::fmt::Debug, V: PartialOrd + Clone + std::fmt::D
     /// Initializes a min ([`HeapType::Min`]) heap using [`HeapRank::One`] and [`HeapPasses::Single`]
     ///
     /// ```rust
-    /// use heapz::RankPairingHeap;
+    /// use mwpf::heapz::RankPairingHeap;
     ///
     /// let heap: RankPairingHeap<(usize, usize), i32> = RankPairingHeap::single_pass_min();
     /// ```
@@ -155,7 +155,7 @@ impl<K: Hash + Eq + Clone + std::fmt::Debug, V: PartialOrd + Clone + std::fmt::D
     /// Initializes a min ([`HeapType::Min`]) heap using [`HeapRank::Two`] and [`HeapPasses::Single`]
     ///
     /// ```rust
-    /// use heapz::RankPairingHeap;
+    /// use mwpf::heapz::RankPairingHeap;
     ///
     /// let heap: RankPairingHeap<(usize, usize), i32> = RankPairingHeap::single_pass_min2();
     /// ```
@@ -166,7 +166,7 @@ impl<K: Hash + Eq + Clone + std::fmt::Debug, V: PartialOrd + Clone + std::fmt::D
     /// Initializes a min ([`HeapType::Max`]) heap using [`HeapRank::One`] and [`HeapPasses::Multi`]
     ///
     /// ```rust
-    /// use heapz::RankPairingHeap;
+    /// use mwpf::heapz::RankPairingHeap;
     ///
     /// let heap: RankPairingHeap<(usize, usize), i32> = RankPairingHeap::multi_pass_max();
     /// ```
@@ -177,7 +177,7 @@ impl<K: Hash + Eq + Clone + std::fmt::Debug, V: PartialOrd + Clone + std::fmt::D
     /// Initializes a min ([`HeapType::Max`]) heap using [`HeapRank::Two`] and [`HeapPasses::Multi`]
     ///
     /// ```rust
-    /// use heapz::RankPairingHeap;
+    /// use mwpf::heapz::RankPairingHeap;
     ///
     /// let heap: RankPairingHeap<(usize, usize), i32> = RankPairingHeap::multi_pass_max2();
     /// ```
@@ -188,7 +188,7 @@ impl<K: Hash + Eq + Clone + std::fmt::Debug, V: PartialOrd + Clone + std::fmt::D
     /// Initializes a min ([`HeapType::Min`]) heap using [`HeapRank::One`] and [`HeapPasses::Multi`]
     ///
     /// ```rust
-    /// use heapz::RankPairingHeap;
+    /// use mwpf::heapz::RankPairingHeap;
     ///
     /// let heap: RankPairingHeap<(usize, usize), i32> = RankPairingHeap::multi_pass_min();
     /// ```
@@ -199,7 +199,7 @@ impl<K: Hash + Eq + Clone + std::fmt::Debug, V: PartialOrd + Clone + std::fmt::D
     /// Initializes a min ([`HeapType::Min`]) heap using [`HeapRank::Two`] and [`HeapPasses::Multi`]
     ///
     /// ```rust
-    /// use heapz::RankPairingHeap;
+    /// use mwpf::heapz::RankPairingHeap;
     ///
     /// let heap: RankPairingHeap<(usize, usize), i32> = RankPairingHeap::multi_pass_max2();
     /// ```
@@ -706,7 +706,7 @@ where
     /// Indicates whether a [`RankPairingHeap`] is empty or not
     ///
     /// ```rust
-    /// use heapz::{RankPairingHeap, Heap};
+    /// use mwpf::heapz::{RankPairingHeap, Heap};
     ///
     /// let mut heap = RankPairingHeap::multi_pass_min();
     ///
@@ -723,7 +723,7 @@ where
     /// Returns the amount of elements in the [`RankPairingHeap`]
     ///
     /// ```rust
-    /// use heapz::{RankPairingHeap, Heap};
+    /// use mwpf::heapz::{RankPairingHeap, Heap};
     ///
     /// let mut heap = RankPairingHeap::multi_pass_max2();
     ///
@@ -740,7 +740,7 @@ where
     /// Adds an element to the [`RankPairingHeap`]
     ///
     /// ```rust
-    /// use heapz::{RankPairingHeap, Heap};
+    /// use mwpf::heapz::{RankPairingHeap, Heap};
     ///
     /// let mut heap = RankPairingHeap::multi_pass_min();
     /// let value = "Hello".to_string();
@@ -758,7 +758,7 @@ where
     /// Returns the highest priority element of a [`RankPairingHeap`] (or None)
     ///
     /// ```
-    /// use heapz::{RankPairingHeap, Heap};
+    /// use mwpf::heapz::{RankPairingHeap, Heap};
     ///
     /// let value = "Hello".to_string();
     /// let mut heap = RankPairingHeap::multi_pass_min2();
@@ -776,7 +776,7 @@ where
     /// Returns the highest priority element of a [`RankPairingHeap`] (or None) as mutable
     ///
     /// ```rust
-    /// use heapz::{RankPairingHeap, Heap};
+    /// use mwpf::heapz::{RankPairingHeap, Heap};
     ///
     /// let value = "Hello".to_string();
     /// let mut heap = RankPairingHeap::single_pass_min();
@@ -794,7 +794,7 @@ where
     /// Removes and Returns the highest priority element of a [`RankPairingHeap`] (or None)
     ///
     /// ```rust
-    /// use heapz::{RankPairingHeap, Heap};
+    /// use mwpf::heapz::{RankPairingHeap, Heap};
     ///
     /// let value1 = "Hello".to_string();
     /// let value2 = "World".to_string();
@@ -830,7 +830,7 @@ where
     /// Updates the priority of an element in the [`RankPairingHeap`] (or None)
     ///
     /// ```rust
-    /// use heapz::{DecreaseKey, Heap, RankPairingHeap};
+    /// use mwpf::heapz::{DecreaseKey, Heap, RankPairingHeap};
     ///
     /// let mut heap = RankPairingHeap::single_pass_max();
     /// let hello = "Hello".to_string();
@@ -881,7 +881,7 @@ where
     ///  Deletes an element from the [`RankPairingHeap`] and returns it (or None)
     ///
     /// ```rust
-    /// use heapz::{DecreaseKey, Heap, RankPairingHeap};
+    /// use mwpf::heapz::{DecreaseKey, Heap, RankPairingHeap};
     ///
     /// let mut heap = RankPairingHeap::single_pass_max2();
     /// let hello = "Hello".to_string();

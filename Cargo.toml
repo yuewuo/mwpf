@@ -1,8 +1,9 @@
 [package]
 name = "mwpf"
-version = "0.2.12"
+version = "0.2.16"
 authors = ["Yue Wu <wuyue16pku@gmail.com>"]
 edition = "2021"
+rust-version = "1.82"
 license = "MIT"
 description = "Hypergraph Minimum-Weight Parity Factor (MWPF) Solver for Quantum LDPC Codes"
 readme = "README.md"
@@ -10,7 +11,24 @@ homepage = "https://hyper-mwpf.com"
 repository = "https://github.com/yuewuo/mwpf"
 keywords = ["QEC", "quantum-computing", "error-correction", "visualization"]
 categories = ["science"]
-exclude = ["tutorial/*", "benchmark/*", "visualize/data/persist/*", ".github/*"]
+include = [
+    "/src/**/*.rs",
+    "/src/**/LICENSE*",
+    "/src/**/Cargo.toml.orig",
+    "/src/**/README.md",
+    "/src/slp/src/parser/grammar.pest",
+    "/src/python/**/*.py",
+    "/tests/*.rs",
+    "/build.rs",
+    "/README.md",
+    "/LICENSE",
+    "/Cargo.lock",
+    "/pyproject.toml",
+    "/pyproject-patch.py",
+    "/visualize/dist/standalone.html",
+    # Explicit includes override .gitignore, including for nested build output.
+    "!/src/**/target/**",
+]
 default-run = "mwpf"
 
 # see https://doc.rust-lang.org/1.39.0/cargo/reference/manifest.html#the-documentation-field-optional
@@ -26,6 +44,55 @@ crate-type = ["lib", "cdylib"]
 name = "mwpf"
 path = "src/main.rs"
 
+[[bin]]
+name = "aps2024_demo"
+path = "src/bin/aps2024_demo.rs"
+required-features = ["embed_visualizer"]
+
+[[bin]]
+name = "sosp2024_poster"
+path = "src/bin/sosp2024_poster.rs"
+required-features = ["embed_visualizer"]
+
+[[test]]
+name = "bp_tests"
+path = "src/bp/tests/bp_tests.rs"
+
+[[test]]
+name = "heapz_linked"
+path = "src/heapz/tests/linked.rs"
+
+[[test]]
+name = "heapz_ranked"
+path = "src/heapz/tests/ranked.rs"
+
+[[bench]]
+name = "heapz_pairing_heap"
+path = "src/heapz/benches/pairing_heap.rs"
+harness = false
+
+[[bench]]
+name = "heapz_rank_pairing_heap"
+path = "src/heapz/benches/rank_pairing_heap.rs"
+harness = false
+
+[[bench]]
+name = "pheap"
+path = "src/pheap/benches/heap.rs"
+harness = false
+
+[[example]]
+name = "pheap_dijkstra"
+path = "src/pheap/examples/dijkstra.rs"
+
+[[example]]
+name = "pheap_mst"
+path = "src/pheap/examples/mst.rs"
+
+[[example]]
+name = "pheap_stress"
+path = "src/pheap/examples/stress.rs"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 # profiling: see scripts/NOTES.md
@@ -36,27 +103,21 @@ debug = true
 
 [features]
 # to enable a feature, use `--features xxx`
-default = [
-    "f64_weight",
-    "qecp_integrate",
-    "embed_visualizer",
-    "progress_bar",
-    "fast_ds",
-]
+default = ["f64_weight", "qecp_integrate", "progress_bar"]
 f64_weight = ["float_lp"] # use f64 instead of BigRational as weight type
 rational_weight = ["slp"]
-slp = [] # placeholder feature; the src/slp dependency is always included
+slp = [] # enable the bundled rational LP solver
 python_binding = ["pyo3"] # bind to Python
 wasm_binding = ["wasm-bindgen"] # bind to wasm
 progress_bar = ["pbr"] # make pbr an optional dependency because of wasm
 colorful = [] # enable colorful output in case terminal exists
 qecp_integrate = ["qecp"] # integrate with qecp
 float_lp = ["highs"] # use floating point LP solver, which is highs
-highs = [] # placeholder feature; the src/highs dependency is always included
+highs = [] # enable the bundled HiGHS wrapper
 incr_lp = [
 ] # solve lp problems incrementally, compatible with highs, by modifying the internal data of the probelm
 embed_visualizer = [
-] # use nodejs to build frontend and embed in Python instead of outputing individual JSON files
+] # embed the prebuilt visualizer; rebuild with `make frontend`
 loose_sanity_check = [] # do not panic when check fails
 fast_ds = ["gxhash"] # use fast data structures to fast iterate
 
@@ -90,20 +151,21 @@ cfg-if = "1.0.0"
 getrandom = { version = "0.2.15", features = ["js"] }
 wasm-bindgen = { version = "0.2.100", optional = true }
 lazy_static = "1.4.0"
-slp = { path = "src/slp" }
-highs = { path = "src/highs" }
+highs-sys = "1.6.1"
+log = "0.4.17"
+pest = "2.1"
+pest_derive = "2.1"
+rayon = "1.4"
+float-cmp = "0.10.0"
 sugar = "0.2.0"
 maplit = "1.0.2"
 qecp = { version = "0.2.5", optional = true, default-features = false }
 serde_variant = "0.1.3"
 priority-queue = "2.1.2"
-heapz = { path = "src/heapz" }
 hashbrown = "0.15.2"
-pheap = { path = "src/pheap" }
 tempfile = "3.17.1"
 flate2 = "1.0.35"
 base64 = "0.22.1"
-bp = { path = "src/bp" }
 thread-priority = "1.2.0"
 lnexp = "0.2.1"
 gxhash = { version = "3.5.0", optional = true }
@@ -111,10 +173,15 @@ gxhash = { version = "3.5.0", optional = true }
 [dev-dependencies]
 test-case = "3.1.0"
 bytebuffer = "2.3.0"
+criterion = "0.4.0"
+keyed_priority_queue = "0.3.2"
+addressable-pairing-heap = "0.2.0"
+pairing-heap = "0.1.0"
+clap_2 = { package = "clap", version = "2.33.3" }
+pathfinding = "1.1.1"
 
 [build-dependencies]
 chrono = "0.4.19"
 
 [package.metadata.docs.rs]
-# to run locally: `RUSTDOCFLAGS="--html-in-header katex-header.html" cargo doc --no-deps`
-rustdoc-args = ["--html-in-header", "katex-header.html"]
+features = ["embed_visualizer"]

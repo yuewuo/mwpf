@@ -36,7 +36,7 @@ where
     /// Indicates whether a [`Heap`] is empty or not
     ///
     /// ```rust
-    /// use heapz::{PairingHeap, Heap};
+    /// use mwpf::heapz::{PairingHeap, Heap};
     ///
     /// fn check_heap<T: Heap<String, u8>>(mut heap: T) {
     ///
@@ -54,7 +54,7 @@ where
     /// Returns the amount of elements in the [`Heap`]
     ///
     /// ```rust
-    /// use heapz::{PairingHeap, Heap};
+    /// use mwpf::heapz::{PairingHeap, Heap};
     ///
     /// fn check_heap<T: Heap<String, u8>>(mut heap: T) {
     ///
@@ -72,7 +72,7 @@ where
     /// Adds an element to the [`Heap`]
     ///
     /// ```rust
-    /// use heapz::{PairingHeap, Heap};
+    /// use mwpf::heapz::{PairingHeap, Heap};
     ///
     /// fn check_heap<T: Heap<String, u8>>(mut heap: T) {
     ///
@@ -90,7 +90,7 @@ where
     /// Returns the highest priority element of a [`Heap`] (or None)
     ///
     /// ```
-    /// use heapz::{PairingHeap, Heap};
+    /// use mwpf::heapz::{PairingHeap, Heap};
     /// fn check_heap<T: Heap<String, u8>>(mut heap: T) {
     ///
     ///     let value = "Hello".to_string();
@@ -109,7 +109,7 @@ where
     /// Returns the highest priority element of a [`Heap`] (or None) as mutable
     ///
     /// ```rust
-    /// use heapz::{PairingHeap, Heap};
+    /// use mwpf::heapz::{PairingHeap, Heap};
     ///
     /// fn check_heap<T: Heap<String, u8>>(mut heap: T) {
     ///
@@ -129,7 +129,7 @@ where
     /// Removes and Returns the highest priority element of a [`Heap`] (or None)
     ///
     /// ```rust
-    /// use heapz::{PairingHeap, Heap};
+    /// use mwpf::heapz::{PairingHeap, Heap};
     ///
     /// fn check_heap<T: Heap<String, u8>>(mut heap: T) {
     ///
@@ -155,7 +155,7 @@ where
     /// Updates the priority of an element in the [`Heap`] (or None)
     ///
     /// ```rust
-    /// use heapz::{DecreaseKey, RankPairingHeap};
+    /// use mwpf::heapz::{DecreaseKey, RankPairingHeap};
     ///
     /// fn check_heap<T: DecreaseKey<String, u8>>(mut heap: T) {
     ///     let hello = "Hello".to_string();
@@ -178,7 +178,7 @@ where
     ///  Deletes an element from the [`Heap`] and returns it (or None)
     ///
     /// ```rust
-    /// use heapz::{DecreaseKey, RankPairingHeap};
+    /// use mwpf::heapz::{DecreaseKey, RankPairingHeap};
     ///
     /// fn check_heap<T: DecreaseKey<String, u8>>(mut  heap: T) {
     ///

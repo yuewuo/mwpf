@@ -1,5 +1,5 @@
 use keyed_priority_queue::KeyedPriorityQueue;
-use pheap::PairingHeap;
+use mwpf::pheap::PairingHeap;
 use priority_queue::PriorityQueue;
 
 fn create_ph(n: i32) {

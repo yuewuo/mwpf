@@ -10,7 +10,7 @@ extern crate itertools;
 extern crate lazy_static;
 extern crate more_asserts;
 extern crate num_rational;
-extern crate num_traits;
+pub extern crate num_traits;
 extern crate parking_lot;
 extern crate prettytable;
 #[cfg(feature = "python_binding")]
@@ -18,8 +18,6 @@ extern crate prettytable;
 extern crate pyo3;
 extern crate rand;
 extern crate rand_xoshiro;
-#[cfg(feature = "slp")]
-extern crate slp;
 extern crate urlencoding;
 #[cfg(feature = "wasm_binding")]
 extern crate wasm_bindgen;
@@ -55,7 +53,21 @@ pub mod util;
 pub mod util_py;
 pub mod visualize;
 
-pub use bp;
+#[rustfmt::skip]
+#[path = "bp/src/lib.rs"]
+pub mod bp;
+#[rustfmt::skip]
+#[path = "heapz/src/lib.rs"]
+pub mod heapz;
+#[rustfmt::skip]
+#[path = "highs/src/lib.rs"]
+pub mod highs;
+#[rustfmt::skip]
+#[path = "pheap/src/lib.rs"]
+pub mod pheap;
+#[rustfmt::skip]
+#[path = "slp/src/lib.rs"]
+pub mod slp;
 
 #[cfg(feature = "python_binding")]
 use pyo3::prelude::*;
