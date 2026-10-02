@@ -15,13 +15,13 @@ pub trait RwLockPtr<ObjType> {
     fn ptr_mut(&mut self) -> &mut Arc<RwLock<ObjType>>;
 
     #[inline(always)]
-    fn read_recursive(&self) -> RwLockReadGuard<RawRwLock, ObjType> {
+    fn read_recursive(&self) -> RwLockReadGuard<'_, RawRwLock, ObjType> {
         let ret = self.ptr().read_recursive();
         ret
     }
 
     #[inline(always)]
-    fn write(&self) -> RwLockWriteGuard<RawRwLock, ObjType> {
+    fn write(&self) -> RwLockWriteGuard<'_, RawRwLock, ObjType> {
         let ret = self.ptr().write();
         ret
     }

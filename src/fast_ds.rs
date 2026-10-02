@@ -321,7 +321,7 @@ impl<'a, K: Eq + Hash + Clone, V: Hash> VacantEntry<'a, K, V> {
 }
 
 impl<K: Eq + Hash + Clone, V: Hash> Map<K, V> {
-    pub fn entry(&mut self, key: K) -> Entry<K, V> {
+    pub fn entry(&mut self, key: K) -> Entry<'_, K, V> {
         match self.map.entry(key) {
             hashbrown::hash_map::Entry::Occupied(entry) => Entry::Occupied(OccupiedEntry {
                 entry,

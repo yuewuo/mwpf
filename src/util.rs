@@ -661,7 +661,7 @@ impl OutputSubgraph {
         }
     }
 
-    pub fn iter(&self) -> OutputSubgraphIter {
+    pub fn iter(&self) -> OutputSubgraphIter<'_> {
         OutputSubgraphIter {
             subgraph_iter: self.subgraph.iter(),
             flip_edge_indices: &self.flip_edge_indices,
@@ -670,7 +670,7 @@ impl OutputSubgraph {
     }
 
     // Mutable iterator with updates to `subgraph` during iteration
-    pub fn iter_mut(&mut self) -> OutputSubgraphIterMut {
+    pub fn iter_mut(&mut self) -> OutputSubgraphIterMut<'_> {
         OutputSubgraphIterMut {
             subgraph: &mut self.subgraph,
             subgraph_iter: 0, // Start iterating from the beginning of `subgraph`
