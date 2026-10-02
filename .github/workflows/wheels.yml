@@ -66,7 +66,7 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
 
       - name: Build Frontend
         working-directory: ./visualize
-        run: npm install --include=dev && npm run build
+        run: npm ci --include=dev && npm run build
 
       - name: apply patch to build different packages
         if: matrix.build-feature != 'default'
@@ -93,10 +93,12 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
           CIBW_ARCHS_LINUX: x86_64 # aarch64 requires QEMU, ~ 40min for each manylinux and musllinux...
           CIBW_ARCHS_MACOS: universal2
           CIBW_BEFORE_BUILD: >
-            rustup default nightly-2024-11-03 &&
+            rustup default stable &&
+            rustup override set stable &&
             rustup show
           CIBW_BEFORE_BUILD_MACOS: >
-            rustup default nightly-2024-11-03 &&
+            rustup default stable &&
+            rustup override set stable &&
             rustup target add aarch64-apple-darwin &&
             rustup target add x86_64-apple-darwin &&
             rustup show
@@ -110,6 +112,7 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
             fi &&
             curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain=stable --profile=minimal -y &&
             . "$HOME/.cargo/env" &&
+            rustup override set stable &&
             rustup show
 
       - name: list wheel files
@@ -146,10 +149,11 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
           path: wheelhouse/*
 
   rust_tests:
-    name: Run Rust tests on ${{ matrix.os }}
+    name: Run Rust tests on ${{ matrix.os }} (Rust ${{ matrix.toolchain }})
     strategy:
       fail-fast: true
       matrix:
+        toolchain: ["1.82", "stable"]
         os:
           - ubuntu
           - macos
@@ -172,25 +176,15 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
-          # profile: minimal
-          toolchain: stable
+          profile: minimal
+          toolchain: ${{ matrix.toolchain }}
           override: true
-
-      - name: Install NodeJs
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - name: Build Frontend
-        working-directory: ./visualize
-        run: npm install --include=dev && npm run build
 
       - name: run Rust test
         run: make ci_rust_test
         env:
           SKIP_FRONTEND_BUILD: "1"
-          # RUSTFLAGS: -C target-cpu=native
-          RUSTFLAGS: -C target-feature=+aes
+
 
   publish-to-pypi:
     name: >-

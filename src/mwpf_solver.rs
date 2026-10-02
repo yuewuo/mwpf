@@ -18,7 +18,8 @@ use crate::primal_module_serial::*;
 use crate::util::*;
 use crate::visualize::*;
 
-use bp::bp::BpDecoder;
+use crate::bp;
+use crate::bp::bp::BpDecoder;
 
 use core::panic;
 use num_traits::ToPrimitive;
@@ -33,7 +34,7 @@ cfg_if::cfg_if! {
         use crate::invalid_subgraph::*;
         use crate::util_py::*;
 
-        use bp::bp::BpSparse;
+        use crate::bp::bp::BpSparse;
 
         use pyo3::prelude::*;
         use pyo3::types::{PyTuple, PyDict};

@@ -10,12 +10,14 @@ clippy:
 
 clean:
 	cargo clean
-# the following subfolder targets only appears when running `maturin develop --release`
-	cd src/heapz && cargo clean
 	cd src/highs/fuzz && cargo clean
-	cd src/highs && cargo clean
-	cd src/pheap && cargo clean
-	cd src/slp && cargo clean
+
+frontend:
+	cd visualize && npm ci --include=dev && npm run build
+
+package: frontend
+	cargo package --list
+	cargo publish --dry-run --locked
 
 
 clean-env: clean fmt
@@ -27,8 +29,8 @@ test: clean-env
 	cargo test -r --no-default-features --features rational_weight,embed_visualizer,qecp_integrate,progress_bar
 
 ci_rust_test:
-	cargo test --release
-	cargo test -r --no-default-features --features rational_weight,embed_visualizer,qecp_integrate,progress_bar
+	cargo test --locked --release
+	cargo test --locked -r --no-default-features --features rational_weight,embed_visualizer,qecp_integrate,progress_bar
 
 build: clean-env
 	cargo build

@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, BatchSize, Bencher, Criterion};
-use heapz::{Heap, PairingHeap};
+use mwpf::heapz::{Heap, PairingHeap};
 
 fn is_empty_benchmark(b: &mut Bencher) {
     let mut heap = PairingHeap::min();
@@ -17,10 +17,7 @@ fn push_benchmark(b: &mut Bencher) {
     let arr = vec![1, 3, 5, -2, 6, -7, 9, 10, 13, 4, 12, 115, 500, 132, 67, 334];
     b.iter_batched(
         || PairingHeap::<i32, i32>::min(),
-        |mut heap| {
-            arr.iter()
-                .for_each(|num| heap.push(black_box(*num), black_box(*num)))
-        },
+        |mut heap| arr.iter().for_each(|num| heap.push(black_box(*num), black_box(*num))),
         BatchSize::SmallInput,
     );
 }
@@ -46,8 +43,7 @@ pub fn pop_benchmark(b: &mut Bencher) {
         || {
             let arr = vec![1, 3, 5, -2, 6, -7, 9, 10, 13, 4, 12, 115, 500, 132, 67, 334];
             let mut heap = PairingHeap::min();
-            arr.iter()
-                .for_each(|num| heap.push(black_box(*num), black_box(*num)));
+            arr.iter().for_each(|num| heap.push(black_box(*num), black_box(*num)));
             (heap, arr.len())
         },
         |(mut heap, len)| {

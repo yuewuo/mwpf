@@ -1,10 +1,10 @@
-use crate::Number;
+use crate::slp::Number;
 use pest::error::Error;
 use pest::Parser;
 
 mod lp_parser {
-    #[derive(Parser)]
-    #[grammar = "parser/grammar.pest"]
+    #[derive(pest_derive::Parser)]
+    #[grammar = "src/slp/src/parser/grammar.pest"]
     pub struct LpParser;
 }
 

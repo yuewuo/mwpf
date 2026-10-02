@@ -9,22 +9,21 @@ fn main() {
     let formatted_time = now.format("%Y_%m_%d_%H_%M_%S").to_string();
     println!("cargo:rustc-env=MWPF_BUILD_RS_TIMESTAMP={formatted_time}");
 
-    // when embedded visualizer is enabled, build frontend code first
-    if cfg!(feature = "embed_visualizer") {
-        // respond to frontend code changes
-        println!("cargo:rerun-if-changed=./visualize/src"); // the whole src folder
-        for file in std::fs::read_dir("./visualize").unwrap() {
-            // also files in visualizer folder (but not any folders in it)
-            let path = file.unwrap().path().display().to_string();
-            if std::fs::metadata(path.as_str()).unwrap().is_file() && !path.ends_with("package-lock.json") {
-                println!("cargo:rerun-if-changed={path}");
-            }
-        }
+    println!("cargo:rerun-if-env-changed=SKIP_FRONTEND_BUILD");
 
-        if std::env::var("SKIP_FRONTEND_BUILD").is_err() {
+    if cfg!(feature = "embed_visualizer") {
+        let template = std::path::Path::new("visualize/dist/standalone.html");
+        println!("cargo:rerun-if-changed={}", template.display());
+
+        // Published packages contain this asset and never need npm.
+        if !template.is_file() {
+            assert!(
+                std::env::var_os("SKIP_FRONTEND_BUILD").is_none(),
+                "visualizer asset is missing; run `make frontend` before enabling embed_visualizer"
+            );
             assert!(std::process::Command::new("npm")
                 .current_dir("./visualize")
-                .arg("install")
+                .arg("ci")
                 .arg("--include=dev")
                 .status()
                 .expect("npm install failed")
@@ -37,6 +36,7 @@ fn main() {
                 .status()
                 .expect("npm build failed")
                 .success());
+            assert!(template.is_file(), "frontend build did not produce {}", template.display());
         }
     }
 }

@@ -4,8 +4,8 @@ use std::convert::TryInto;
 use std::ops::RangeBounds;
 use std::os::raw::c_int;
 
-use crate::matrix_col::ColMatrix;
-use crate::Problem;
+use crate::highs::matrix_col::ColMatrix;
+use crate::highs::Problem;
 
 /// Represents a variable
 #[derive(Debug, Clone, Copy)]
@@ -60,7 +60,7 @@ impl Problem<RowMatrix> {
     ///  - `row_factors` are the coefficients in the linear expression expressing the constraint
     ///
     /// ```
-    /// use highs::*;
+    /// use mwpf::highs::*;
     /// let mut pb = RowProblem::new();
     /// // Optimize 3x - 2y with x<=6 and y>=5
     /// let x = pb.add_column(3., ..6);
@@ -111,8 +111,8 @@ impl From<RowMatrix> for ColMatrix {
 #[allow(clippy::float_cmp)]
 #[test]
 fn test_conversion() {
-    use crate::status::HighsModelStatus::Optimal;
-    use crate::{ColProblem, Model, RowProblem, Sense};
+    use crate::highs::status::HighsModelStatus::Optimal;
+    use crate::highs::{ColProblem, Model, RowProblem, Sense};
     let inf = f64::INFINITY;
     let neg_inf = f64::NEG_INFINITY;
     let mut p = RowProblem::default();

@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use bp::{bp::*, sparse_matrix_util::print_sparse_matrix};
+    use mwpf::bp::{bp::*, sparse_matrix_util::print_sparse_matrix};
 
     #[test]
     fn bp_entry_init() {

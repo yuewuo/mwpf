@@ -1,3 +1,4 @@
+# Original package metadata; this library is now an mwpf module.
 [package]
 name = "highs"
 version = "1.6.1"

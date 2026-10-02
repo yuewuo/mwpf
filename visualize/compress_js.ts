@@ -47,7 +47,7 @@ async function generate_self_contained_html (folder: string, gzip_filename: stri
     const base64_string = fs.readFileSync(zip_filepath).toString()
     const js_code = `
 
-const module_base64 = 
+const module_base64 =
 /* HYPERION_VISUAL_GZIP_B64_BEGIN */
 "${base64_string}"
 /* HYPERION_VISUAL_GZIP_B64_END */

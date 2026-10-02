@@ -22,7 +22,7 @@ pub enum HighsModelStatus {
     PostsolveError = MODEL_STATUS_POSTSOLVE_ERROR as isize,
     /// No variables in the model: nothing to optimize
     /// ```
-    /// use highs::*;
+    /// use mwpf::highs::*;
     /// let solved = ColProblem::new().optimise(Sense::Maximise).solve();
     /// assert_eq!(solved.status(), HighsModelStatus::ModelEmpty);
     /// ```

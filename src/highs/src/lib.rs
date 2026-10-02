@@ -9,7 +9,7 @@
 //!constraints one by one.
 //!
 //! ```
-//! use highs::{Sense, Model, HighsModelStatus, RowProblem};
+//! use mwpf::highs::{Sense, Model, HighsModelStatus, RowProblem};
 //! // max: x + 2y + z
 //! // under constraints:
 //! // c1: 3x +  y      <= 6
@@ -44,7 +44,7 @@
 //! This is slightly more efficient than building the problem constraint by constraint.
 //!
 //! ```
-//! use highs::{ColProblem, Sense};
+//! use mwpf::highs::{ColProblem, Sense};
 //! let mut pb = ColProblem::new();
 //! // We cannot use more then 5 units of sugar in total.
 //! let sugar = pb.add_row(..=5);
@@ -61,7 +61,7 @@
 //! ```
 //!
 //! ```
-//! use highs::{Sense, Model, HighsModelStatus, ColProblem};
+//! use mwpf::highs::{Sense, Model, HighsModelStatus, ColProblem};
 //! // max: x + 2y + z
 //! // under constraints:
 //! // c1: 3x +  y      <= 6
@@ -94,7 +94,7 @@
 //! and the solution is then guaranteed to contain a whole number as a value for this variable.
 //!
 //! ```
-//! use highs::{Sense, Model, HighsModelStatus, ColProblem};
+//! use mwpf::highs::{Sense, Model, HighsModelStatus, ColProblem};
 //! // maximize: x + 2y under constraints x + y <= 3.5 and x - y >= 1
 //! let mut pb = ColProblem::default();
 //! let c1 = pb.add_row(..3.5);
@@ -120,7 +120,7 @@ pub use matrix_col::{ColMatrix, Row};
 pub use matrix_row::{Col, RowMatrix};
 pub use status::{HighsModelStatus, HighsStatus};
 
-use crate::options::HighsOptionValue;
+use crate::highs::options::HighsOptionValue;
 
 /// A problem where variables are declared first, and constraints are then added dynamically.
 /// See [`Problem<RowMatrix>`](Problem#impl-1).
@@ -335,8 +335,8 @@ impl Model {
     /// <https://www.maths.ed.ac.uk/hall/HiGHS/HighsOptions.html>
     ///
     /// ```
-    /// # use highs::ColProblem;
-    /// # use highs::Sense::Maximise;
+    /// # use mwpf::highs::ColProblem;
+    /// # use mwpf::highs::Sense::Maximise;
     /// let mut model = ColProblem::default().optimise(Maximise);
     /// model.set_option("presolve", "off"); // disable the presolver
     /// model.set_option("solver", "ipm"); // use the ipm solver

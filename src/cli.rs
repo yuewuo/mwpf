@@ -1,9 +1,9 @@
+use crate::bp::bp::BpSparse;
 use crate::example_codes::*;
 use crate::matrix::*;
 use crate::mwpf_solver::*;
 use crate::util::*;
 use crate::visualize::*;
-use bp::bp::BpSparse;
 use clap::builder::{StringValueParser, TypedValueParser, ValueParser};
 use clap::error::{ContextKind, ContextValue, ErrorKind};
 use clap::{Parser, Subcommand, ValueEnum};

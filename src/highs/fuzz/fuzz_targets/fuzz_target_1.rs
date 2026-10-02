@@ -1,5 +1,5 @@
 #![no_main]
-use highs::{RowProblem, Sense};
+use mwpf::highs::{RowProblem, Sense};
 use libfuzzer_sys::arbitrary;
 use libfuzzer_sys::arbitrary::{Arbitrary, Unstructured};
 use libfuzzer_sys::fuzz_target;

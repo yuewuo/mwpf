@@ -1,5 +1,13 @@
 # Pairing Heap
 
+This modified copy is built as `mwpf::pheap`, not as a separate crate. Original
+package metadata, including the upstream author and license declaration, is
+retained in `Cargo.toml.orig`. Run its tests from the repository root with
+`cargo test --lib pheap::` and its benchmarks with `cargo bench --bench pheap`.
+The graph examples are now `pheap_dijkstra`, `pheap_mst`, and `pheap_stress`;
+the historical benchmark results and standalone helper scripts below describe
+the upstream package layout.
+
 [![Crates.io](https://img.shields.io/crates/v/pheap)](https://crates.io/crates/pheap) [![Documentation](https://docs.rs/pheap/badge.svg)](https://docs.rs/pheap) 
 
 From [Wikipedia](https://en.wikipedia.org/wiki/Pairing_heap):
@@ -59,7 +67,7 @@ cargo build --examples --release
 
 To run valgrind:
 ```batch
-valgrind --tool=massif ./target/release/examples/stress <implementation> <number of nodes to be inserted>
+valgrind --tool=massif ./target/release/examples/pheap_stress <implementation> <number of nodes to be inserted>
 ```
 
 The commandline argument ```<implementation>``` accepts the following options:

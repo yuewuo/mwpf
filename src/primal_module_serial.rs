@@ -1206,8 +1206,10 @@ pub mod tests {
                     vec![&interface_ptr, &dual_module, &subgraph, &weight_range],
                 )
                 .unwrap();
-            visualizer.save_html_along_json();
-            println!("open visualizer at {}", visualizer.html_along_json_path());
+            if cfg!(feature = "embed_visualizer") {
+                visualizer.save_html_along_json();
+                println!("open visualizer at {}", visualizer.html_along_json_path());
+            }
         }
         assert!(
             decoding_graph

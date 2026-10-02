@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, BatchSize, Bencher, Criterion};
-use heapz::{DecreaseKey, Heap, RankPairingHeap};
+use mwpf::heapz::{DecreaseKey, Heap, RankPairingHeap};
 
 fn is_empty_benchmark(b: &mut Bencher) {
     let mut heap = RankPairingHeap::multi_pass_min();
@@ -17,10 +17,7 @@ fn push_benchmark(b: &mut Bencher) {
     let arr = vec![1, 3, 5, -2, 6, -7, 9, 10, 13, 4, 12, 115, 500, 132, 67, 334];
     b.iter_batched(
         || RankPairingHeap::<i32, i32>::multi_pass_min(),
-        |mut heap| {
-            arr.iter()
-                .for_each(|num| heap.push(black_box(*num), black_box(*num)))
-        },
+        |mut heap| arr.iter().for_each(|num| heap.push(black_box(*num), black_box(*num))),
         BatchSize::SmallInput,
     );
 }
@@ -46,8 +43,7 @@ fn pop_benchmark(b: &mut Bencher) {
         || {
             let arr = vec![1, 3, 5, -2, 6, -7, 9, 10, 13, 4, 12, 115, 500, 132, 67, 334];
             let mut heap = RankPairingHeap::multi_pass_min();
-            arr.iter()
-                .for_each(|num| heap.push(black_box(*num), black_box(*num)));
+            arr.iter().for_each(|num| heap.push(black_box(*num), black_box(*num)));
             (heap, arr.len())
         },
         |(mut heap, len)| {
@@ -67,8 +63,7 @@ fn update_benchmark(b: &mut Bencher) {
             let mut heap = RankPairingHeap::multi_pass_min();
             let key = arr[(i % arr.len()) as usize];
             let value = if i % 2 == 0 { -1 } else { 2 };
-            arr.iter()
-                .for_each(|num| heap.push(black_box(*num), black_box(*num)));
+            arr.iter().for_each(|num| heap.push(black_box(*num), black_box(*num)));
             i += 1;
             (heap, (key, value))
         },
@@ -84,8 +79,7 @@ fn delete_benchmark(b: &mut Bencher) {
             let arr = vec![1, 3, 5, -2, 6, -7, 9, 10, 13, 4, 12, 115, 500, 132, 67, 334];
             let mut heap = RankPairingHeap::multi_pass_min();
             let key = arr[(i % arr.len()) as usize];
-            arr.iter()
-                .for_each(|num| heap.push(black_box(*num), black_box(*num)));
+            arr.iter().for_each(|num| heap.push(black_box(*num), black_box(*num)));
             i += 1;
             (heap, key)
         },

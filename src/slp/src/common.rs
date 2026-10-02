@@ -1,5 +1,5 @@
-use crate::num_traits::{One, Zero};
-use crate::*;
+use crate::slp::num_traits::{One, Zero};
+use crate::slp::*;
 
 /// Number trait used in this library.
 pub trait Number:

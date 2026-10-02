@@ -5,9 +5,9 @@
 use std::error::Error;
 use std::f64;
 
-use crate::custom_rng::RandomListShuffle;
-use crate::gf2sparse::GF2Sparse;
-use crate::sparse_matrix_base::EntryBase;
+use crate::bp::custom_rng::RandomListShuffle;
+use crate::bp::gf2sparse::GF2Sparse;
+use crate::bp::sparse_matrix_base::EntryBase;
 
 pub type BpEntry = EntryBase<_BpEntry>;
 pub type BpSparse = GF2Sparse<_BpEntry>;

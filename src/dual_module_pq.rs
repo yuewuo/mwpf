@@ -20,14 +20,14 @@ use std::{
     time::Instant,
 };
 
+use crate::heapz::RankPairingHeap;
+use crate::heapz::{DecreaseKey, Heap};
+use crate::pheap::PairingHeap;
 use derivative::Derivative;
 use hashbrown::hash_map::Entry;
 use hashbrown::{HashMap, HashSet};
-use heapz::RankPairingHeap;
-use heapz::{DecreaseKey, Heap};
 use num_traits::Signed;
 use parking_lot::{lock_api::RwLockWriteGuard, RawRwLock};
-use pheap::PairingHeap;
 use priority_queue::PriorityQueue;
 
 /* Helper structs for events/obstacles during growing */
@@ -1087,8 +1087,10 @@ mod tests {
             .snapshot_combined("subgraph".to_string(), vec![&interface_ptr, &dual_module, &subgraph])
             .unwrap();
 
-        visualizer.save_html_along_json();
-        println!("open visualizer at {}", visualizer.html_along_json_path());
+        if cfg!(feature = "embed_visualizer") {
+            visualizer.save_html_along_json();
+            println!("open visualizer at {}", visualizer.html_along_json_path());
+        }
     }
 
     #[test]
@@ -1132,8 +1134,10 @@ mod tests {
             .snapshot_combined("subgraph".to_string(), vec![&interface_ptr, &dual_module, &subgraph])
             .unwrap();
 
-        visualizer.save_html_along_json();
-        println!("open visualizer at {}", visualizer.html_along_json_path());
+        if cfg!(feature = "embed_visualizer") {
+            visualizer.save_html_along_json();
+            println!("open visualizer at {}", visualizer.html_along_json_path());
+        }
     }
 
     #[test]
@@ -1217,8 +1221,10 @@ mod tests {
             .snapshot_combined("subgraph".to_string(), vec![&interface_ptr, &dual_module, &subgraph])
             .unwrap();
 
-        visualizer.save_html_along_json();
-        println!("open visualizer at {}", visualizer.html_along_json_path());
+        if cfg!(feature = "embed_visualizer") {
+            visualizer.save_html_along_json();
+            println!("open visualizer at {}", visualizer.html_along_json_path());
+        }
     }
 
     // TODO: write more tests here, perhaps unit tests

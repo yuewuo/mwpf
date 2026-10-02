@@ -1,4 +1,4 @@
-use crate::{Heap, HeapType};
+use crate::heapz::{Heap, HeapType};
 use std::hash::Hash;
 
 type BoxedNode<K, V> = Box<Node<K, V>>;
@@ -43,7 +43,7 @@ impl<K, V: PartialOrd> PairingHeap<K, V> {
     /// Initializes a min priority ([`HeapType::Min`]) [`PairingHeap`]
     ///
     /// ```rust
-    /// use heapz::PairingHeap;
+    /// use mwpf::heapz::PairingHeap;
     ///
     /// let heap: PairingHeap<(usize, usize), i32> = PairingHeap::min();
     /// ```
@@ -54,7 +54,7 @@ impl<K, V: PartialOrd> PairingHeap<K, V> {
     /// Initializes a max priority ([`HeapType::Max`]) [`PairingHeap`]
     ///
     /// ```rust
-    /// use heapz::PairingHeap;
+    /// use mwpf::heapz::PairingHeap;
     ///
     /// let heap: PairingHeap<(usize, usize), i32> = PairingHeap::max();
     /// ```
@@ -124,7 +124,7 @@ impl<K: Hash + Eq, V: PartialOrd> Heap<K, V> for PairingHeap<K, V> {
     /// Indicates whether a [`PairingHeap`] is empty or not
     ///
     /// ```rust
-    /// use heapz::{PairingHeap, Heap};
+    /// use mwpf::heapz::{PairingHeap, Heap};
     ///
     /// let mut heap = PairingHeap::min();
     ///
@@ -141,7 +141,7 @@ impl<K: Hash + Eq, V: PartialOrd> Heap<K, V> for PairingHeap<K, V> {
     /// Returns the amount of elements in the [`PairingHeap`]
     ///
     /// ```rust
-    /// use heapz::{PairingHeap, Heap};
+    /// use mwpf::heapz::{PairingHeap, Heap};
     ///
     /// let mut heap = PairingHeap::max();
     ///
@@ -158,7 +158,7 @@ impl<K: Hash + Eq, V: PartialOrd> Heap<K, V> for PairingHeap<K, V> {
     /// Adds an element to the [`PairingHeap`]
     ///
     /// ```rust
-    /// use heapz::{PairingHeap, Heap};
+    /// use mwpf::heapz::{PairingHeap, Heap};
     ///
     /// let mut heap = PairingHeap::min();
     /// let value = "Hello".to_string();
@@ -180,7 +180,7 @@ impl<K: Hash + Eq, V: PartialOrd> Heap<K, V> for PairingHeap<K, V> {
     /// Returns the highest priority element of a [`PairingHeap`] (or None)
     ///
     /// ```
-    /// use heapz::{PairingHeap, Heap};
+    /// use mwpf::heapz::{PairingHeap, Heap};
     ///
     /// let value = "Hello".to_string();
     /// let mut heap = PairingHeap::max();
@@ -198,7 +198,7 @@ impl<K: Hash + Eq, V: PartialOrd> Heap<K, V> for PairingHeap<K, V> {
     /// Returns the highest priority element of a [`PairingHeap`] (or None) as mutable
     ///
     /// ```rust
-    /// use heapz::{PairingHeap, Heap};
+    /// use mwpf::heapz::{PairingHeap, Heap};
     ///
     /// let value = "Hello".to_string();
     /// let mut heap = PairingHeap::min();
@@ -216,7 +216,7 @@ impl<K: Hash + Eq, V: PartialOrd> Heap<K, V> for PairingHeap<K, V> {
     /// Removes and Returns the highest priority element of a [`PairingHeap`] (or None)
     ///
     /// ```rust
-    /// use heapz::{PairingHeap, Heap};
+    /// use mwpf::heapz::{PairingHeap, Heap};
     ///
     /// let value1 = "Hello".to_string();
     /// let value2 = "World".to_string();
