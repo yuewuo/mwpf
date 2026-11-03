@@ -7,14 +7,20 @@ from common import mwpf, pytest
 
 
 def decode(_):
-    initializer = mwpf.SolverInitializer(2, [mwpf.HyperEdge([0, 1], 1)])
+    edges = [mwpf.HyperEdge([vertex, vertex + 1], 100) for vertex in range(5)]
+    edges += [
+        mwpf.HyperEdge([1, 2, 3], 60),
+        mwpf.HyperEdge([0], 0),
+        mwpf.HyperEdge([5], 0),
+    ]
+    initializer = mwpf.SolverInitializer(6, edges)
     initializer = pickle.loads(pickle.dumps(initializer))
     solver = mwpf.Solver(initializer)
-    solver.solve(mwpf.SyndromePattern([0, 1]))
-    assert solver.subgraph() == [0]
+    solver.solve(mwpf.SyndromePattern([1, 2, 4]))
+    assert solver.subgraph() == [3, 5]
     _, bounds = solver.subgraph_range()
-    assert bounds.lower.float() == 1
-    assert bounds.upper.float() == 1
+    assert bounds.lower.float() == 160
+    assert bounds.upper.float() == 160
     solver.clear()
     solver.solve(mwpf.SyndromePattern([]))
     assert solver.subgraph() == []
