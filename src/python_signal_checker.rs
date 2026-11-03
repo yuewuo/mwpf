@@ -16,7 +16,7 @@ use std::time::Duration;
 use thread_priority::{set_current_thread_priority, ThreadPriority};
 
 pub fn force_check_signals() -> PyResult<()> {
-    Python::with_gil(|py| Python::check_signals(py))
+    Python::attach(|py| Python::check_signals(py))
 }
 
 pub struct PythonSignalChecker {

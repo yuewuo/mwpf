@@ -150,7 +150,7 @@ impl HTMLExport {
 </script>"#,
             script_body.len() / 1024
         );
-        Python::with_gil(|py| -> PyResult<()> {
+        Python::attach(|py| -> PyResult<()> {
             let display = PyModule::import(py, "IPython.display")?;
             display.call_method1("display", (display.call_method1("HTML", (script_block,))?,))?;
             Ok(())
@@ -181,7 +181,7 @@ impl HTMLExport {
         let width_str = width.unwrap_or_else(|| "auto".to_string());
         let height_str = height.unwrap_or_else(|| "min(max(60vh, 400px), 100vw)".to_string());
         let div_block = format!(r#"<div id="{div_id}" style="width: {width_str}; height: {height_str};"></div>"#);
-        Python::with_gil(|py| -> PyResult<()> {
+        Python::attach(|py| -> PyResult<()> {
             let display = PyModule::import(py, "IPython.display")?;
             display.call_method1("display", (display.call_method1("HTML", (div_block,))?,))?;
             Ok(())
@@ -249,7 +249,7 @@ impl HTMLExport {
             on_hyperion_library_ready(main)</script>
         "###
         );
-        Python::with_gil(|py| -> PyResult<()> {
+        Python::attach(|py| -> PyResult<()> {
             let display = PyModule::import(py, "IPython.display")?;
             display.call_method1("display", (display.call_method1("HTML", (js_code,))?,))?;
             Ok(())
@@ -274,7 +274,7 @@ impl HTMLExport {
         };
         let div_block =
             format!(r#"<div id="{div_id}" style="font-family: monospace; white-space: pre;">{alternate_text}</div>"#);
-        Python::with_gil(|py| -> PyResult<()> {
+        Python::attach(|py| -> PyResult<()> {
             let display = PyModule::import(py, "IPython.display")?;
             display.call_method1("display", (display.call_method1("HTML", (div_block,))?,))?;
             Ok(())
@@ -320,7 +320,7 @@ impl HTMLExport {
             on_hyperion_library_ready(main)</script>
         "###
         );
-        Python::with_gil(|py| -> PyResult<()> {
+        Python::attach(|py| -> PyResult<()> {
             let display = PyModule::import(py, "IPython.display")?;
             display.call_method1("display", (display.call_method1("HTML", (js_code,))?,))?;
             Ok(())
@@ -392,7 +392,7 @@ impl HTMLExport {
 
     #[staticmethod]
     #[pyo3(name = "generate_html", signature = (visualizer_data, override_config = None))]
-    pub fn generate_html_py(visualizer_data: PyObject, override_config: Option<PyObject>) -> std::io::Result<String> {
+    pub fn generate_html_py(visualizer_data: Py<PyAny>, override_config: Option<Py<PyAny>>) -> std::io::Result<String> {
         let visualizer_data = pyobject_to_json(visualizer_data);
         let override_config = if let Some(override_config) = override_config {
             pyobject_to_json(override_config)
@@ -405,8 +405,8 @@ impl HTMLExport {
     #[staticmethod]
     #[pyo3(name = "display_jupyter_html", signature = (visualizer_data, override_config = None, width = None, height = None))]
     pub fn display_jupyter_html_py(
-        visualizer_data: PyObject,
-        override_config: Option<PyObject>,
+        visualizer_data: Py<PyAny>,
+        override_config: Option<Py<PyAny>>,
         width: Option<String>,
         height: Option<String>,
     ) -> std::io::Result<()> {

@@ -77,11 +77,11 @@ macro_rules! bind_trait_to_python {
         impl $struct_name {
             #[pyo3(name = "clear")]
             fn py_clear(&mut self, py: Python<'_>) {
-                py.allow_threads(move || self.clear())
+                py.detach(move || self.clear())
             }
             #[pyo3(name = "solve", signature = (syndrome_pattern, visualizer=None))] // in Python, `solve` and `solve_visualizer` is the same because it can take optional parameter
             fn py_solve(&mut self, py: Python<'_>, syndrome_pattern: SyndromePattern, visualizer: Option<&mut Visualizer>) {
-                py.allow_threads(move || self.solve_visualizer(syndrome_pattern, visualizer));
+                py.detach(move || self.solve_visualizer(syndrome_pattern, visualizer));
             }
             #[pyo3(name = "subgraph_range", signature = (visualizer=None))] // in Python, `subgraph_range` and `subgraph_range_visualizer` is the same
             fn py_subgraph_range(
@@ -89,14 +89,14 @@ macro_rules! bind_trait_to_python {
                 py: Python<'_>,
                 visualizer: Option<&mut Visualizer>,
             ) -> (PySubgraph, PyWeightRange) {
-                let (subgraph, range) = py.allow_threads(move || self.subgraph_range_visualizer(visualizer));
+                let (subgraph, range) = py.detach(move || self.subgraph_range_visualizer(visualizer));
                 let mut complete_subgraph = subgraph.into_iter().collect::<Vec<EdgeIndex>>();
                 complete_subgraph.sort();
                 (complete_subgraph.into(), range.into())
             }
             #[pyo3(name = "subgraph", signature = (visualizer=None))]
             fn py_subgraph(&mut self, py: Python<'_>, visualizer: Option<&mut Visualizer>) -> Subgraph {
-                py.allow_threads(move || self.subgraph_range_visualizer(visualizer).0.into_iter().collect())
+                py.detach(move || self.subgraph_range_visualizer(visualizer).0.into_iter().collect())
             }
             #[pyo3(name = "sum_dual_variables")]
             fn py_sum_dual_variables(&self) -> PyRational {
@@ -110,7 +110,7 @@ macro_rules! bind_trait_to_python {
                 visualizer: Option<&mut Visualizer>,
                 skip_initial_duals: bool,
             ) {
-                py.allow_threads(move || self.0.load_syndrome(syndrome_pattern, visualizer, skip_initial_duals))
+                py.detach(move || self.0.load_syndrome(syndrome_pattern, visualizer, skip_initial_duals))
             }
             #[pyo3(name = "get_node", signature = (node_index))]
             pub fn py_get_node(&mut self, node_index: NodeIndex) -> Option<PyDualNodePtr> {
@@ -185,7 +185,7 @@ macro_rules! bind_trait_to_python {
             #[pyo3(name = "grow", signature = (length))]
             fn py_grow(&mut self, py: Python<'_>, length: PyRational) {
                 let length: Rational = length.into();
-                py.allow_threads(move || {
+                py.detach(move || {
                     if let Some(max_valid_grow) = self.0.dual_module.compute_max_valid_grow() {
                         assert!(
                             length <= max_valid_grow,
@@ -198,8 +198,8 @@ macro_rules! bind_trait_to_python {
                 });
             }
             #[pyo3(name = "snapshot", signature = (abbrev=true))]
-            fn py_snapshot(&mut self, py: Python<'_>, abbrev: bool) -> PyObject {
-                let value = py.allow_threads(move || self.0.snapshot(abbrev));
+            fn py_snapshot(&mut self, py: Python<'_>, abbrev: bool) -> Py<PyAny> {
+                let value = py.detach(move || self.0.snapshot(abbrev));
                 json_to_pyobject(value)
             }
             #[pyo3(name = "dual_report")]
@@ -242,7 +242,7 @@ macro_rules! bind_trait_to_python {
                 width: Option<String>,
                 height: Option<String>,
             ) {
-                py.allow_threads(move || {
+                py.detach(move || {
                     let mut visualizer = Visualizer::new(Some(String::new()), positions, true).unwrap();
                     visualizer.snapshot("show".to_string(), &self.0).unwrap();
                     visualizer.show_py(None, None, width, height);
@@ -260,7 +260,7 @@ macro_rules! bind_trait_to_python {
                 Ok((args, kwargs).into_pyobject(py)?.unbind())
             }
             #[getter]
-            fn get_config(&self) -> PyObject {
+            fn get_config(&self) -> Py<PyAny> {
                 json_to_pyobject(json!(self.0.config.clone()))
             }
             #[pyo3(name = "get_solver_base")]
@@ -566,9 +566,9 @@ impl SolverSerialUnionFind {
 impl SolverSerialUnionFind {
     #[new]
     #[pyo3(signature = (initializer, config=None))]
-    pub fn new_python(py: Python<'_>, initializer: &SolverInitializer, config: Option<PyObject>) -> Self {
+    pub fn new_python(py: Python<'_>, initializer: &SolverInitializer, config: Option<Py<PyAny>>) -> Self {
         let config = config.map(|x| pyobject_to_json(x)).unwrap_or(json!({}));
-        py.allow_threads(move || Self::new(&Arc::new(initializer.clone()), config))
+        py.detach(move || Self::new(&Arc::new(initializer.clone()), config))
     }
 }
 
@@ -600,9 +600,9 @@ impl SolverSerialSingleHair {
 impl SolverSerialSingleHair {
     #[new]
     #[pyo3(signature = (initializer, config=None))]
-    pub fn new_python(py: Python<'_>, initializer: &SolverInitializer, config: Option<PyObject>) -> Self {
+    pub fn new_python(py: Python<'_>, initializer: &SolverInitializer, config: Option<Py<PyAny>>) -> Self {
         let config = config.map(|x| pyobject_to_json(x)).unwrap_or(json!({}));
-        py.allow_threads(move || Self::new(&Arc::new(initializer.clone()), config))
+        py.detach(move || Self::new(&Arc::new(initializer.clone()), config))
     }
 }
 
@@ -637,9 +637,9 @@ impl SolverSerialJointSingleHair {
 impl SolverSerialJointSingleHair {
     #[new]
     #[pyo3(signature = (initializer, config=None))]
-    pub fn new_python(py: Python<'_>, initializer: &SolverInitializer, config: Option<PyObject>) -> Self {
+    pub fn new_python(py: Python<'_>, initializer: &SolverInitializer, config: Option<Py<PyAny>>) -> Self {
         let config = config.map(pyobject_to_json).unwrap_or(json!({}));
-        py.allow_threads(move || Self::new(&Arc::new(initializer.clone()), config))
+        py.detach(move || Self::new(&Arc::new(initializer.clone()), config))
     }
 }
 
@@ -719,7 +719,7 @@ pub enum SolverEnum {
     SolverErrorPatternLogger(SolverErrorPatternLogger),
 }
 
-#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf", name = "BPSolverBase"))]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf", name = "BPSolverBase", from_py_object))]
 // base of all solvers
 pub struct SolverBase {
     pub inner: SolverEnum,
@@ -895,22 +895,22 @@ impl SolverBase {
 impl SolverBPWrapper {
     #[pyo3(name = "clear")]
     fn py_clear(&mut self, py: Python<'_>) {
-        py.allow_threads(move || self.clear())
+        py.detach(move || self.clear())
     }
     #[pyo3(name = "solve", signature = (syndrome_pattern, visualizer=None))] // in Python, `solve` and `solve_visualizer` is the same because it can take optional parameter
     fn py_solve(&mut self, py: Python<'_>, syndrome_pattern: SyndromePattern, visualizer: Option<&mut Visualizer>) {
-        py.allow_threads(move || self.solve_visualizer(syndrome_pattern, visualizer));
+        py.detach(move || self.solve_visualizer(syndrome_pattern, visualizer));
     }
     #[pyo3(name = "subgraph_range", signature = (visualizer=None))] // in Python, `subgraph_range` and `subgraph_range_visualizer` is the same
     fn py_subgraph_range(&mut self, py: Python<'_>, visualizer: Option<&mut Visualizer>) -> (PySubgraph, PyWeightRange) {
-        let (subgraph, range) = py.allow_threads(move || self.subgraph_range_visualizer(visualizer));
+        let (subgraph, range) = py.detach(move || self.subgraph_range_visualizer(visualizer));
         let mut complete_subgraph = subgraph.into_iter().collect::<Vec<EdgeIndex>>();
         complete_subgraph.sort();
         (complete_subgraph.into(), range.into())
     }
     #[pyo3(name = "subgraph", signature = (visualizer=None))]
     fn py_subgraph(&mut self, py: Python<'_>, visualizer: Option<&mut Visualizer>) -> Subgraph {
-        py.allow_threads(move || self.subgraph_range_visualizer(visualizer).0.into_iter().collect())
+        py.detach(move || self.subgraph_range_visualizer(visualizer).0.into_iter().collect())
     }
     #[pyo3(name = "sum_dual_variables")]
     fn py_sum_dual_variables(&self) -> PyRational {
@@ -924,7 +924,7 @@ impl SolverBPWrapper {
         visualizer: Option<&mut Visualizer>,
         skip_initial_duals: bool,
     ) {
-        py.allow_threads(move || self.solver.load_syndrome(syndrome_pattern, visualizer, skip_initial_duals))
+        py.detach(move || self.solver.load_syndrome(syndrome_pattern, visualizer, skip_initial_duals))
     }
     #[pyo3(name = "get_node", signature = (node_index))]
     pub fn py_get_node(&mut self, node_index: NodeIndex) -> Option<PyDualNodePtr> {
@@ -990,7 +990,7 @@ impl SolverBPWrapper {
     #[pyo3(name = "grow", signature = (length))]
     fn py_grow(&mut self, py: Python<'_>, length: PyRational) {
         let length: Rational = length.into();
-        py.allow_threads(move || {
+        py.detach(move || {
             if let Some(max_valid_grow) = self.solver.dual_module_mut().compute_max_valid_grow() {
                 assert!(
                     length <= max_valid_grow,
@@ -1003,8 +1003,8 @@ impl SolverBPWrapper {
         });
     }
     #[pyo3(name = "snapshot", signature = (abbrev=true))]
-    fn py_snapshot(&mut self, py: Python<'_>, abbrev: bool) -> PyObject {
-        let value = py.allow_threads(move || self.solver.snapshot(abbrev));
+    fn py_snapshot(&mut self, py: Python<'_>, abbrev: bool) -> Py<PyAny> {
+        let value = py.detach(move || self.solver.snapshot(abbrev));
         json_to_pyobject(value)
     }
     #[pyo3(name = "dual_report")]
@@ -1072,7 +1072,7 @@ impl SolverBPWrapper {
         Ok((args, kwargs).into_pyobject(py)?.unbind())
     }
     #[getter]
-    fn get_config(&self) -> PyObject {
+    fn get_config(&self) -> Py<PyAny> {
         json_to_pyobject(json!(self.solver.config().clone()))
     }
     #[pyo3(name = "get_solver_base")]

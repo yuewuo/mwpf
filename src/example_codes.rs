@@ -28,7 +28,7 @@ use std::sync::Arc;
 /// Vertex corresponds to a stabilizer measurement bit
 #[derive(Derivative, Clone)]
 #[derivative(Debug)]
-#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf", get_all, set_all))]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf", get_all, set_all, from_py_object))]
 pub struct CodeVertex {
     /// position helps to visualize
     pub position: VisualizePosition,
@@ -49,7 +49,7 @@ impl CodeVertex {
 /// Edge flips the measurement result of two vertices
 #[derive(Derivative, Clone)]
 #[derivative(Debug)]
-#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf"))]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf", from_py_object))]
 pub struct CodeEdge {
     /// the two vertices incident to this edge; in quantum LDPC codes this should be only a handful of vertices
     pub vertices: Vec<VertexIndex>,
@@ -544,7 +544,7 @@ macro_rules! bind_trait_example_code {
                 self.is_defect(vertex_idx)
             }
             #[pyo3(name = "snapshot", signature = (abbrev=true))]
-            fn trait_snapshot(&mut self, abbrev: bool) -> PyObject {
+            fn trait_snapshot(&mut self, abbrev: bool) -> Py<PyAny> {
                 json_to_pyobject(self.snapshot(abbrev))
             }
         }

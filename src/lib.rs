@@ -80,7 +80,7 @@ pub fn run_cli(parameters: Vec<String>) {
 }
 
 #[cfg(feature = "python_binding")]
-#[pymodule]
+#[pymodule(gil_used = false)]
 fn mwpf(m: &Bound<'_, PyModule>) -> PyResult<()> {
     util::register(m)?;
     visualize::register(m)?;

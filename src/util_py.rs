@@ -9,6 +9,7 @@ use crate::util::*;
 use crate::visualize::*;
 use num_traits::FromPrimitive;
 use pyo3::basic::CompareOp;
+use pyo3::conversion::FromPyObjectOwned;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyFloat, PyInt, PyList, PySet, PyTuple};
 use std::fmt::Debug;
@@ -32,7 +33,7 @@ macro_rules! bind_trait_simple_wrapper {
 
 #[derive(Clone, Hash)]
 #[repr(transparent)]
-#[pyclass(module = "mwpf", name = "Rational")]
+#[pyclass(module = "mwpf", name = "Rational", from_py_object)]
 pub struct PyRational(pub Rational);
 bind_trait_simple_wrapper!(Rational, PyRational);
 
@@ -77,12 +78,12 @@ impl PyRational {
         }
     }
     #[getter]
-    fn numer(&self) -> PyObject {
-        Python::with_gil(|py| self.0.numer().into_pyobject(py).unwrap().to_owned().into())
+    fn numer(&self) -> Py<PyAny> {
+        Python::attach(|py| self.0.numer().into_pyobject(py).unwrap().to_owned().into())
     }
     #[getter]
-    fn denom(&self) -> PyObject {
-        Python::with_gil(|py| self.0.denom().into_pyobject(py).unwrap().to_owned().into())
+    fn denom(&self) -> Py<PyAny> {
+        Python::attach(|py| self.0.denom().into_pyobject(py).unwrap().to_owned().into())
     }
     fn float(&self) -> f64 {
         self.0.to_f64().unwrap()
@@ -163,7 +164,7 @@ impl std::fmt::Debug for PyRational {
 
 #[derive(Clone, PartialEq, Eq)]
 #[repr(transparent)]
-#[pyclass(module = "mwpf", name = "DualNodePtr")]
+#[pyclass(module = "mwpf", name = "DualNodePtr", from_py_object)]
 pub struct PyDualNodePtr(pub DualNodePtr);
 bind_trait_simple_wrapper!(DualNodePtr, PyDualNodePtr);
 
@@ -236,7 +237,7 @@ impl PyDualNodePtr {
 }
 
 #[derive(Clone, Debug)]
-#[pyclass(module = "mwpf", name = "Obstacle")]
+#[pyclass(module = "mwpf", name = "Obstacle", from_py_object)]
 pub enum PyObstacle {
     Conflict { edge_index: EdgeIndex },
     ShrinkToZero { dual_node_ptr: PyDualNodePtr },
@@ -292,24 +293,26 @@ impl PyDualReport {
 }
 
 /// Python code of `[a, b, c]` or `{a, b, c}` or `{}`
-pub fn py_into_set<'py, T: Ord + FromPyObject<'py> + std::hash::Hash>(value: &Bound<'py, PyAny>) -> PyResult<FastIterSet<T>>
+pub fn py_into_set<'py, T: Ord + FromPyObjectOwned<'py> + std::hash::Hash>(
+    value: &Bound<'py, PyAny>,
+) -> PyResult<FastIterSet<T>>
 where
     T: Clone,
     T: Debug,
 {
     let mut result = FastIterSet::<T>::new();
     if value.is_instance_of::<PyList>() {
-        let list: &Bound<PyList> = value.downcast()?;
+        let list: &Bound<PyList> = value.cast()?;
         for element in list.iter() {
-            result.insert(element.extract::<T>()?);
+            result.insert(element.extract::<T>().map_err(Into::into)?);
         }
     } else if value.is_instance_of::<PySet>() {
-        let list: &Bound<PySet> = value.downcast()?;
+        let list: &Bound<PySet> = value.cast()?;
         for element in list.iter() {
-            result.insert(element.extract::<T>()?);
+            result.insert(element.extract::<T>().map_err(Into::into)?);
         }
     } else if value.is_instance_of::<PyDict>() {
-        let dict: &Bound<PyDict> = value.downcast()?;
+        let dict: &Bound<PyDict> = value.cast()?;
         assert!(
             dict.is_empty(),
             "only empty dict is supported; please use set or list instead"
@@ -319,9 +322,9 @@ where
         let result: PyResult<()> = (|| {
             let builtins = PyModule::import(value.py(), "builtins")?;
             let any = builtins.getattr("list")?.call1((value,))?;
-            let any_list: &Bound<PyList> = any.downcast()?;
+            let any_list: &Bound<PyList> = any.cast()?;
             for element in any_list.iter() {
-                result.insert(element.extract::<T>()?);
+                result.insert(element.extract::<T>().map_err(Into::into)?);
             }
             Ok(())
         })();
@@ -337,20 +340,20 @@ where
 }
 
 /// Python code of `[a, b, c]` or `{a, b, c}` or `{}`
-pub fn py_into_vec<'py, T: Ord + FromPyObject<'py>>(value: &Bound<'py, PyAny>) -> PyResult<Vec<T>> {
+pub fn py_into_vec<'py, T: Ord + FromPyObjectOwned<'py>>(value: &Bound<'py, PyAny>) -> PyResult<Vec<T>> {
     let mut result = Vec::new();
     if value.is_instance_of::<PyList>() {
-        let list: &Bound<PyList> = value.downcast()?;
+        let list: &Bound<PyList> = value.cast()?;
         for element in list.iter() {
-            result.push(element.extract::<T>()?);
+            result.push(element.extract::<T>().map_err(Into::into)?);
         }
     } else if value.is_instance_of::<PySet>() {
-        let list: &Bound<PySet> = value.downcast()?;
+        let list: &Bound<PySet> = value.cast()?;
         for element in list.iter() {
-            result.push(element.extract::<T>()?);
+            result.push(element.extract::<T>().map_err(Into::into)?);
         }
     } else if value.is_instance_of::<PyDict>() {
-        let dict: &Bound<PyDict> = value.downcast()?;
+        let dict: &Bound<PyDict> = value.cast()?;
         assert!(
             dict.is_empty(),
             "only empty dict is supported; please use set or list instead"
@@ -360,9 +363,9 @@ pub fn py_into_vec<'py, T: Ord + FromPyObject<'py>>(value: &Bound<'py, PyAny>) -
         let result: PyResult<()> = (|| {
             let builtins = PyModule::import(value.py(), "builtins")?;
             let any = builtins.getattr("list")?.call1((value,))?;
-            let any_list: &Bound<PyList> = any.downcast()?;
+            let any_list: &Bound<PyList> = any.cast()?;
             for element in any_list.iter() {
-                result.push(element.extract::<T>()?);
+                result.push(element.extract::<T>().map_err(Into::into)?);
             }
             Ok(())
         })();
@@ -378,7 +381,7 @@ pub fn py_into_vec<'py, T: Ord + FromPyObject<'py>>(value: &Bound<'py, PyAny>) -
 }
 
 /// Python code of `[(k1, v1), (k2, v2)]` or `{ k1: v1, k2: v2 }` or `dict(k1=v1, k2=v2)`
-pub fn py_into_map<'py, K: Ord + Debug + Clone + FromPyObject<'py>, T: FromPyObject<'py>>(
+pub fn py_into_map<'py, K: Ord + Debug + Clone + FromPyObjectOwned<'py>, T: FromPyObjectOwned<'py>>(
     value: &Bound<'py, PyAny>,
 ) -> PyResult<hashbrown::HashMap<K, T>>
 where
@@ -386,19 +389,19 @@ where
 {
     let mut result = hashbrown::HashMap::<K, T>::new();
     if value.is_instance_of::<PyList>() {
-        let list: &Bound<PyList> = value.downcast()?;
+        let list: &Bound<PyList> = value.cast()?;
         for element in list.iter() {
-            let element: &Bound<PyTuple> = element.downcast()?;
+            let element: &Bound<PyTuple> = element.cast()?;
             assert!(element.len() == 2, "each tuple should contain two elements");
-            let key = element.get_item(0)?.extract::<K>()?;
-            let value = element.get_item(1)?.extract::<T>()?;
+            let key = element.get_item(0)?.extract::<K>().map_err(Into::into)?;
+            let value = element.get_item(1)?.extract::<T>().map_err(Into::into)?;
             assert!(result.insert(key.clone(), value).is_none(), "duplicate key found: {:?}", key);
         }
     } else if value.is_instance_of::<PyDict>() {
-        let dict: &Bound<PyDict> = value.downcast()?;
+        let dict: &Bound<PyDict> = value.cast()?;
         for (key, value) in dict.iter() {
-            let key = key.extract::<K>()?;
-            let value = value.extract::<T>()?;
+            let key = key.extract::<K>().map_err(Into::into)?;
+            let value = value.extract::<T>().map_err(Into::into)?;
             assert!(result.insert(key.clone(), value).is_none(), "duplicate key found: {:?}", key);
         }
     } else {
@@ -406,10 +409,10 @@ where
         let result: PyResult<()> = (|| {
             let builtins = PyModule::import(value.py(), "builtins")?;
             let any = builtins.getattr("dict")?.call1((value,))?;
-            let any_dict: &Bound<PyDict> = any.downcast()?;
+            let any_dict: &Bound<PyDict> = any.cast()?;
             for (key, value) in any_dict.iter() {
-                let key = key.extract::<K>()?;
-                let value = value.extract::<T>()?;
+                let key = key.extract::<K>().map_err(Into::into)?;
+                let value = value.extract::<T>().map_err(Into::into)?;
                 assert!(result.insert(key.clone(), value).is_none(), "duplicate key found: {:?}", key);
             }
             Ok(())
@@ -427,7 +430,7 @@ where
 
 #[derive(Clone, Debug)]
 #[repr(transparent)]
-#[pyclass(module = "mwpf", name = "Subgraph")]
+#[pyclass(module = "mwpf", name = "Subgraph", from_py_object)]
 pub struct PySubgraph(pub Subgraph);
 bind_trait_simple_wrapper!(Subgraph, PySubgraph);
 
@@ -485,7 +488,7 @@ impl PySubgraph {
         self.__repr__()
     }
     #[pyo3(signature = (abbrev=true))]
-    fn snapshot(&mut self, abbrev: bool) -> PyObject {
+    fn snapshot(&mut self, abbrev: bool) -> Py<PyAny> {
         json_to_pyobject(self.0.snapshot(abbrev))
     }
     fn set(&self) -> FastIterSet<EdgeIndex> {
@@ -569,7 +572,7 @@ macro_rules! bind_trait_matrix_basic {
             fn get_rows(&mut self) -> usize {
                 self.0.rows()
             }
-            fn snapshot(&mut self) -> PyObject {
+            fn snapshot(&mut self) -> Py<PyAny> {
                 json_to_pyobject(self.snapshot_json())
             }
             fn show(&mut self) {
@@ -716,7 +719,7 @@ macro_rules! bind_trait_matrix_echelon {
 type EchelonMatrix = Echelon<Tail<Tight<BasicMatrix>>>;
 
 #[derive(Clone)]
-#[pyclass(module = "mwpf", name = "EchelonMatrix")]
+#[pyclass(module = "mwpf", name = "EchelonMatrix", from_py_object)]
 pub struct PyEchelonMatrix(pub EchelonMatrix);
 bind_trait_simple_wrapper!(EchelonMatrix, PyEchelonMatrix);
 bind_trait_matrix_basic!(PyEchelonMatrix);
@@ -786,7 +789,7 @@ type TailMatrix = Tail<Tight<BasicMatrix>>;
 
 /// TailMatrix is a matrix that allows reordering part of the columns to the end.
 #[derive(Clone)]
-#[pyclass(module = "mwpf", name = "TailMatrix")]
+#[pyclass(module = "mwpf", name = "TailMatrix", from_py_object)]
 pub struct PyTailMatrix(pub TailMatrix);
 bind_trait_simple_wrapper!(TailMatrix, PyTailMatrix);
 bind_trait_matrix_basic!(PyTailMatrix);
@@ -851,7 +854,7 @@ type TightMatrix = Tight<BasicMatrix>;
 
 /// TightMatrix is a matrix that hides some of the edges that are not tight while still keeping track of them when doing row operations.
 #[derive(Clone)]
-#[pyclass(module = "mwpf", name = "TightMatrix")]
+#[pyclass(module = "mwpf", name = "TightMatrix", from_py_object)]
 pub struct PyTightMatrix(pub TightMatrix);
 bind_trait_simple_wrapper!(TightMatrix, PyTightMatrix);
 bind_trait_matrix_basic!(PyTightMatrix);
@@ -921,7 +924,7 @@ impl PyTightMatrix {
 
 /// BasicMatrix is a matrix that provides the basic functionality
 #[derive(Clone)]
-#[pyclass(module = "mwpf", name = "BasicMatrix")]
+#[pyclass(module = "mwpf", name = "BasicMatrix", from_py_object)]
 pub struct PyBasicMatrix(pub BasicMatrix);
 bind_trait_simple_wrapper!(BasicMatrix, PyBasicMatrix);
 bind_trait_matrix_basic!(PyBasicMatrix);
@@ -968,7 +971,7 @@ impl PyBasicMatrix {
 }
 
 #[derive(Clone, Debug)]
-#[pyclass(module = "mwpf", name = "WeightRange")]
+#[pyclass(module = "mwpf", name = "WeightRange", from_py_object)]
 pub struct PyWeightRange(pub WeightRange);
 bind_trait_simple_wrapper!(WeightRange, PyWeightRange);
 
@@ -999,7 +1002,7 @@ impl PyWeightRange {
         format!("{:?}", self.0)
     }
     #[pyo3(signature = (abbrev=true))]
-    fn snapshot(&mut self, abbrev: bool) -> PyObject {
+    fn snapshot(&mut self, abbrev: bool) -> Py<PyAny> {
         json_to_pyobject(self.0.snapshot(abbrev))
     }
 }
