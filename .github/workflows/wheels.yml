@@ -87,7 +87,7 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
         run: |
           $features = python -c "import tomllib; from pathlib import Path; config = tomllib.loads(Path('pyproject.toml').read_text()); print(','.join(config['tool']['maturin']['features']))"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          "CIBW_CONFIG_SETTINGS=build-args=--features=$features,pyo3/generate-import-lib" >> "$env:GITHUB_ENV"
+          "CIBW_CONFIG_SETTINGS=build-args='--features=$features,pyo3/generate-import-lib --interpreter=python3.11'" >> "$env:GITHUB_ENV"
 
       - name: Build Wheels
         run: python -m cibuildwheel --output-dir wheelhouse
