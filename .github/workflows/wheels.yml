@@ -18,17 +18,26 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
           - ubuntu
           - macos
           - windows
+          - windows-arm64
         include:
           - os: ubuntu
             platform: linux
           - os: windows
+            platform: windows
+            ls: dir
+          - os: windows-arm64
+            platform: windows
+            runner: windows-latest
+            arch: ARM64
+            python-build: cp311-win_arm64
+            rust-target: aarch64-pc-windows-msvc
             ls: dir
         build-feature:
           - default
           - rational
           - incr
           - fast
-    runs-on: ${{ format('{0}-latest', matrix.os) }}
+    runs-on: ${{ matrix.runner || format('{0}-latest', matrix.os) }}
 
     steps:
       - uses: actions/checkout@v4
@@ -43,14 +52,14 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
         run: python -m pip install -r .github/requirements-dev.txt
 
       - name: Install LLVM and Clang (Windows)
-        if: matrix.os == 'windows'
+        if: matrix.platform == 'windows'
         uses: KyleMayes/install-llvm-action@v1
         with:
           version: "11.0"
 
       - name: Set LIBCLANG_PATH (Windows)
-        if: matrix.os == 'windows'
-        run: echo "LIBCLANG_PATH=${{ env.LLVM_PATH }}/lib" >> "$GITHUB_ENV"
+        if: matrix.platform == 'windows'
+        run: echo "LIBCLANG_PATH=${{ env.LLVM_PATH }}\bin" >> "$env:GITHUB_ENV"
 
       - name: Install Rust
         uses: actions-rs/toolchain@v1
@@ -58,6 +67,7 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
           profile: minimal
           toolchain: stable
           override: true
+          target: ${{ matrix.rust-target }}
 
       - name: Install NodeJs
         uses: actions/setup-node@v4
@@ -72,12 +82,21 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
         if: matrix.build-feature != 'default'
         run: python pyproject-patch.py ${{ matrix.build-feature }} apply
 
+      - name: Configure Windows ARM64 import library generation
+        if: matrix.arch == 'ARM64'
+        run: |
+          $features = python -c "import tomllib; from pathlib import Path; config = tomllib.loads(Path('pyproject.toml').read_text()); print(','.join(config['tool']['maturin']['features']))"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "CIBW_CONFIG_SETTINGS=build-args=--features=$features,pyo3/generate-import-lib" >> "$env:GITHUB_ENV"
+
       - name: Build Wheels
         run: python -m cibuildwheel --output-dir wheelhouse
         env:
-          CIBW_BUILD: "cp38-*"
+          # Windows ARM64 has no CPython 3.8 build; the resulting wheel still uses abi3.
+          CIBW_BUILD: ${{ matrix.python-build || 'cp38-*' }}
           CIBW_SKIP: "*-win32 *_i686" # do not build for 32bit machines, rustc seems to complain about it
           CIBW_PLATFORM: ${{ matrix.platform || matrix.os }} # only build for specific platform
+          CIBW_ARCHS_WINDOWS: ${{ matrix.arch || 'AMD64' }}
           # Keep Rosetta from selecting x86-only HiGHS flags for the ARM64 slice.
           CIBW_ENVIRONMENT_MACOS: >
             PATH="$HOME/.cargo/bin:$PATH" MACOSX_DEPLOYMENT_TARGET=10.12
@@ -85,7 +104,7 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
             ${{ matrix.build-feature == 'fast' && 'RUSTFLAGS="-C target-feature=+aes"' || 'SOME_USELESS_ENV=""' }}
           CIBW_ENVIRONMENT_WINDOWS: >
             PATH="$UserProfile\.cargo\bin;$PATH" SKIP_FRONTEND_BUILD=1
-            ${{ matrix.build-feature == 'fast' && 'RUSTFLAGS="-C target-feature=+aes,+sse2"' || 'SOME_USELESS_ENV=""' }}
+            ${{ matrix.build-feature == 'fast' && (matrix.arch == 'ARM64' && 'RUSTFLAGS="-C target-feature=+aes,+neon"' || 'RUSTFLAGS="-C target-feature=+aes,+sse2"') || 'SOME_USELESS_ENV=""' }}
           CIBW_ENVIRONMENT_LINUX: >
             PATH="$HOME/.cargo/bin:$PATH" LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/rh/llvm-toolset-7.0/root/usr/lib64/ SKIP_FRONTEND_BUILD=1
             ${{ matrix.build-feature == 'fast' && 'RUSTFLAGS="-C target-feature=+aes,+sse2"' || 'SOME_USELESS_ENV=""' }}
@@ -136,7 +155,7 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
         run: Get-ChildItem -Path wheelhouse -Filter *.whl |ForEach-Object { python -m pip install -U $_.FullName }
 
       - name: run Python test
-        if: matrix.os != 'windows'
+        if: matrix.platform != 'windows'
         env:
           RUST_BACKTRACE: 1
         run: pytest tests/python
@@ -213,6 +232,7 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
           - ubuntu
           - macos
           - windows
+          - windows-arm64
         build-feature:
           - default
           - rational
