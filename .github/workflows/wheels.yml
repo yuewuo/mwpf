@@ -87,6 +87,13 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
         run: |
           $version = "${{ matrix.python-abi == 'abi3t' && '3.15' || '3.11' }}"
           "CIBW_CONFIG_SETTINGS=build-args=--interpreter=python$version" >> "$env:GITHUB_ENV"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $installation = & $vswhere -latest -products '*' -property installationPath
+          if ($LASTEXITCODE -ne 0 -or !$installation) { throw "Visual Studio installation not found" }
+          $runtime = Get-ChildItem "$installation\VC\Redist\MSVC\*\arm64\Microsoft.VC*.CRT" -Directory |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          if (!$runtime -or !(Test-Path "$($runtime.FullName)\msvcp140.dll")) { throw "ARM64 VC++ runtime not found" }
+          "CIBW_REPAIR_WHEEL_COMMAND_WINDOWS=delvewheel repair --add-path `"$($runtime.FullName)`" -w {dest_dir} -v {wheel}" >> "$env:GITHUB_ENV"
 
       - name: Build Wheels
         run: python -m cibuildwheel --output-dir wheelhouse
@@ -98,6 +105,8 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
           CIBW_TEST_REQUIRES: "pytest>=8.4,<10"
           CIBW_TEST_COMMAND: python -m pytest "{project}/tests/python/test_wheel_compatibility.py" -v -W default::DeprecationWarning
           CIBW_TEST_SKIP: "*-win_arm64"
+          # abi3audit does not yet recognize PEP 803/793 exports (pypa/abi3audit#215).
+          CIBW_AUDIT_COMMAND: ${{ matrix.python-abi == 'abi3' && 'abi3audit --strict --report {abi3_wheel}' || '' }}
           # Keep Rosetta from selecting x86-only HiGHS flags for the ARM64 slice.
           CIBW_ENVIRONMENT_MACOS: >
             PATH="$HOME/.cargo/bin:$PATH" MACOSX_DEPLOYMENT_TARGET=10.12

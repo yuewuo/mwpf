@@ -31,6 +31,8 @@ Python, and are tested on both Python 3.15 builds without enabling the GIL.
 Windows ARM64 wheels are cross-compiled on x64 runners and cannot be tested there.
 Optional Stim integration also depends on the Python and free-threading support
 provided by its third-party dependencies.
+Strict symbol auditing covers `abi3` wheels. `abi3t` symbol auditing is disabled
+until [abi3audit supports Python 3.15 exports](https://github.com/pypa/abi3audit/issues/215).
 
 MWPF now supports [stim](https://github.com/quantumlib/Stim) simulation. You may experience high logical error rate due to some [adaptor bugs](https://github.com/quantumlib/Stim/pull/873) prior to [sinter](https://pypi.org/project/sinter) version 1.15, so instead of using the `mw_parity_factor` decoder in `sinter`, you may want to manually import the latest MWPF decoder from the `mwpf>=0.2.8` package.
 
