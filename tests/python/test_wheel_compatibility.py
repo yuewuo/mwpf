@@ -17,7 +17,7 @@ def decode(_):
     initializer = pickle.loads(pickle.dumps(initializer))
     solver = mwpf.Solver(initializer)
     solver.solve(mwpf.SyndromePattern([1, 2, 4]))
-    assert solver.subgraph() == [3, 5]
+    assert sorted(solver.subgraph()) == [3, 5]
     _, bounds = solver.subgraph_range()
     assert bounds.lower.float() == 160
     assert bounds.upper.float() == 160
