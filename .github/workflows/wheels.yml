@@ -234,15 +234,17 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
   python_tests:
     name: Run Python tests on ${{ matrix.python-version }}
     needs: build_wheels
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - python-version: "3.9"
             python-abi: abi3
+            os: ubuntu-24.04
           - python-version: "3.15"
             python-abi: abi3t
+            os: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
