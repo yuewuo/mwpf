@@ -118,3 +118,31 @@ make uninstall-py
 ```
 
 This is preferred over installing from pypi because it can fully utilize the optimization with `target-cpu=native`.
+
+## Releasing to PyPI
+
+The [wheel workflow](.github/workflows/wheels.yml) publishes release-tag builds
+directly to PyPI only after all wheel, Rust, and Python test jobs succeed.
+Branch pushes build and test packages but do not publish them.
+
+Before creating a release tag, configure a GitHub Actions
+[Trusted Publisher](https://docs.pypi.org/trusted-publishers/adding-a-publisher/)
+on each PyPI project: `mwpf`, `mwpf-rational`, `mwpf-incr`, and `mwpf-fast`.
+Use these values for all four projects:
+
+| Setting | Value |
+| --- | --- |
+| Repository owner | `yuewuo` |
+| Repository name | `mwpf` |
+| Workflow filename | `wheels.yml` |
+| Environment name | `pypi` |
+
+The publish job uses GitHub OIDC instead of a `PYPI_API_TOKEN` secret and
+explicitly enables PyPI attestations for every uploaded wheel and source
+distribution. Once the publishers are configured, push a release tag matching
+the package version, for example `v0.2.17`.
+
+[Provenance attestations](https://docs.pypi.org/attestations/producing-attestations/)
+are optional metadata, not a requirement for a valid wheel. They are attached
+when a file is uploaded; enabling them does not retroactively add provenance
+to existing releases or files skipped by `skip-existing`.

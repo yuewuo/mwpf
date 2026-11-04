@@ -22,19 +22,6 @@ Please wait for our paper for more discussion of the speed v.s. accuracy.
 pip install -U mwpf
 ```
 
-The wheel CI builds Windows x64 and ARM64 wheels for all package variants
-(`mwpf`, `mwpf-rational`, `mwpf-incr`, and `mwpf-fast`).
-Python 3.9 and newer are supported; building from source requires Rust 1.85 or newer.
-The CI builds `abi3` wheels for conventional CPython and separate `abi3t` wheels
-for Python 3.15 and newer. The latter work with both conventional and free-threaded
-Python. CI runs the full integration suite on Python 3.9 and 3.15, and checks
-concurrent hypergraph decoding with the GIL disabled on free-threaded Python 3.15.
-Windows ARM64 wheels are cross-compiled on x64 runners and cannot be tested there.
-Optional Stim integration also depends on the Python and free-threading support
-provided by its third-party dependencies.
-Strict symbol auditing covers `abi3` wheels. `abi3t` symbol auditing is disabled
-until [abi3audit supports Python 3.15 exports](https://github.com/pypa/abi3audit/issues/215).
-
 MWPF now supports [stim](https://github.com/quantumlib/Stim) simulation. You may experience high logical error rate due to some [adaptor bugs](https://github.com/quantumlib/Stim/pull/873) prior to [sinter](https://pypi.org/project/sinter) version 1.15, so instead of using the `mw_parity_factor` decoder in `sinter`, you may want to manually import the latest MWPF decoder from the `mwpf>=0.2.8` package.
 
 ```sh
@@ -184,34 +171,6 @@ For triangle color code with X errors, here shows physical error rates 1%, 2% an
 For circuit-level surface code, here shows physical error rate 0.03%, 0.1% and 0.3% (left to right).
 
 [<img src="https://raw.githubusercontent.com/yuewuo/conference-talk-2024-APS-march-meeting/main/video_maker/circuit_level_example.gif" alt="Circuit-level Surface Code Example (click for YouTube video)" align="center" loop=infinite>](https://youtu.be/ki9fHiA4Gyo)
-
-## Releasing to PyPI
-
-The [wheel workflow](.github/workflows/wheels.yml) publishes release-tag builds
-directly to PyPI only after all wheel, Rust, and Python test jobs succeed.
-Branch pushes build and test packages but do not publish them.
-
-Before creating a release tag, configure a GitHub Actions
-[Trusted Publisher](https://docs.pypi.org/trusted-publishers/adding-a-publisher/)
-on each PyPI project: `mwpf`, `mwpf-rational`, `mwpf-incr`, and `mwpf-fast`.
-Use these values for all four projects:
-
-| Setting | Value |
-| --- | --- |
-| Repository owner | `yuewuo` |
-| Repository name | `mwpf` |
-| Workflow filename | `wheels.yml` |
-| Environment name | `pypi` |
-
-The publish job uses GitHub OIDC instead of a `PYPI_API_TOKEN` secret and
-explicitly enables PyPI attestations for every uploaded wheel and source
-distribution. Once the publishers are configured, push a release tag matching
-the package version, for example `v0.2.17`.
-
-[Provenance attestations](https://docs.pypi.org/attestations/producing-attestations/)
-are optional metadata, not a requirement for a valid wheel. They are attached
-when a file is uploaded; enabling them does not retroactively add provenance
-to existing releases or files skipped by `skip-existing`.
 
 ## Reference
 
