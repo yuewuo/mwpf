@@ -312,4 +312,4 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
           skip-existing: true
           verbose: true
           print-hash: true
-          password: ${{ secrets.PYPI_API_TOKEN }}
+          attestations: true
