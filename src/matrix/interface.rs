@@ -263,7 +263,7 @@ impl EchelonInfo {
 
 #[derive(Clone, Copy, Derivative, PartialEq, Eq)]
 #[derivative(Default(new = "true"))]
-#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf", get_all, set_all))]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf", get_all, set_all, from_py_object))]
 pub struct ColumnInfo {
     pub row: RowIndex,
 }
@@ -311,7 +311,7 @@ impl std::fmt::Debug for ColumnInfo {
 
 #[derive(Clone, Copy, Derivative, PartialEq, Eq)]
 #[derivative(Default(new = "true"))]
-#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf", get_all, set_all))]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf", get_all, set_all, from_py_object))]
 pub struct RowInfo {
     pub column: ColumnIndex,
 }

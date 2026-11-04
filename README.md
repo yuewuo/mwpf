@@ -22,6 +22,8 @@ Please wait for our paper for more discussion of the speed v.s. accuracy.
 pip install -U mwpf
 ```
 
+Python 3.9 and newer are supported, including free-threaded Python 3.14 and 3.15+.
+
 MWPF now supports [stim](https://github.com/quantumlib/Stim) simulation. You may experience high logical error rate due to some [adaptor bugs](https://github.com/quantumlib/Stim/pull/873) prior to [sinter](https://pypi.org/project/sinter) version 1.15, so instead of using the `mw_parity_factor` decoder in `sinter`, you may want to manually import the latest MWPF decoder from the `mwpf>=0.2.8` package.
 
 ```sh
@@ -183,4 +185,3 @@ For circuit-level surface code, here shows physical error rate 0.03%, 0.1% and 0
 [4] Wu, Yue, and Lin Zhong. "Fusion Blossom: Fast MWPM Decoders for QEC." arXiv preprint arXiv:2305.08307 (2023).
 
 [5] Rothvoß, Thomas. "The matching polytope has exponential extension complexity." *Journal of the ACM (JACM)* 64.6 (2017): 1-19.
-

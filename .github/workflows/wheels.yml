@@ -10,7 +10,7 @@ on:
 
 jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.github/workflows/ci.yml
   build_wheels:
-    name: Build wheels on ${{ matrix.os }} (${{ matrix.build-feature }})
+    name: Build wheels on ${{ matrix.os }} (${{ matrix.build-feature }}, ${{ matrix.python-abi }})
     strategy:
       fail-fast: false
       matrix:
@@ -18,17 +18,32 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
           - ubuntu
           - macos
           - windows
+          - windows-arm64
+        python-abi:
+          - abi3
+          - cp314t
+          - abi3t
         include:
           - os: ubuntu
             platform: linux
           - os: windows
+            platform: windows
+            ls: dir
+          - os: windows-arm64
+            platform: windows
+            runner: windows-latest
+            arch: ARM64
+            python-build: cp311-win_arm64
+            rust-target: aarch64-pc-windows-msvc
             ls: dir
         build-feature:
           - default
           - rational
           - incr
           - fast
-    runs-on: ${{ format('{0}-latest', matrix.os) }}
+    runs-on: ${{ matrix.runner || format('{0}-latest', matrix.os) }}
+    env:
+      PACKAGE_NAME: ${{ matrix.build-feature == 'default' && 'mwpf' || format('mwpf_{0}', matrix.build-feature) }}
 
     steps:
       - uses: actions/checkout@v4
@@ -43,21 +58,19 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
         run: python -m pip install -r .github/requirements-dev.txt
 
       - name: Install LLVM and Clang (Windows)
-        if: matrix.os == 'windows'
+        if: matrix.platform == 'windows'
         uses: KyleMayes/install-llvm-action@v1
         with:
           version: "11.0"
 
       - name: Set LIBCLANG_PATH (Windows)
-        if: matrix.os == 'windows'
-        run: echo "LIBCLANG_PATH=${{ env.LLVM_PATH }}/lib" >> "$GITHUB_ENV"
+        if: matrix.platform == 'windows'
+        run: echo "LIBCLANG_PATH=${{ env.LLVM_PATH }}\bin" >> "$env:GITHUB_ENV"
 
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
+          targets: ${{ matrix.rust-target }}
 
       - name: Install NodeJs
         uses: actions/setup-node@v4
@@ -72,12 +85,31 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
         if: matrix.build-feature != 'default'
         run: python pyproject-patch.py ${{ matrix.build-feature }} apply
 
+      - name: Configure Windows ARM64 target interpreter
+        if: matrix.arch == 'ARM64'
+        run: |
+          $version = "${{ matrix.python-abi == 'abi3t' && '3.15' || matrix.python-abi == 'cp314t' && '3.14t' || '3.11' }}"
+          "CIBW_CONFIG_SETTINGS=build-args=--interpreter=python$version" >> "$env:GITHUB_ENV"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $installation = & $vswhere -latest -products '*' -property installationPath
+          if ($LASTEXITCODE -ne 0 -or !$installation) { throw "Visual Studio installation not found" }
+          $runtime = Get-ChildItem "$installation\VC\Redist\MSVC\*\arm64\Microsoft.VC*.CRT" -Directory |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          if (!$runtime -or !(Test-Path "$($runtime.FullName)\msvcp140.dll")) { throw "ARM64 VC++ runtime not found" }
+          "CIBW_REPAIR_WHEEL_COMMAND_WINDOWS=delvewheel repair --add-path `"$($runtime.FullName)`" -w {dest_dir} -v {wheel}" >> "$env:GITHUB_ENV"
+
       - name: Build Wheels
         run: python -m cibuildwheel --output-dir wheelhouse
         env:
-          CIBW_BUILD: "cp38-*"
+          CIBW_BUILD: ${{ matrix.python-abi == 'abi3t' && 'cp315-*' || matrix.python-abi == 'cp314t' && 'cp314t-*' || matrix.python-build || 'cp39-*' }}
           CIBW_SKIP: "*-win32 *_i686" # do not build for 32bit machines, rustc seems to complain about it
           CIBW_PLATFORM: ${{ matrix.platform || matrix.os }} # only build for specific platform
+          CIBW_ARCHS_WINDOWS: ${{ matrix.arch || 'AMD64' }}
+          CIBW_TEST_REQUIRES: "pytest>=8.4,<10"
+          CIBW_TEST_COMMAND: python -m pytest "{project}/tests/python/test_wheel_compatibility.py" "{project}/tests/python/test_highs.py" -v -W default::DeprecationWarning
+          CIBW_TEST_SKIP: "*-win_arm64"
+          # cp314t is version-specific; abi3audit also lacks ABI3t export support (pypa/abi3audit#215).
+          CIBW_AUDIT_COMMAND: ${{ matrix.python-abi == 'abi3' && 'abi3audit --strict --report {abi3_wheel}' || '' }}
           # Keep Rosetta from selecting x86-only HiGHS flags for the ARM64 slice.
           CIBW_ENVIRONMENT_MACOS: >
             PATH="$HOME/.cargo/bin:$PATH" MACOSX_DEPLOYMENT_TARGET=10.12
@@ -85,11 +117,11 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
             ${{ matrix.build-feature == 'fast' && 'RUSTFLAGS="-C target-feature=+aes"' || 'SOME_USELESS_ENV=""' }}
           CIBW_ENVIRONMENT_WINDOWS: >
             PATH="$UserProfile\.cargo\bin;$PATH" SKIP_FRONTEND_BUILD=1
-            ${{ matrix.build-feature == 'fast' && 'RUSTFLAGS="-C target-feature=+aes,+sse2"' || 'SOME_USELESS_ENV=""' }}
+            ${{ matrix.build-feature == 'fast' && (matrix.arch == 'ARM64' && 'RUSTFLAGS="-C target-feature=+aes,+neon"' || 'RUSTFLAGS="-C target-feature=+aes,+sse2"') || 'SOME_USELESS_ENV=""' }}
           CIBW_ENVIRONMENT_LINUX: >
-            PATH="$HOME/.cargo/bin:$PATH" LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/rh/llvm-toolset-7.0/root/usr/lib64/ SKIP_FRONTEND_BUILD=1
+            PATH="$HOME/.cargo/bin:$PATH" LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/mwpf-libclang/clang/native SKIP_FRONTEND_BUILD=1
             ${{ matrix.build-feature == 'fast' && 'RUSTFLAGS="-C target-feature=+aes,+sse2"' || 'SOME_USELESS_ENV=""' }}
-          CIBW_MANYLINUX_X86_64_IMAGE: "manylinux2014"
+          CIBW_MANYLINUX_X86_64_IMAGE: ${{ matrix.python-abi != 'abi3' && 'manylinux_2_28' || 'manylinux2014' }}
           CIBW_MUSLLINUX_X86_64_IMAGE: "musllinux_1_2"
           # Yue 2022.10.17: build on aarch64 failed due to strange `cargo metadata` exited with an error:     Updating crates.io index
           CIBW_ARCHS_LINUX: x86_64 # aarch64 requires QEMU, ~ 40min for each manylinux and musllinux...
@@ -107,8 +139,10 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
           # manylinux2014 uses centOS 7 (yum install)
           # musllinux_1_2 uses Alpine Linux 3.19 (apk add)
           CIBW_BEFORE_BUILD_LINUX: >
-            if command -v apt > /dev/null; then apt install -y clang; elif command -v yum > /dev/null;
-              then yum install -y llvm-toolset-7.0;
+            if command -v apt > /dev/null; then apt install -y clang;
+            elif command -v dnf > /dev/null; then dnf install -y clang;
+            elif command -v yum > /dev/null; then
+              /opt/python/cp39-cp39/bin/python -m pip install --target /opt/mwpf-libclang libclang==18.1.1;
             elif command -v apk > /dev/null;
               then apk add clang17-libclang;
             fi &&
@@ -123,31 +157,38 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
       - name: twine check
         run: twine check wheelhouse/*
 
-      - name: install wheel for testing (Ubuntu)
-        if: matrix.os == 'ubuntu'
-        run: python -m pip install -U wheelhouse/*.manylinux2014_x86_64.whl
-
-      - name: install wheel for testing (macOS)
-        if: matrix.os == 'macos'
-        run: python -m pip install -U wheelhouse/*.whl
-
-      - name: install wheel for testing (Windows)
-        if: matrix.os == 'windows'
-        run: Get-ChildItem -Path wheelhouse -Filter *.whl |ForEach-Object { python -m pip install -U $_.FullName }
+      - name: Install compatible wheel for host testing
+        if: matrix.python-abi == 'abi3' && matrix.arch != 'ARM64'
+        shell: bash
+        run: python -m pip install --no-index --no-deps --force-reinstall --find-links=wheelhouse "$PACKAGE_NAME"
 
       - name: run Python test
-        if: matrix.os != 'windows'
+        if: matrix.platform != 'windows' && matrix.python-abi == 'abi3'
         env:
           RUST_BACKTRACE: 1
         run: pytest tests/python
 
+      - name: Install free-threaded Python for testing
+        if: matrix.python-abi != 'abi3' && matrix.arch != 'ARM64'
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-abi == 'cp314t' && '3.14t' || '3.15t' }}
+
+      - name: Test wheel on free-threaded Python
+        if: matrix.python-abi != 'abi3' && matrix.arch != 'ARM64'
+        shell: bash
+        run: |
+          python -m pip install "pytest>=8.4,<10"
+          python -m pip install --no-index --no-deps --find-links=wheelhouse "$PACKAGE_NAME"
+          python -m pytest tests/python/test_wheel_compatibility.py tests/python/test_highs.py -v -W default::DeprecationWarning
+
       - name: build source distribution (ubuntu only)
-        if: matrix.os == 'ubuntu'
+        if: matrix.os == 'ubuntu' && matrix.python-abi == 'abi3'
         run: maturin sdist --out wheelhouse/
 
       - uses: actions/upload-artifact@v4
         with:
-          name: binary-${{ matrix.os }}-${{ matrix.build-feature }}
+          name: binary-${{ matrix.os }}-${{ matrix.build-feature }}-${{ matrix.python-abi }}
           path: wheelhouse/*
 
   rust_tests:
@@ -155,7 +196,7 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
     strategy:
       fail-fast: false
       matrix:
-        toolchain: ["1.82", "1.95.0", "stable"]
+        toolchain: ["1.85", "1.95.0", "stable"]
         os:
           - ubuntu
           - macos
@@ -173,14 +214,12 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
 
       - name: Set LIBCLANG_PATH (Windows)
         if: matrix.os == 'windows'
-        run: echo "LIBCLANG_PATH=${{ env.LLVM_PATH }}/lib" >> "$GITHUB_ENV"
+        run: echo "LIBCLANG_PATH=${{ env.LLVM_PATH }}\bin" >> "$env:GITHUB_ENV"
 
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@master
         with:
-          profile: minimal
           toolchain: ${{ matrix.toolchain }}
-          override: true
 
       - name: run Rust test
         run: make ci_rust_test
@@ -188,10 +227,124 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
           SKIP_FRONTEND_BUILD: "1"
 
       - name: Verify crates.io package without publishing
-        if: matrix.os == 'ubuntu' && matrix.toolchain != '1.82'
+        if: matrix.os == 'ubuntu' && matrix.toolchain != '1.85'
         run: cargo publish --dry-run --locked
         env:
           SKIP_FRONTEND_BUILD: "1"
+
+  python_tests:
+    name: Run Python tests on ${{ matrix.python-version }}
+    needs: build_wheels
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python-version: "3.9"
+            python-abi: abi3
+            os: ubuntu-24.04
+          - python-version: "3.15"
+            python-abi: abi3t
+            os: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: binary-ubuntu-default-${{ matrix.python-abi }}
+          path: wheelhouse/
+
+      - name: Install wheel and integration test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --no-index --no-deps --find-links=wheelhouse mwpf
+          python -m pip install "mwpf[stim]" "pytest>=8.4,<10" "fusion_blossom~=0.2.13"
+
+      - name: Run full Python test suite
+        env:
+          RUST_BACKTRACE: "1"
+        run: python -m pytest tests/python -v -W default::DeprecationWarning
+
+  publish-to-crates-io:
+    name: Publish Rust crate to crates.io
+    if: startsWith(github.ref, 'refs/tags/')
+    needs:
+      - build_wheels
+      - rust_tests
+      - python_tests
+    runs-on: ubuntu-latest
+    environment:
+      name: crates-io
+      url: https://crates.io/crates/mwpf
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      SKIP_FRONTEND_BUILD: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Prepare and verify Rust package
+        # Unlike publish --dry-run, package retains the verified archive in target/package.
+        run: cargo package --package mwpf --locked
+
+      - name: Check whether this crate is already published
+        id: crate
+        shell: bash
+        run: |
+          metadata="$(cargo metadata --locked --no-deps --format-version 1)"
+          version="$(jq -er '.packages[] | select(.name == "mwpf") | .version' <<< "$metadata")"
+          target_dir="$(jq -er '.target_directory' <<< "$metadata")"
+          archive="$target_dir/package/mwpf-$version.crate"
+          if [ ! -f "$archive" ]; then
+            echo "::error::Verified crate archive not found: $archive"
+            exit 1
+          fi
+          response="$RUNNER_TEMP/crates-io-version.json"
+          status="$(curl --silent --show-error --location --retry 3 --max-time 60 \
+            --user-agent 'mwpf-release (https://github.com/yuewuo/mwpf)' \
+            --output "$response" --write-out '%{http_code}' \
+            "https://crates.io/api/v1/crates/mwpf/$version")"
+          case "$status" in
+            404)
+              echo "publish=true" >> "$GITHUB_OUTPUT"
+              ;;
+            200)
+              checksum="$(jq -er '.version.checksum | select(type == "string" and test("^[0-9a-f]{64}$"))' "$response")" || {
+                echo "::error::crates.io returned invalid version checksum metadata"
+                exit 1
+              }
+              actual="$(sha256sum "$archive" | cut -d ' ' -f 1)"
+              if [ "$checksum" != "$actual" ]; then
+                echo "::error::mwpf $version is already published with a different archive"
+                exit 1
+              fi
+              echo "mwpf $version is already published with the same checksum; skipping upload"
+              echo "publish=false" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "::error::crates.io version lookup failed with HTTP $status"
+              exit 1
+              ;;
+          esac
+
+      - name: Authenticate to crates.io
+        if: steps.crate.outputs.publish == 'true'
+        id: auth
+        uses: rust-lang/crates-io-auth-action@v1
+
+      - name: Publish Rust crate
+        if: steps.crate.outputs.publish == 'true'
+        run: cargo publish --package mwpf --locked
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
 
   publish-to-pypi:
     name: >-
@@ -200,6 +353,7 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
     needs:
       - build_wheels
       - rust_tests
+      - python_tests
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -213,6 +367,11 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
           - ubuntu
           - macos
           - windows
+          - windows-arm64
+        python-abi:
+          - abi3
+          - cp314t
+          - abi3t
         build-feature:
           - default
           - rational
@@ -223,7 +382,7 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
       - name: Download all the dists
         uses: actions/download-artifact@v4
         with:
-          name: binary-${{ matrix.os }}-${{ matrix.build-feature }}
+          name: binary-${{ matrix.os }}-${{ matrix.build-feature }}-${{ matrix.python-abi }}
           path: wheelhouse/
       - name: Publish distribution 📦 to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
@@ -232,4 +391,4 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
           skip-existing: true
           verbose: true
           print-hash: true
-          password: ${{ secrets.PYPI_API_TOKEN }}
+          attestations: true

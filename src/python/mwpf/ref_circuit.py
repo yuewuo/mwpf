@@ -30,7 +30,16 @@ print(circuit_2)  # print the circuit in relative indices
 
 import stim
 from dataclasses import dataclass, field
-from typing import Iterator, Iterable, TypeAlias, Collection, Protocol, Sequence, Any
+from typing import (
+    Iterator,
+    Iterable,
+    Collection,
+    Protocol,
+    Sequence,
+    Any,
+    Optional,
+    Union,
+)
 import functools
 import numpy as np
 from functools import reduce
@@ -65,7 +74,7 @@ class RefRec:
 @dataclass(frozen=True)
 class RefInstruction:
     name: str
-    targets: tuple[stim.GateTarget | RefRec, ...] = ()
+    targets: tuple[Union[stim.GateTarget, RefRec], ...] = ()
     gate_args: tuple[float, ...] = ()
     tag: str = ""
     recs: FrozenList[RefRec] = field(default_factory=FrozenList)
@@ -85,7 +94,7 @@ class RefInstruction:
 
     @staticmethod
     def new_heralded_erase(
-        targets: tuple[stim.GateTarget | RefRec, ...], p: float
+        targets: tuple[Union[stim.GateTarget, RefRec], ...], p: float
     ) -> "RefInstruction":
         instruction = RefInstruction(
             name="HERALDED_ERASE",
@@ -105,7 +114,7 @@ class RefInstruction:
 
     @staticmethod
     def new_heralded_pauli_channel_1(
-        targets: tuple[stim.GateTarget | RefRec, ...],
+        targets: tuple[Union[stim.GateTarget, RefRec], ...],
         pI: float = 0,
         pX: float = 0,
         pY: float = 0,
@@ -128,7 +137,7 @@ class RefInstruction:
         return instruction
 
     @staticmethod
-    def new_detector(targets: tuple[stim.GateTarget | RefRec, ...]) -> "RefInstruction":
+    def new_detector(targets: tuple[Union[stim.GateTarget, RefRec], ...]) -> "RefInstruction":
         for target in targets:
             assert isinstance(target, RefRec)
         return RefInstruction(
@@ -137,7 +146,7 @@ class RefInstruction:
         )
 
 
-RefDetector: TypeAlias = RefInstruction
+RefDetector = RefInstruction
 
 
 @dataclass(frozen=True)
@@ -149,7 +158,7 @@ class RefCircuit:
 
     @staticmethod
     def of(
-        circuit: stim.Circuit | Iterable[RefInstruction] | None = None,
+        circuit: Optional[Union[stim.Circuit, Iterable[RefInstruction]]] = None,
     ) -> "RefCircuit":
         if circuit is None:
             return RefCircuit(instructions=tuple())
@@ -159,7 +168,7 @@ class RefCircuit:
         recs: list[RefRec] = []
         for instruction in circuit.flattened():
             # rewrite the gate target to absolute measurement indices
-            ref_targets: list[stim.GateTarget | RefRec] = []
+            ref_targets: list[Union[stim.GateTarget, RefRec]] = []
             for target in instruction.targets_copy():
                 if target.is_measurement_record_target:
                     ref_targets.append(recs[target.value])
@@ -321,7 +330,7 @@ class RefCircuit:
             circuit.append(stim_instruction)
         return circuit
 
-    def __getitem__(self, index_or_slice: object) -> "RefInstruction | RefCircuit":
+    def __getitem__(self, index_or_slice: object) -> "Union[RefInstruction, RefCircuit]":
         if isinstance(index_or_slice, int):
             return self.instructions[index_or_slice]
         elif isinstance(index_or_slice, slice):
@@ -329,7 +338,7 @@ class RefCircuit:
         else:
             raise TypeError("Invalid key type")
 
-    def __add__(self, other: "RefCircuit | RefInstruction") -> "RefCircuit":
+    def __add__(self, other: "Union[RefCircuit, RefInstruction]") -> "RefCircuit":
         if isinstance(other, RefInstruction):
             return RefCircuit.of([*self.instructions, other])
         elif isinstance(other, RefCircuit):
@@ -337,7 +346,7 @@ class RefCircuit:
         else:
             raise NotImplemented()
 
-    def __radd__(self, other: "RefCircuit | RefInstruction") -> "RefCircuit":
+    def __radd__(self, other: "Union[RefCircuit, RefInstruction]") -> "RefCircuit":
         if isinstance(other, RefInstruction):
             return RefCircuit.of([other, *self.instructions])
         elif isinstance(other, RefCircuit):
@@ -481,7 +490,7 @@ NOISE_CHANNEL_INSTRUCTION_NAMES: frozenset[str] = frozenset(
 
 
 def is_noise_channel_instruction(
-    instruction: RefInstruction | stim.CircuitInstruction,
+    instruction: Union[RefInstruction, stim.CircuitInstruction],
 ) -> bool:
     name: str = instruction.name
     if name in NOISE_CHANNEL_INSTRUCTION_NAMES:
@@ -496,7 +505,7 @@ def is_noise_channel_instruction(
 class RefDemInstruction:
     type: str
     args: tuple[float, ...] = ()
-    targets: tuple[int | stim.DemTarget | RefDetector, ...] = ()
+    targets: tuple[Union[int, stim.DemTarget, RefDetector], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -506,8 +515,8 @@ class RefDetectorErrorModel:
 
     @staticmethod
     def of(
-        ref_circuit: RefCircuit | None = None,
-        dem: stim.DetectorErrorModel | None = None,
+        ref_circuit: Optional[RefCircuit] = None,
+        dem: Optional[stim.DetectorErrorModel] = None,
     ) -> "RefDetectorErrorModel":
         if dem is None:
             assert ref_circuit is not None, "circuit and dem cannot be both None"
@@ -529,7 +538,7 @@ class RefDetectorErrorModel:
             ref_circuit = RefCircuit.of(circuit)
         instructions: list[RefDemInstruction] = []
         for instruction in dem.flattened():
-            ref_targets: list[int | stim.DemTarget | RefDetector] = []
+            ref_targets: list[Union[int, stim.DemTarget, RefDetector]] = []
             for target in instruction.targets_copy():
                 if target.is_relative_detector_id():
                     ref_targets.append(ref_circuit.detectors[target.val])
@@ -546,7 +555,7 @@ class RefDetectorErrorModel:
             instructions=tuple(instructions), ref_circuit=ref_circuit
         )
 
-    def dem(self, ref_circuit: RefCircuit | None = None) -> stim.DetectorErrorModel:
+    def dem(self, ref_circuit: Optional[RefCircuit] = None) -> stim.DetectorErrorModel:
         if ref_circuit is None:
             ref_circuit = self.ref_circuit
         dem = stim.DetectorErrorModel()

@@ -29,7 +29,7 @@ macro_rules! bind_trait_mwpf_visualizer {
         impl $struct_name {
             #[pyo3(name = "snapshot")]
             #[args(abbrev = "true")]
-            fn trait_snapshot(&self, abbrev: bool) -> PyObject {
+            fn trait_snapshot(&self, abbrev: bool) -> Py<PyAny> {
                 json_to_pyobject(self.snapshot(abbrev))
             }
         }
@@ -39,7 +39,7 @@ macro_rules! bind_trait_mwpf_visualizer {
 pub use bind_trait_mwpf_visualizer;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf", get_all, set_all))]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf", get_all, set_all, from_py_object))]
 pub struct VisualizePosition {
     /// vertical axis, -i is up, +i is down (left-up corner is smallest i,j)
     pub i: f64,
@@ -494,17 +494,17 @@ impl Visualizer {
     #[pyo3(name = "snapshot", signature=(name, object, *py_args))]
     pub fn snapshot_py(&mut self, name: String, object: &Bound<PyAny>, py_args: &Bound<PyTuple>) -> PyResult<()> {
         let mut values = Vec::<serde_json::Value>::with_capacity(py_args.len() + 1);
-        values.push(pyobject_to_json(object.call_method0("snapshot")?.extract::<PyObject>()?));
+        values.push(pyobject_to_json(object.call_method0("snapshot")?.extract::<Py<PyAny>>()?));
         for i in 0..py_args.len() {
             let object_arg = py_args.get_item(i)?;
-            values.push(pyobject_to_json(object_arg.call_method0("snapshot")?.extract::<PyObject>()?));
+            values.push(pyobject_to_json(object_arg.call_method0("snapshot")?.extract::<Py<PyAny>>()?));
         }
         self.snapshot_combined_value(name, values)?;
         Ok(())
     }
 
     #[pyo3(name = "snapshot_value")]
-    pub fn snapshot_value_py(&mut self, name: String, value_py: PyObject) -> std::io::Result<()> {
+    pub fn snapshot_value_py(&mut self, name: String, value_py: Py<PyAny>) -> std::io::Result<()> {
         let value = pyobject_to_json(value_py);
         self.snapshot_value(name, value)
     }
@@ -512,7 +512,7 @@ impl Visualizer {
     #[pyo3(name = "show", signature = (override_config = None, *, snapshot_index=None, width=None, height=None))]
     pub fn show_py(
         &mut self,
-        override_config: Option<PyObject>,
+        override_config: Option<Py<PyAny>>,
         snapshot_index: Option<usize>,
         width: Option<String>,
         height: Option<String>,
@@ -532,7 +532,7 @@ impl Visualizer {
     }
 
     #[pyo3(name = "get_visualizer_data")]
-    pub fn py_get_visualizer_data(&mut self) -> PyObject {
+    pub fn py_get_visualizer_data(&mut self) -> Py<PyAny> {
         json_to_pyobject(self.get_visualizer_data())
     }
 
@@ -545,7 +545,7 @@ impl Visualizer {
     }
 
     #[pyo3(name = "generate_html", signature = (override_config = None))]
-    pub fn generate_html_py(&mut self, override_config: Option<PyObject>) -> String {
+    pub fn generate_html_py(&mut self, override_config: Option<Py<PyAny>>) -> String {
         let override_config = if let Some(override_config) = override_config {
             pyobject_to_json(override_config)
         } else {
@@ -555,7 +555,7 @@ impl Visualizer {
     }
 
     #[pyo3(name = "save_html", signature = (path, override_config = None))]
-    pub fn save_html_py(&mut self, path: String, override_config: Option<PyObject>) {
+    pub fn save_html_py(&mut self, path: String, override_config: Option<Py<PyAny>>) {
         let html = self.generate_html_py(override_config);
         let mut file = File::create(path).expect("cannot create HTML file");
         file.write_all(html.as_bytes()).expect("cannot write to HTML file");

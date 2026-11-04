@@ -22,7 +22,7 @@ from .ref_circuit import (
     probability_to_weight,
     Predictor,
 )
-from typing import Sequence
+from typing import Optional, Sequence
 import functools
 from dataclasses import dataclass
 from frozendict import frozendict
@@ -111,7 +111,7 @@ class HeraldedDetectorErrorModel:
         )
 
     @functools.cached_property
-    def heralded_detectors(self) -> tuple[RefDetector | None, ...]:
+    def heralded_detectors(self) -> tuple[Optional[RefDetector], ...]:
         heralded_measurements = frozenset(self.heralded_measurements)
         return tuple(
             detector if (set(detector.targets) & heralded_measurements) else None
@@ -450,7 +450,7 @@ def is_heralded_error(instruction: RefInstruction) -> bool:
 
 def heralded_instruction_to_noise_instruction(
     instruction: RefInstruction,
-) -> RefInstruction | None:
+) -> Optional[RefInstruction]:
     if instruction.name == "HERALDED_ERASE":
         heralded_probability = instruction.gate_args[0]
         if heralded_probability == 0:

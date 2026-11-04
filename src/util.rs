@@ -109,7 +109,7 @@ macro_rules! fast_iter_set {
 pub use crate::fast_iter_set;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf"))]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf", from_py_object))]
 pub struct HyperEdge {
     /// the vertices incident to the hyperedge
     pub vertices: Vec<VertexIndex>,
@@ -160,7 +160,7 @@ impl HyperEdge {
     }
 }
 
-#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf"))]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf", from_py_object))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SolverInitializer {
     /// the number of vertices
@@ -300,7 +300,7 @@ impl SolverInitializer {
         Ok(())
     }
     #[pyo3(name = "snapshot", signature = (abbrev=true))]
-    fn py_snapshot(&mut self, abbrev: bool) -> PyObject {
+    fn py_snapshot(&mut self, abbrev: bool) -> Py<PyAny> {
         json_to_pyobject(self.snapshot(abbrev))
     }
     #[pyo3(name = "get_subgraph_syndrome")]
@@ -440,7 +440,7 @@ impl MWPSVisualizer for SolverInitializer {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf"))]
+#[cfg_attr(feature = "python_binding", pyclass(module = "mwpf", from_py_object))]
 pub struct SyndromePattern {
     /// the vertices corresponding to defect measurements
     pub defect_vertices: Vec<VertexIndex>,
@@ -609,7 +609,7 @@ impl SyndromePattern {
         }
     }
     #[pyo3(name="snapshot", signature = (abbrev=true))]
-    fn py_snapshot(&mut self, abbrev: bool) -> PyObject {
+    fn py_snapshot(&mut self, abbrev: bool) -> Py<PyAny> {
         json_to_pyobject(self.snapshot(abbrev))
     }
     #[pyo3(name = "to_json")]
@@ -1092,7 +1092,7 @@ impl BenchmarkProfilerEntry {
 }
 
 #[cfg(feature = "python_binding")]
-pub fn json_to_pyobject_locked(value: serde_json::Value, py: Python) -> PyObject {
+pub fn json_to_pyobject_locked(value: serde_json::Value, py: Python) -> Py<PyAny> {
     match value {
         serde_json::Value::Null => py.None(),
         serde_json::Value::Bool(value) => value.into_pyobject(py).unwrap().to_owned().into(),
@@ -1105,7 +1105,7 @@ pub fn json_to_pyobject_locked(value: serde_json::Value, py: Python) -> PyObject
         }
         serde_json::Value::String(value) => value.into_pyobject(py).unwrap().to_owned().into(),
         serde_json::Value::Array(array) => {
-            let elements: Vec<PyObject> = array.into_iter().map(|value| json_to_pyobject_locked(value, py)).collect();
+            let elements: Vec<Py<PyAny>> = array.into_iter().map(|value| json_to_pyobject_locked(value, py)).collect();
             PyList::new(py, elements).unwrap().into()
         }
         serde_json::Value::Object(map) => {
@@ -1120,8 +1120,8 @@ pub fn json_to_pyobject_locked(value: serde_json::Value, py: Python) -> PyObject
 }
 
 #[cfg(feature = "python_binding")]
-pub fn json_to_pyobject(value: serde_json::Value) -> PyObject {
-    Python::with_gil(|py| json_to_pyobject_locked(value, py))
+pub fn json_to_pyobject(value: serde_json::Value) -> Py<PyAny> {
+    Python::attach(|py| json_to_pyobject_locked(value, py))
 }
 
 #[cfg(feature = "python_binding")]
@@ -1138,14 +1138,14 @@ pub fn pyobject_to_json_locked(value: &Bound<PyAny>) -> serde_json::Value {
         json!(value.extract::<String>().unwrap())
     } else if value.is_instance_of::<PyList>() {
         let elements: Vec<serde_json::Value> = value
-            .downcast::<PyList>()
+            .cast::<PyList>()
             .unwrap()
             .into_iter()
             .map(|object| pyobject_to_json_locked(&object))
             .collect();
         json!(elements)
     } else if value.is_instance_of::<PyDict>() {
-        let map: &Bound<PyDict> = value.downcast().unwrap();
+        let map: &Bound<PyDict> = value.cast().unwrap();
         let mut json_map = serde_json::Map::new();
         for (key, value) in map.iter() {
             json_map.insert(key.extract::<String>().unwrap(), pyobject_to_json_locked(&value));
@@ -1157,8 +1157,8 @@ pub fn pyobject_to_json_locked(value: &Bound<PyAny>) -> serde_json::Value {
 }
 
 #[cfg(feature = "python_binding")]
-pub fn pyobject_to_json(value: PyObject) -> serde_json::Value {
-    Python::with_gil(|py| pyobject_to_json_locked(value.bind(py)))
+pub fn pyobject_to_json(value: Py<PyAny>) -> serde_json::Value {
+    Python::attach(|py| pyobject_to_json_locked(value.bind(py)))
 }
 
 #[cfg(feature = "python_binding")]

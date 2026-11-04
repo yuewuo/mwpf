@@ -3,6 +3,12 @@ import os
 
 static_patches = [
     (
+        "src/python/mwpf/_highs.py",
+        [
+            ("from . import mwpf\n", "from . import mwpf_$name$ as mwpf\n", 1),
+        ],
+    ),
+    (
         "Cargo.toml",
         [
             ('name = "mwpf"', 'name = "mwpf_$name$"', 3),
