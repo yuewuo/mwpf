@@ -119,11 +119,13 @@ make uninstall-py
 
 This is preferred over installing from pypi because it can fully utilize the optimization with `target-cpu=native`.
 
-## Releasing to PyPI
+## Releasing to PyPI and crates.io
 
-The [wheel workflow](.github/workflows/wheels.yml) publishes release-tag builds
-directly to PyPI only after all wheel, Rust, and Python test jobs succeed.
-Branch pushes build and test packages but do not publish them.
+The [wheel workflow](../../.github/workflows/wheels.yml) publishes release-tag
+builds to both registries only after all wheel, Rust, and Python test jobs
+succeed. Separate publishing jobs release the `mwpf` Rust crate to crates.io
+and the four Python packages to PyPI. Branch pushes build and test packages
+but do not publish them.
 
 Before creating a release tag, configure a GitHub Actions
 [Trusted Publisher](https://docs.pypi.org/trusted-publishers/adding-a-publisher/)
@@ -137,10 +139,27 @@ Use these values for all four projects:
 | Workflow filename | `wheels.yml` |
 | Environment name | `pypi` |
 
-The publish job uses GitHub OIDC instead of a `PYPI_API_TOKEN` secret and
-explicitly enables PyPI attestations for every uploaded wheel and source
-distribution. Once the publishers are configured, push a release tag matching
-the package version, for example `v0.2.17`.
+Also configure [Trusted Publishing](https://crates.io/docs/trusted-publishing)
+under the `mwpf` crate's Settings on crates.io. Use the same repository owner,
+repository name, and workflow filename, but set the environment name to
+`crates-io`. The PyPI publisher configuration does not authorize crates.io
+uploads. Restrict both GitHub environments to release tags, with approval
+requirements if desired.
+
+Both publish jobs use GitHub OIDC, so no permanent registry-token secrets are
+required. The Rust job verifies the package before authenticating, obtains a
+temporary crates.io token, and passes it only to `cargo publish --locked` through
+`CARGO_REGISTRY_TOKEN`. This value is an authentication-action output, not a
+GitHub secret.
+The PyPI job explicitly enables attestations for every uploaded wheel and
+source distribution. Once the publishers are configured, push a release tag
+matching the shared package version, for example `v0.2.17`.
+
+The two registry uploads are not atomic: one can succeed while the other fails.
+Prefer rerunning only failed publishing jobs. The Rust job skips an existing
+version only if its archive checksum matches the verified local package;
+a different checksum or a registry lookup error fails instead of masking the
+problem. PyPI keeps `skip-existing` enabled for partial-upload retries.
 
 [Provenance attestations](https://docs.pypi.org/attestations/producing-attestations/)
 are optional metadata, not a requirement for a valid wheel. They are attached
