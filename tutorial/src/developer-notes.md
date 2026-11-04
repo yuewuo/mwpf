@@ -119,6 +119,27 @@ make uninstall-py
 
 This is preferred over installing from pypi because it can fully utilize the optimization with `target-cpu=native`.
 
+## Python wheel coverage
+
+The wheel workflow builds all four package variants for Linux, macOS universal2,
+Windows x64, and Windows ARM64 using three ABI families:
+
+| Wheel family | Supported CPython interpreters |
+| --- | --- |
+| `abi3` | Conventional Python 3.9 and newer |
+| `cp314t` | Free-threaded Python 3.14 only |
+| `abi3t` | Conventional and free-threaded Python 3.15 and newer |
+
+Python 3.14t cannot load the other two families, so it needs a version-specific
+`cp314-cp314t` wheel. PyO3 selects this ABI when building with the 3.14t
+interpreter; the minimum supported Python version remains 3.9.
+
+CI checks core decoding, pickling, and concurrent independent solvers on both
+free-threaded versions, including an assertion that importing the module does
+not enable the GIL. Windows ARM64 wheels are cross-compiled and cannot be
+executed on the x64 build runners. Optional Stim integration depends on its
+third-party dependencies' interpreter and free-threading support.
+
 ## Releasing to PyPI and crates.io
 
 The [wheel workflow](../../.github/workflows/wheels.yml) publishes release-tag
