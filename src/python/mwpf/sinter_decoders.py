@@ -111,7 +111,7 @@ class SinterMWPFDecoder:
     def config(self) -> dict[str, Any]:
         return dict(cluster_node_limit=self._cluster_node_limit)
 
-    def with_circuit(self, circuit: stim.Circuit | None) -> "SinterMWPFDecoder":
+    def with_circuit(self, circuit: Optional[stim.Circuit]) -> "SinterMWPFDecoder":
         if circuit is None:
             self.circuit = None
             return self

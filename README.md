@@ -27,7 +27,8 @@ The wheel CI builds Windows x64 and ARM64 wheels for all package variants
 Python 3.9 and newer are supported; building from source requires Rust 1.85 or newer.
 The CI builds `abi3` wheels for conventional CPython and separate `abi3t` wheels
 for Python 3.15 and newer. The latter work with both conventional and free-threaded
-Python, and are tested on both Python 3.15 builds without enabling the GIL.
+Python. CI runs the full integration suite on Python 3.9 and 3.15, and checks
+concurrent hypergraph decoding with the GIL disabled on free-threaded Python 3.15.
 Windows ARM64 wheels are cross-compiled on x64 runners and cannot be tested there.
 Optional Stim integration also depends on the Python and free-threading support
 provided by its third-party dependencies.
