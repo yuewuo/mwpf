@@ -140,6 +140,42 @@ not enable the GIL. Windows ARM64 wheels are cross-compiled and cannot be
 executed on the x64 build runners. Optional Stim integration depends on its
 third-party dependencies' interpreter and free-threading support.
 
+## Internal bundled HiGHS interface
+
+Version 0.2.18 adds `mwpf._highs`, a small, minimization-only interface to the
+HiGHS already compiled into every package variant, including Windows ARM64.
+It needs neither `highspy` nor SciPy. It is not a full highspy replacement.
+
+The interface supports the subset used by
+[QDK's distance MILP backend](https://github.com/microsoft/qdk/blob/main/source/qdk_package/qdk/ec/_analysis/distance_solvers.py):
+`Highs`, `HighsStatus`, `HighsModelStatus`, `kHighsInf`, binary/integer variables,
+sparse bounded rows, and solution/status/dual-bound queries. A caller using
+that subset can change its backend import to `mwpf._highs`. Supported options
+are `output_flag`, `time_limit`, `mip_rel_gap`, and `mip_abs_gap`; unsupported
+options or invalid inputs raise exceptions instead of being silently ignored.
+
+```python
+from mwpf import _highs as highs
+
+model = highs.Highs()
+x = model.addBinary(obj=1.0)
+model.addRow(1.0, 1.0, 1, [x], [1.0])
+model.run()
+assert model.getModelStatus() == highs.HighsModelStatus.kOptimal
+assert model.getSolution().value_valid
+assert model.getSolution().col_value[x] == 1.0
+assert model.getInfo().mip_dual_bound == 1.0
+```
+
+Check `getInfo().valid` and `getSolution().value_valid` before using bounds or
+values after a limited solve. Infeasibility or a timeout without an incumbent
+must not be treated as an all-zero witness. Mutating a model invalidates its
+previous result. Independent instances may solve concurrently, with the
+Python interpreter detached and HiGHS using the same single-thread scheduler
+settings as the decoder; sharing a mutable model across threads is unsupported.
+The same module is available as `mwpf_rational._highs`, `mwpf_incr._highs`, and
+`mwpf_fast._highs`.
+
 ## Releasing to PyPI and crates.io
 
 The [wheel workflow](../../.github/workflows/wheels.yml) publishes release-tag
@@ -174,7 +210,7 @@ temporary crates.io token, and passes it only to `cargo publish --locked` throug
 GitHub secret.
 The PyPI job explicitly enables attestations for every uploaded wheel and
 source distribution. Once the publishers are configured, push a release tag
-matching the shared package version, for example `v0.2.17`.
+matching the shared package version, for example `v0.2.18`.
 
 The two registry uploads are not atomic: one can succeed while the other fails.
 Prefer rerunning only failed publishing jobs. The Rust job skips an existing

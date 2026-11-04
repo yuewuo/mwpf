@@ -106,7 +106,7 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
           CIBW_PLATFORM: ${{ matrix.platform || matrix.os }} # only build for specific platform
           CIBW_ARCHS_WINDOWS: ${{ matrix.arch || 'AMD64' }}
           CIBW_TEST_REQUIRES: "pytest>=8.4,<10"
-          CIBW_TEST_COMMAND: python -m pytest "{project}/tests/python/test_wheel_compatibility.py" -v -W default::DeprecationWarning
+          CIBW_TEST_COMMAND: python -m pytest "{project}/tests/python/test_wheel_compatibility.py" "{project}/tests/python/test_highs.py" -v -W default::DeprecationWarning
           CIBW_TEST_SKIP: "*-win_arm64"
           # cp314t is version-specific; abi3audit also lacks ABI3t export support (pypa/abi3audit#215).
           CIBW_AUDIT_COMMAND: ${{ matrix.python-abi == 'abi3' && 'abi3audit --strict --report {abi3_wheel}' || '' }}
@@ -180,7 +180,7 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
         run: |
           python -m pip install "pytest>=8.4,<10"
           python -m pip install --no-index --no-deps --find-links=wheelhouse "$PACKAGE_NAME"
-          python -m pytest tests/python/test_wheel_compatibility.py -v -W default::DeprecationWarning
+          python -m pytest tests/python/test_wheel_compatibility.py tests/python/test_highs.py -v -W default::DeprecationWarning
 
       - name: build source distribution (ubuntu only)
         if: matrix.os == 'ubuntu' && matrix.python-abi == 'abi3'
@@ -292,7 +292,8 @@ jobs: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.gith
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Prepare and verify Rust package
-        run: cargo publish --package mwpf --dry-run --locked
+        # Unlike publish --dry-run, package retains the verified archive in target/package.
+        run: cargo package --package mwpf --locked
 
       - name: Check whether this crate is already published
         id: crate

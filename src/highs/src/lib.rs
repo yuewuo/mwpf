@@ -134,6 +134,9 @@ mod matrix_row;
 mod options;
 mod status;
 
+#[cfg(feature = "python_binding")]
+pub(crate) mod python;
+
 /// A complete optimization problem.
 /// Depending on the `MATRIX` type parameter, the problem will be built
 /// constraint by constraint (with [ColProblem]), or

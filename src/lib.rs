@@ -88,6 +88,7 @@ fn mwpf(m: &Bound<'_, PyModule>) -> PyResult<()> {
     mwpf_solver::register(m)?;
     html_export::register(m)?;
     util_py::register(m)?;
+    highs::python::register(m)?;
     m.add_wrapped(wrap_pyfunction!(run_cli))?;
     Ok(())
 }
