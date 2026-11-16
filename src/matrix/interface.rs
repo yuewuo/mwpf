@@ -23,6 +23,10 @@ use crate::util::*;
 use derivative::Derivative;
 use num_traits::{One, Zero};
 
+#[cfg(all(test, feature = "f64_weight"))]
+#[path = "local_minimum_cache_tests.rs"]
+mod local_minimum_cache_tests;
+
 pub type VarIndex = usize;
 pub type RowIndex = usize;
 pub type ColumnIndex = usize;
@@ -187,11 +191,14 @@ pub trait MatrixEchelon: MatrixView {
             total_weight += weight_of(edge_index);
         }
         let mut pending_flip_edge_indices = vec![];
+        // The echelon matrix is immutable during this search. Cache row support,
+        // not weights/deltas, retaining the original ascending accumulation order.
+        let mut column_supports: Vec<Option<Vec<RowIndex>>> = vec![None; independent_columns.len()];
         let mut is_local_minimum = false;
         while !is_local_minimum {
             is_local_minimum = true;
             // try every independent variable and find a local minimum
-            for &column in independent_columns.iter() {
+            for (cache_index, &column) in independent_columns.iter().enumerate() {
                 pending_flip_edge_indices.clear();
                 let var_index = self.column_to_var_index(column);
                 let edge_index = self.var_to_edge_index(var_index);
@@ -202,21 +209,23 @@ pub trait MatrixEchelon: MatrixView {
                         Rational::one()
                     };
                 pending_flip_edge_indices.push(edge_index);
-                for row in 0..info.rows.len() {
-                    if self.get_lhs(row, var_index) {
-                        debug_assert!(info.rows[row].has_leading());
-                        let flip_column = info.rows[row].column;
-                        debug_assert!(flip_column < column);
-                        let flip_edge_index = self.column_to_edge_index(flip_column);
-                        primal_delta += (weight_of(flip_edge_index))
-                            * if solution.contains(&flip_edge_index) {
-                                -Rational::one()
-                            } else {
-                                Rational::one()
-                            };
-                        pending_flip_edge_indices.push(flip_edge_index);
-                    }
+                let support = column_supports[cache_index]
+                    .get_or_insert_with(|| (0..info.rows.len()).filter(|&row| self.get_lhs(row, var_index)).collect());
+                for &row in support.iter() {
+                    debug_assert!(info.rows[row].has_leading());
+                    let flip_column = info.rows[row].column;
+                    debug_assert!(flip_column < column);
+                    let flip_edge_index = self.column_to_edge_index(flip_column);
+                    primal_delta += (weight_of(flip_edge_index))
+                        * if solution.contains(&flip_edge_index) {
+                            -Rational::one()
+                        } else {
+                            Rational::one()
+                        };
+                    pending_flip_edge_indices.push(flip_edge_index);
                 }
+                #[cfg(all(test, feature = "f64_weight"))]
+                local_minimum_cache_tests::record(column, &primal_delta, &pending_flip_edge_indices);
                 // warning: has to be this form (instead of .is_negative) to use the tolerance of OrderedFloat
                 if primal_delta < Rational::zero() {
                     total_weight = total_weight + primal_delta;

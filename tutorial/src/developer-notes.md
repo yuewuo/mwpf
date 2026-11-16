@@ -210,7 +210,7 @@ temporary crates.io token, and passes it only to `cargo publish --locked` throug
 GitHub secret.
 The PyPI job explicitly enables attestations for every uploaded wheel and
 source distribution. Once the publishers are configured, push a release tag
-matching the shared package version, for example `v0.2.18`.
+matching the shared package version, for example `v0.2.19`.
 
 The two registry uploads are not atomic: one can succeed while the other fails.
 Prefer rerunning only failed publishing jobs. The Rust job skips an existing
